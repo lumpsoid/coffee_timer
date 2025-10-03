@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:coffee_timer/core/recipe/recipe.dart';
+import 'package:coffee_timer/recipe_list/pages/pages.dart';
 import 'package:flutter/material.dart' hide Step;
 import 'package:uuid/uuid.dart';
 
@@ -80,9 +81,10 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
     super.dispose();
   }
 
-  void _addEmptyStep() {
+  void _addEmptyStep([String? name]) {
+    final nameCtrl = TextEditingController(text: name);
     setState(() {
-      _stepNameControllers.add(TextEditingController());
+      _stepNameControllers.add(nameCtrl);
       _stepDurationControllers.add(TextEditingController(text: '0'));
     });
   }
@@ -99,14 +101,6 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
     });
   }
 
-  String _formatMmSsFromSeconds(int totalSeconds) {
-    final minutes = totalSeconds ~/ 60;
-    final seconds = totalSeconds % 60;
-    final mm = minutes.toString().padLeft(2, '0');
-    final ss = seconds.toString().padLeft(2, '0');
-    return '$mm:$ss';
-  }
-
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
@@ -116,9 +110,12 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
       final durText = _stepDurationControllers[i].text.trim();
       final dur = int.tryParse(durText) ?? 0;
       final index = i + 1;
+      final originalId = widget.initial.isEmpty
+          ? const Uuid().v7()
+          : widget.initial.steps[i].id;
       steps.add(
         Step(
-          id: const Uuid().v7(),
+          id: originalId,
           name: name.isEmpty ? 'Step $index' : name,
           durationSeconds: dur,
         ),
@@ -141,18 +138,34 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
     Navigator.of(context).pop(recipe);
   }
 
+  String _totalDuration() {
+    var totalSeconds = 0;
+    for (var i = 0; i < _stepNameControllers.length; i++) {
+      final durText = _stepDurationControllers[i].text;
+      final dur = int.tryParse(durText) ?? 0;
+      totalSeconds += dur;
+    }
+    return Recipe.totalDurationFormatted(totalSeconds);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Edit Recipe'),
         actions: [
-          TextButton(
-            onPressed: _save,
-            child: const Text(
-              'Save',
-              style: TextStyle(color: Colors.white),
+          if (widget.initial.isNotEmpty)
+            IconButton(
+              onPressed: () => _openConfirmationDelete(
+                context,
+                _nameController.text,
+                widget.initial.id,
+              ),
+              icon: const Icon(Icons.delete),
             ),
+          IconButton(
+            onPressed: _save,
+            icon: const Icon(Icons.save),
           ),
         ],
       ),
@@ -174,23 +187,46 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
               maxLines: 3,
             ),
             const SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Steps', style: TextStyle(fontSize: 16)),
-                ElevatedButton.icon(
-                  onPressed: _addEmptyStep,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Step'),
-                ),
-              ],
-            ),
+            Text('Total duration: ${_totalDuration()}'),
+            const SizedBox(height: 20),
+            const Text('Steps', style: TextStyle(fontSize: 16)),
             const SizedBox(height: 8),
-            ...List.generate(_stepNameControllers.length, (index) {
+            ...List.generate(_stepNameControllers.length + 1, (index) {
+              if (index == _stepNameControllers.length) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Wrap(
+                    runSpacing: 4,
+                    spacing: 4,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => _addEmptyStep('Add coffee'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add coffee'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _addEmptyStep('Add water'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add water'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _addEmptyStep('Wait'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Wait'),
+                      ),
+                      TextButton.icon(
+                        onPressed: _addEmptyStep,
+                        icon: const Icon(Icons.add),
+                        label: const Text('Add Step'),
+                      ),
+                    ],
+                  ),
+                );
+              }
               final nameCtrl = _stepNameControllers[index];
               final durCtrl = _stepDurationControllers[index];
               final durValue = int.tryParse(durCtrl.text) ?? 0;
-              final mmss = _formatMmSsFromSeconds(durValue);
+              final mmss = Recipe.totalDurationFormatted(durValue);
 
               return Card(
                 margin: const EdgeInsets.symmetric(vertical: 8),
@@ -220,8 +256,7 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
                         controller: durCtrl,
                         decoration: InputDecoration(
                           labelText: 'Duration (seconds)',
-                          helperText:
-                              'MM:SS — ${_formatMmSsFromSeconds(durValue)}',
+                          helperText: 'MM:SS — $mmss',
                         ),
                         keyboardType: TextInputType.number,
                         validator: (v) {
@@ -242,15 +277,48 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
                 ),
               );
             }),
-            const SizedBox(height: 12),
-            ListTile(
-              title: const Text('Total duration'),
-              subtitle: Text(widget.initial.totalDurationFormatted),
-            ),
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: _save,
               child: const Text('Save Recipe'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _openConfirmationDelete(
+    BuildContext context,
+    String name,
+    String id,
+  ) {
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Delete recipe'),
+          content: Text(
+            'Delete "$name"? This action cannot be undone.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(ctx).pop(); // close dialog
+                _bus.fire(RecipeDelete(id: id));
+                Navigator.of(ctx).popUntil((r) => false);
+                unawaited(
+                  Navigator.of(ctx).push(RecipeListPage.route()),
+                );
+              },
+              child: const Text(
+                'Delete',
+                style: TextStyle(color: Colors.red),
+              ),
             ),
           ],
         ),

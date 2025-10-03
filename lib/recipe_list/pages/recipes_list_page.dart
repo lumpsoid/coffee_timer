@@ -8,6 +8,12 @@ import 'package:flutter/material.dart';
 class RecipeListPage extends StatefulWidget {
   const RecipeListPage({super.key});
 
+  static MaterialPageRoute<void> route() {
+    return MaterialPageRoute(
+      builder: (context) => const RecipeListPage(),
+    );
+  }
+
   @override
   State<RecipeListPage> createState() => _RecipeListPageState();
 }

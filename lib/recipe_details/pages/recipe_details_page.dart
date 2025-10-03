@@ -180,7 +180,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                                             const SizedBox(height: 4),
                                             _RecipeInfoText(
                                               emoji: '⏱️',
-                                              text: r.totalDurationFormatted,
+                                              text: r.totalDurationString,
                                             ),
                                           ],
                                         );
