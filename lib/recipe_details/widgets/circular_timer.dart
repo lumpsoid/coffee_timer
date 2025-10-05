@@ -1,22 +1,23 @@
+import 'package:coffee_timer/recipe_details/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 
-class CircularTimerWidget extends StatelessWidget {
-  const CircularTimerWidget({
-    required this.controller,
+class CircularTimer extends StatelessWidget {
+  const CircularTimer({
+    required this.duration,
     required this.child,
-    super.key,
-    this.constraints,
     this.strokeWidth = 10,
     this.backgroundColor = const Color(0xFF424242),
     this.progressColor = Colors.greenAccent,
+    this.constraints,
+    super.key,
   });
 
-  final ValueNotifier<double> controller;
+  final ValueNotifier<Duration?> duration;
   final Widget child;
-  final BoxConstraints? constraints;
   final double strokeWidth;
   final Color backgroundColor;
   final Color progressColor;
+  final BoxConstraints? constraints;
 
   @override
   Widget build(BuildContext context) {
@@ -24,15 +25,14 @@ class CircularTimerWidget extends StatelessWidget {
       alignment: Alignment.center,
       children: [
         ValueListenableBuilder(
-          valueListenable: controller,
-          builder: (context, progress, _) {
-            print('CircularProgressIndicator build');
-            return CircularProgressIndicator(
-              constraints: constraints,
-              value: progress,
+          valueListenable: duration,
+          builder: (context, d, _) {
+            return DurationalCircularProgressIndicator(
+              duration: d,
               strokeWidth: strokeWidth,
               backgroundColor: backgroundColor,
-              valueColor: AlwaysStoppedAnimation<Color>(progressColor),
+              progressColor: progressColor,
+              constraints: constraints,
             );
           },
         ),

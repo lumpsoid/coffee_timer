@@ -24,3 +24,18 @@ class RecipeDeleteStorage extends RecipeEvent {
   const RecipeDeleteStorage(this.id);
   final String id;
 }
+
+class RecipeCreatedStorage extends RecipeEvent {
+  const RecipeCreatedStorage(this.recipe);
+  final Recipe recipe;
+}
+
+class RecipeUpdatedStorage extends RecipeEvent {
+  const RecipeUpdatedStorage(this.recipe);
+  final Recipe recipe;
+}
+
+class RecipeDeletedStorage extends RecipeEvent {
+  const RecipeDeletedStorage(this.id);
+  final String id;
+}

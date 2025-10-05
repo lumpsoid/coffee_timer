@@ -21,7 +21,6 @@ class RecipeStorageSqlite {
   Future<void> initialize() async {
     final dir = await getApplicationDocumentsDirectory();
     final dbPath = p.join(dir.path, 'recipes.db');
-    print('dbPath $dbPath');
 
     _db = SqliteDatabase(path: dbPath);
 
@@ -39,15 +38,15 @@ class RecipeStorageSqlite {
 
       case RecipeCreateStorage(:final recipe):
         final createdRecipe = await _createRecipe(recipe);
-        _bus.fire(RecipeModified(createdRecipe));
+        _bus.fire(RecipeCreatedStorage(createdRecipe));
 
       case RecipeUpdateStorage(:final recipe):
         final updatedRecipe = await _updateRecipe(recipe);
-        _bus.fire(RecipeModified(updatedRecipe));
+        _bus.fire(RecipeUpdatedStorage(updatedRecipe));
 
       case RecipeDeleteStorage(:final id):
         await _deleteRecipe(id);
-        _bus.fire(RecipeDeleted(id));
+        _bus.fire(RecipeDeletedStorage(id));
 
       default:
         break;
@@ -58,11 +57,11 @@ class RecipeStorageSqlite {
     final recipeRows = await _db.getAll('SELECT * FROM recipe');
     final stepsRows = await _db.getAll('SELECT * FROM step');
 
-    final stepsMap = <String, List<Step>>{};
+    final stepsMap = <String, List<RecipeStep>>{};
 
     for (final row in stepsRows) {
       final recipeId = row['recipe_id'] as String;
-      final step = Step(
+      final step = RecipeStep(
         id: row['id'] as String,
         name: row['name'] as String,
         durationSeconds: row['duration_seconds'] as int,
@@ -92,7 +91,7 @@ class RecipeStorageSqlite {
       final insertedRecipeRow = recipeRows.first;
 
       // Insert steps and collect returned rows
-      final insertedSteps = <Step>[];
+      final insertedSteps = <RecipeStep>[];
       for (final step in recipe.steps) {
         final stepRows = await tx.getAll(
           'INSERT INTO step (id, recipe_id, name, duration_seconds) VALUES (?, ?, ?, ?)'
@@ -101,7 +100,7 @@ class RecipeStorageSqlite {
         );
         final r = stepRows.first;
         insertedSteps.add(
-          Step(
+          RecipeStep(
             id: r['id'] as String,
             name: r['name'] as String,
             durationSeconds: r['duration_seconds'] as int,
@@ -132,7 +131,7 @@ class RecipeStorageSqlite {
       // remove old steps and insert new ones, returning inserted rows
       await tx.execute('DELETE FROM step WHERE recipe_id = ?', [recipe.id]);
 
-      final insertedSteps = <Step>[];
+      final insertedSteps = <RecipeStep>[];
       for (final step in recipe.steps) {
         final stepRows = await tx.getAll(
           'INSERT INTO step (id, recipe_id, name, duration_seconds) '
@@ -141,7 +140,7 @@ class RecipeStorageSqlite {
         );
         final r = stepRows.first;
         insertedSteps.add(
-          Step(
+          RecipeStep(
             id: r['id'] as String,
             name: r['name'] as String,
             durationSeconds: r['duration_seconds'] as int,

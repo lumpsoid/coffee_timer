@@ -7,12 +7,18 @@ class Recipe {
     required this.description,
     required this.steps,
   });
-  const Recipe.empty() : id = '', name = '', description = '', steps = const [];
+
+  static const empty = Recipe(
+    id: '',
+    name: '',
+    description: '',
+    steps: [],
+  );
 
   final String id;
   final String name;
   final String description;
-  final List<Step> steps;
+  final List<RecipeStep> steps;
 
   static String totalDurationFormatted(int totalSeconds) {
     final minutes = totalSeconds ~/ 60;

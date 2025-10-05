@@ -1,6 +1,7 @@
 import 'dart:async';
+
 import 'package:coffee_timer/core/recipe/recipe.dart';
-import 'package:coffee_timer/recipe_details/widgets/circular_timer.dart';
+import 'package:coffee_timer/recipe_details/widgets/widgets.dart';
 import 'package:coffee_timer/recipe_edit/ui/ui.dart';
 import 'package:flutter/material.dart';
 
@@ -22,10 +23,13 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
 
   late final StreamSubscription<RecipeEvent> _sub;
 
-  final stepName = ValueNotifier<String>('');
-  final recipe = ValueNotifier<Recipe>(const Recipe.empty());
-  final remaining = ValueNotifier<int>(0);
-  final progress = ValueNotifier<double>(0);
+  final step = ValueNotifier<RecipeStep>(const RecipeStep.empty());
+  final stepDuration = ValueNotifier<Duration?>(null);
+  final currentStepIndex = ValueNotifier<int>(0);
+  late final runAndIndex = Listenable.merge([started, currentStepIndex]);
+  final recipe = ValueNotifier<Recipe>(Recipe.empty);
+  final timerMinutes = ValueNotifier<String>('');
+  final timerSeconds = ValueNotifier<String>('');
   final started = ValueNotifier<bool>(false);
 
   @override
@@ -41,11 +45,15 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
           recipe.value = event.recipe;
 
         case RecipeTimerTick():
-          remaining.value = event.remainingSeconds;
-          progress.value = event.progress;
+          timerMinutes.value = event.minutes;
+          timerSeconds.value = event.seconds;
 
         case RecipeTimerStepChanged():
-          stepName.value = event.step.name;
+          step.value = event.step;
+          currentStepIndex.value = event.index ?? 0;
+          stepDuration.value = event.step.durationSeconds == 0
+              ? null
+              : Duration(seconds: event.step.durationSeconds);
 
         case RecipeTimerStartFromStep():
         case RecipeTimerStart():
@@ -55,9 +63,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
         case RecipeTimerReset():
         case RecipeTimerPause():
           started.value = false;
+          stepDuration.value = null;
 
         default:
-          break;
+          return;
       }
     });
   }
@@ -65,11 +74,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   @override
   void dispose() {
     unawaited(_sub.cancel());
-    stepName.dispose();
     started.dispose();
-    progress.dispose();
-    remaining.dispose();
     recipe.dispose();
+    timerSeconds.dispose();
+    timerMinutes.dispose();
     super.dispose();
   }
 
@@ -135,8 +143,10 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                         },
                         child: LayoutBuilder(
                           builder: (context, constrains) {
-                            return CircularTimerWidget(
-                              controller: progress,
+                            final textStyle = TextTheme.of(context).titleLarge;
+                            return CircularTimer(
+                              duration: stepDuration,
+                              progressColor: ColorScheme.of(context).primary,
                               constraints: BoxConstraints(
                                 minWidth: constrains.maxWidth,
                                 minHeight: constrains.maxWidth,
@@ -145,19 +155,40 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                                   ? Column(
                                       children: [
                                         ValueListenableBuilder(
-                                          valueListenable: stepName,
-                                          builder: (context, name, _) {
-                                            print('Step name build');
-                                            return Text(name);
+                                          valueListenable: step,
+                                          builder: (context, s, _) {
+                                            return Text(s.name);
                                           },
                                         ),
-                                        ValueListenableBuilder(
-                                          valueListenable: remaining,
-                                          builder: (context, seconds, _) {
-                                            return TimerDigits(
-                                              remainingSeconds: seconds,
-                                            );
-                                          },
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.center,
+                                          children: [
+                                            ValueListenableBuilder(
+                                              valueListenable: timerMinutes,
+                                              builder: (context, minutes, _) {
+                                                return FixedDigit(
+                                                  time: minutes,
+                                                  style: textStyle,
+                                                );
+                                              },
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              ':',
+                                              style: textStyle,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            ValueListenableBuilder(
+                                              valueListenable: timerSeconds,
+                                              builder: (context, seconds, _) {
+                                                return FixedDigit(
+                                                  time: seconds,
+                                                  style: textStyle,
+                                                );
+                                              },
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     )
@@ -169,17 +200,19 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                                               MainAxisAlignment.spaceEvenly,
                                           children: [
                                             _RecipeInfoText(
-                                              emoji: '☕',
+                                              icon: const Icon(Icons.grain),
                                               text: '${r.totalCoffeeGrams}g',
                                             ),
                                             const SizedBox(height: 4),
                                             _RecipeInfoText(
-                                              emoji: '💧',
+                                              icon: const Icon(
+                                                Icons.water_drop_outlined,
+                                              ),
                                               text: '${r.totalWaterGrams}g',
                                             ),
                                             const SizedBox(height: 4),
                                             _RecipeInfoText(
-                                              emoji: '⏱️',
+                                              icon: const Icon(Icons.timer_outlined),
                                               text: r.totalDurationString,
                                             ),
                                           ],
@@ -199,17 +232,27 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                   ),
                   const SizedBox(height: 8),
                   Expanded(
-                    child: ListView.builder(
-                      itemCount: r.steps.length,
-                      itemBuilder: (_, i) {
-                        final step = r.steps[i];
-                        return ListTile(
-                          leading: Text('${i + 1}'),
-                          title: Text(step.name),
-                          trailing: Text('${step.durationSeconds}s'),
-                          onLongPress: () => _bus.fire(
-                            RecipeTimerStartFromStep(i),
-                          ),
+                    child: ListenableBuilder(
+                      listenable: runAndIndex,
+                      builder: (context, _) {
+                        final isTicking = started.value;
+
+                        return ListView.builder(
+                          itemCount: r.steps.length,
+                          itemBuilder: (_, i) {
+                            final step = r.steps[i];
+
+                            return StepListTile(
+                              index: i,
+                              currentStepIndex: currentStepIndex.value,
+                              isTicking: isTicking,
+                              stepName: step.name,
+                              durationSeconds: step.durationSeconds,
+                              onLongPress: () => _bus.fire(
+                                RecipeTimerStartFromStep(i),
+                              ),
+                            );
+                          },
                         );
                       },
                     ),
@@ -224,45 +267,18 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   }
 }
 
-class TimerDigits extends StatelessWidget {
-  const TimerDigits({
+class FixedDigit extends StatelessWidget {
+  const FixedDigit({
+    required this.time,
+    required this.style,
     super.key,
-    required this.remainingSeconds,
   });
 
-  final int remainingSeconds;
+  final String time;
+  final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
-    final textStyle = TextTheme.of(context).titleLarge;
-    final minutes = remainingSeconds ~/ 60;
-    final seconds = remainingSeconds % 60;
-
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        _fixedDigit(
-          minutes.toString().padLeft(2, '0'),
-          textStyle,
-        ),
-        const SizedBox(width: 4),
-        Text(
-          ':',
-          style: textStyle,
-        ),
-        const SizedBox(width: 4),
-        _fixedDigit(
-          seconds.toString().padLeft(2, '0'),
-          textStyle,
-        ),
-      ],
-    );
-  }
-
-  Widget _fixedDigit(
-    String time,
-    TextStyle? style,
-  ) {
     return Row(
       children: time.split('').map((char) {
         return Container(
@@ -282,11 +298,11 @@ class TimerDigits extends StatelessWidget {
 
 class _RecipeInfoText extends StatelessWidget {
   const _RecipeInfoText({
-    required this.emoji,
+    required this.icon,
     required this.text,
   });
 
-  final String emoji;
+  final Icon icon;
   final String text;
 
   @override
@@ -294,7 +310,7 @@ class _RecipeInfoText extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        Text(emoji, style: const TextStyle(fontSize: 18)),
+        icon,
         const SizedBox(width: 4),
         Text(
           text,

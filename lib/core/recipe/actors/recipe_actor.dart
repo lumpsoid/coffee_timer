@@ -16,10 +16,7 @@ class RecipeActor {
 
   final _recipes = <Recipe>[];
   Recipe? _currentRecipe;
-  Timer? _timer;
-  Step? _currentStep;
-  int _remainingSeconds = 0;
-  int _total = 0;
+  RecipeStep? _currentStep;
 
   void _handleEvent(RecipeEvent event) {
     switch (event) {
@@ -33,10 +30,42 @@ class RecipeActor {
         _recipes.addAll(recipes);
         _bus.fire(RecipesLoaded(recipes));
 
+      case RecipeCreatedStorage(:final recipe):
+        _recipes.add(event.recipe);
+        _bus.fire(RecipesLoaded(_recipes));
+        if (_currentRecipe != null) {
+          _bus.fire(RecipeModified(recipe));
+        }
+
+      case RecipeUpdatedStorage(:final recipe):
+        final oldRecipes = _recipes;
+        final indexRecipe = oldRecipes.indexWhere(
+          (recipe) => recipe.id == event.recipe.id,
+        );
+        // new recipe
+        if (indexRecipe == -1) {
+          _recipes.add(event.recipe);
+        } else {
+          // old one modified
+          _recipes[indexRecipe] = event.recipe;
+        }
+        _bus.fire(RecipesLoaded(_recipes));
+        if (_currentRecipe != null) {
+          _bus.fire(RecipeModified(recipe));
+        }
+
+      case RecipeDeletedStorage(:final id):
+        _recipes.removeWhere((r) => r.id == id);
+        _bus.fire(RecipesLoaded(_recipes));
+        if (_currentRecipe != null && _currentRecipe!.id == id) {
+          _bus.fire(const RecipeModified(Recipe.empty));
+        }
+
       case RecipeSelect _:
         _currentRecipe = event.recipe;
       case RecipeDeselect _:
         _currentRecipe = null;
+
       case RecipeCreate(:final recipe):
         _bus.fire(RecipeCreateStorage(recipe));
       case RecipeUpdate _:
@@ -49,6 +78,8 @@ class RecipeActor {
         _startTimer(initialStepIndex: 0);
       case RecipeTimerStartFromStep():
         _startTimer(initialStepIndex: event.stepIndex);
+      case RecipeTimerEnded():
+        _resetTimer();
       case RecipeTimerReset():
         _resetTimer();
       default:
@@ -56,17 +87,15 @@ class RecipeActor {
     }
   }
 
+  Timer? _secondTimer;
   int _currentStepIndex = 0;
-
   int _stepRemainingSeconds = 0;
-  int _totalRemainingSeconds = 0; // optional: overall remaining
+  int _totalRemainingSeconds = 0;
 
-  void _startTimer({
-    required int initialStepIndex,
-  }) {
-    if (_timer?.isActive ?? false) {
-      _resetTimerState();
-    }
+  void _startTimer({required int initialStepIndex}) {
+    _secondTimer?.cancel();
+    _resetTimerState();
+
     if (_currentRecipe == null || _currentRecipe!.steps.isEmpty) return;
 
     _currentStepIndex = initialStepIndex;
@@ -74,104 +103,103 @@ class RecipeActor {
     _stepRemainingSeconds = _currentStep?.durationSeconds ?? 0;
     _totalRemainingSeconds = _currentRecipe!.totalDurationSeconds;
 
-    // emit initial tick for first step
-    final initialStepDuration = _currentStep?.durationSeconds ?? 1;
-    final initialStepProgress = initialStepDuration > 0
-        ? ((_currentStep?.durationSeconds ?? 0) - _stepRemainingSeconds) /
-              initialStepDuration
-        : 0.0;
+    // Fire initial UI tick
+    final (minutes, seconds) = _formatRemainingSeconds(_stepRemainingSeconds);
     _bus
+      ..fire(RecipeTimerTick(minutes: minutes, seconds: seconds))
       ..fire(
-        RecipeTimerTick(
-          remainingSeconds: _stepRemainingSeconds,
-          progress: initialStepProgress.clamp(0.0, 1.0),
+        RecipeTimerStepChanged(
+          index: _currentStepIndex,
+          step: _currentStep!,
         ),
-      )
-      ..fire(RecipeTimerStepChanged(_currentStep!));
+      );
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (t) {
+    // Tick every second
+    _secondTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_currentStep == null) {
-        // no more steps
-        _resetTimer();
-        _bus
-          ..fire(const RecipeTimerTick(remainingSeconds: 0, progress: 0))
-          ..fire(const RecipeTimerEnded());
+        _secondTimer?.cancel();
         return;
       }
 
-      if (_stepRemainingSeconds <= 1) {
-        // finish current step
-        _bus.fire(
-          const RecipeTimerTick(remainingSeconds: 0, progress: 1),
-        );
+      // Decrement time
+      _stepRemainingSeconds--;
+      _totalRemainingSeconds = (_totalRemainingSeconds > 0)
+          ? _totalRemainingSeconds - 1
+          : 0;
 
-        // advance to next step
+      // Fire tick
+      final (minutes, seconds) = _formatRemainingSeconds(_stepRemainingSeconds);
+      _bus.fire(RecipeTimerTick(minutes: minutes, seconds: seconds));
+
+      // Check if step is complete
+      if (_stepRemainingSeconds <= 0) {
         _currentStepIndex++;
+
         if (_currentStepIndex >= _currentRecipe!.steps.length) {
-          // no more steps
+          // All steps done
           _resetTimer();
           _currentStep = null;
+          _secondTimer?.cancel();
+
           _bus
+            ..fire(const RecipeTimerTick(minutes: '00', seconds: '00'))
             ..fire(
               const RecipeTimerStepChanged(
-                Step(id: '', name: 'Recipe ended', durationSeconds: 0),
+                index: null,
+                step: RecipeStep(
+                  id: '',
+                  name: 'Recipe ended',
+                  durationSeconds: 0,
+                ),
               ),
             )
             ..fire(const RecipeTimerEnded());
-          return;
-        } else {
-          _currentStep = _currentRecipe?.steps[_currentStepIndex];
-          _bus.fire(RecipeTimerStepChanged(_currentStep!));
-          // set up next step
-          _stepRemainingSeconds = _currentStep!.durationSeconds;
-          // emit tick for start of new step
-          final dur = _currentStep!.durationSeconds;
-          final prog = dur > 0 ? (dur - _stepRemainingSeconds) / dur : 0.0;
-          _bus.fire(
-            RecipeTimerTick(
-              remainingSeconds: _stepRemainingSeconds,
-              progress: prog.clamp(0.0, 1.0),
-            ),
-          );
-          // continue ticking; do not decrement this second (we already emitted start state)
+
           return;
         }
-      } else {
-        // normal countdown within current step
-        _stepRemainingSeconds--;
-        _totalRemainingSeconds = (_totalRemainingSeconds > 0)
-            ? _totalRemainingSeconds - 1
-            : 0;
 
-        final stepDuration = _currentStep!.durationSeconds;
-        final rawStepProgress = stepDuration > 0
-            ? (stepDuration - _stepRemainingSeconds) / stepDuration
-            : 0.0;
-        final stepProgress = rawStepProgress.clamp(0.0, 1.0);
+        // Move to next step
+        _currentStep = _currentRecipe!.steps[_currentStepIndex];
+        _stepRemainingSeconds = _currentStep!.durationSeconds;
 
-        _bus.fire(
-          RecipeTimerTick(
-            remainingSeconds: _stepRemainingSeconds,
-            progress: stepProgress,
-          ),
+        final (newMinutes, newSeconds) = _formatRemainingSeconds(
+          _stepRemainingSeconds,
         );
+        _bus
+          ..fire(RecipeTimerTick(minutes: newMinutes, seconds: newSeconds))
+          ..fire(
+            RecipeTimerStepChanged(
+              index: _currentStepIndex,
+              step: _currentStep!,
+            ),
+          );
       }
     });
   }
 
+  (String, String) _formatRemainingSeconds(int remainingSeconds) {
+    if (remainingSeconds >= 6000) {
+      return ('99', '60'); // fallback cap
+    }
+
+    final minutes = (remainingSeconds ~/ 60).toString().padLeft(2, '0');
+    final seconds = (remainingSeconds % 60).toString().padLeft(2, '0');
+
+    return (minutes, seconds);
+  }
+
   void _resetTimerState() {
-    _timer?.cancel();
-    _timer = null;
+    _secondTimer?.cancel();
+    _secondTimer = null;
     _currentStep = null;
     _currentStepIndex = 0;
     _stepRemainingSeconds = 0;
     _totalRemainingSeconds = 0;
-    _remainingSeconds = _currentRecipe?.totalDurationSeconds ?? 0;
   }
 
   void _resetTimer() {
     _resetTimerState();
-    _bus.fire(const RecipeTimerTick(remainingSeconds: 0, progress: 0));
+    _bus.fire(const RecipeTimerTick.empty());
   }
 
   void dispose() {

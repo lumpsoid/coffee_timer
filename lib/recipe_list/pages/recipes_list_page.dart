@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:coffee_timer/core/recipe/recipe.dart';
 import 'package:coffee_timer/recipe_details/pages/pages.dart';
 import 'package:coffee_timer/recipe_edit/ui/ui.dart';
+import 'package:coffee_timer/recipe_list/widgets/widgets.dart';
+import 'package:coffee_timer/settings/ui/ui.dart';
 import 'package:flutter/material.dart';
 
 class RecipeListPage extends StatefulWidget {
@@ -21,7 +23,7 @@ class RecipeListPage extends StatefulWidget {
 class _RecipeListPageState extends State<RecipeListPage> {
   final RecipeEventBus _bus = RecipeHub.instance.bus;
   late final StreamSubscription<RecipeEvent> _sub;
-  List<Recipe> _recipes = [];
+  final _recipes = ValueNotifier<List<Recipe>>([]);
 
   @override
   void initState() {
@@ -30,35 +32,8 @@ class _RecipeListPageState extends State<RecipeListPage> {
     _sub = _bus.stream.listen((event) {
       switch (event) {
         case RecipesLoaded():
-          setState(() {
-            _recipes = event.recipes;
-          });
+          _recipes.value = event.recipes;
 
-        case RecipeDeleted():
-          final updatedRecipes = _recipes;
-          updatedRecipes.removeWhere((r) => r.id == event.id);
-          setState(() {
-            _recipes = updatedRecipes;
-          });
-
-        case RecipeModified():
-          final oldRecipes = _recipes;
-          final indexRecipe = oldRecipes.indexWhere(
-            (recipe) => recipe.id == event.recipe.id,
-          );
-          // new recipe
-          if (indexRecipe == -1) {
-            oldRecipes.add(event.recipe);
-            setState(() {
-              _recipes = oldRecipes;
-            });
-          } else {
-            // old one modified
-            oldRecipes[indexRecipe] = event.recipe;
-            setState(() {
-              _recipes = oldRecipes;
-            });
-          }
         default:
           return;
       }
@@ -74,23 +49,33 @@ class _RecipeListPageState extends State<RecipeListPage> {
   }
 
   void _onRecipeTap(Recipe recipe) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(
-        Navigator.push(
-          context,
-          MaterialPageRoute<void>(builder: (_) => const RecipeDetailPage()),
-        ),
-      );
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _bus.fire(RecipeSelect(recipe)),
-      );
-    });
+    unawaited(
+      Navigator.push(
+        context,
+        MaterialPageRoute<void>(builder: (_) => const RecipeDetailPage()),
+      ),
+    );
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _bus.fire(RecipeSelect(recipe)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Recipes')),
+      appBar: AppBar(
+        title: const Text('Recipes'),
+        actions: [
+          IconButton(
+            onPressed: () => Navigator.of(context).push(
+              SettingsPage.route(),
+            ),
+            icon: const Icon(
+              Icons.settings,
+            ),
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton(
         tooltip: 'New recipe',
         onPressed: () =>
@@ -101,15 +86,23 @@ class _RecipeListPageState extends State<RecipeListPage> {
             ),
         child: const Icon(Icons.add),
       ),
-      body: ListView.builder(
-        itemCount: _recipes.length,
-        itemBuilder: (_, index) {
-          final r = _recipes[index];
-          return ListTile(
-            title: Text(r.name),
-            subtitle: Text(r.description),
-            onTap: () => _onRecipeTap(r),
-            onLongPress: () => _showRecipeOptionsSheet(context, r),
+      body: ValueListenableBuilder(
+        valueListenable: _recipes,
+        builder: (context, recipes, _) {
+          return ListView.builder(
+            itemCount: recipes.length,
+            itemBuilder: (_, index) {
+              final r = recipes[index];
+              return RecipeSummaryTile(
+                name: r.name,
+                description: r.description,
+                coffeeGrams: r.totalCoffeeGrams,
+                waterGrams: r.totalWaterGrams,
+                duration: r.totalDurationString,
+                onTap: () => _onRecipeTap(r),
+                onLongPress: () => _showRecipeOptionsSheet(context, r),
+              );
+            },
           );
         },
       ),

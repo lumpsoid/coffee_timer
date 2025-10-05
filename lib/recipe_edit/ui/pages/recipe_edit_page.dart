@@ -8,12 +8,12 @@ import 'package:uuid/uuid.dart';
 class RecipeEditPage extends StatefulWidget {
   const RecipeEditPage({
     super.key,
-    this.initial = const Recipe.empty(),
+    this.initial = Recipe.empty,
   });
   final Recipe initial;
 
   static MaterialPageRoute<void> route({
-    Recipe initial = const Recipe.empty(),
+    Recipe initial = Recipe.empty,
   }) {
     return MaterialPageRoute(
       builder: (context) => RecipeEditPage(
@@ -28,8 +28,6 @@ class RecipeEditPage extends StatefulWidget {
 
 class _RecipeEditPageState extends State<RecipeEditPage> {
   final RecipeEventBus _bus = RecipeHub.instance.bus;
-
-  late final StreamSubscription<RecipeEvent> _sub;
 
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
@@ -57,19 +55,10 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
     if (_stepNameControllers.isEmpty) {
       _addEmptyStep();
     }
-
-    _sub = _bus.stream.listen((event) {
-      switch (event) {
-        // handle events if needed
-        default:
-          break;
-      }
-    });
   }
 
   @override
   void dispose() {
-    unawaited(_sub.cancel());
     _nameController.dispose();
     _descController.dispose();
     for (final c in _stepNameControllers) {
@@ -104,17 +93,18 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
   void _save() {
     if (!_formKey.currentState!.validate()) return;
 
-    final steps = <Step>[];
+    final steps = <RecipeStep>[];
     for (var i = 0; i < _stepNameControllers.length; i++) {
       final name = _stepNameControllers[i].text.trim();
       final durText = _stepDurationControllers[i].text.trim();
       final dur = int.tryParse(durText) ?? 0;
       final index = i + 1;
-      final originalId = widget.initial.isEmpty
+      final originalId =
+          widget.initial.isEmpty || i > widget.initial.steps.length - 1
           ? const Uuid().v7()
           : widget.initial.steps[i].id;
       steps.add(
-        Step(
+        RecipeStep(
           id: originalId,
           name: name.isEmpty ? 'Step $index' : name,
           durationSeconds: dur,

@@ -39,8 +39,13 @@ class RecipeDelete extends RecipeEvent {
 }
 
 class RecipeTimerStepChanged extends RecipeEvent {
-  const RecipeTimerStepChanged(this.step);
-  final Step step;
+  const RecipeTimerStepChanged({
+    required this.index,
+    required this.step,
+  });
+
+  final int? index;
+  final RecipeStep step;
 }
 
 class RecipeTimerStartFromStep extends RecipeEvent {
@@ -54,11 +59,14 @@ class RecipeTimerStart extends RecipeEvent {
 
 class RecipeTimerTick extends RecipeEvent {
   const RecipeTimerTick({
-    required this.remainingSeconds,
-    required this.progress,
+    required this.minutes,
+    required this.seconds,
   });
-  final int remainingSeconds;
-  final double progress;
+
+  const RecipeTimerTick.empty() : minutes = '', seconds = '';
+
+  final String minutes;
+  final String seconds;
 }
 
 class RecipeTimerEnded extends RecipeEvent {
