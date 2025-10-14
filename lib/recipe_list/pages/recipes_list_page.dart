@@ -1,6 +1,8 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/recipe.dart';
+import 'package:coffee_timer/core/settings/settings.dart';
 import 'package:coffee_timer/recipe_details/pages/pages.dart';
 import 'package:coffee_timer/recipe_edit/ui/ui.dart';
 import 'package:coffee_timer/recipe_list/widgets/widgets.dart';
@@ -21,8 +23,8 @@ class RecipeListPage extends StatefulWidget {
 }
 
 class _RecipeListPageState extends State<RecipeListPage> {
-  final RecipeEventBus _bus = RecipeHub.instance.bus;
-  late final StreamSubscription<RecipeEvent> _sub;
+  final RecipeEventBus _bus = RecipeEventBus.instance;
+  late final StreamSubscription<Event> _sub;
   final _recipes = ValueNotifier<List<Recipe>>([]);
 
   @override
@@ -67,9 +69,13 @@ class _RecipeListPageState extends State<RecipeListPage> {
         title: const Text('Recipes'),
         actions: [
           IconButton(
-            onPressed: () => Navigator.of(context).push(
-              SettingsPage.route(),
-            ),
+            onPressed: () {
+              unawaited(
+                Navigator.of(context).push(
+                  SettingsPage.route(),
+                ),
+              );
+            },
             icon: const Icon(
               Icons.settings,
             ),

@@ -1,24 +1,18 @@
-import 'package:coffee_timer/core/settings/buses/buses.dart';
-import 'package:coffee_timer/core/settings/entities/entities.dart';
-import 'package:coffee_timer/core/settings/events/events.dart';
-import 'package:coffee_timer/core/settings/storage/storage.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'package:coffee_timer/core/events/events.dart';
+import 'package:coffee_timer/core/settings/settings.dart';
 import 'package:sqlite_async/sqlite_async.dart';
 
 class SettingsStorageSqlite {
-  SettingsStorageSqlite({required SettingsEventBus bus}) : _bus = bus {
-    _bus.stream.listen(_handleEvent);
-  }
+  SettingsStorageSqlite({
+    required SqliteDatabase db,
+    required this.emit,
+  }) : _db = db;
 
-  final SettingsEventBus _bus;
-  late final SqliteDatabase _db;
+  final SqliteDatabase _db;
+
+  void Function(Event) emit;
 
   Future<void> initialize() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final dbPath = p.join(dir.path, 'settings.db');
-    _db = SqliteDatabase(path: dbPath);
-
     // Create key-value table
     await _db.execute('''
       CREATE TABLE IF NOT EXISTS ${SettingsTable.tableName} (
@@ -51,14 +45,14 @@ class SettingsStorageSqlite {
     }
   }
 
-  Future<void> _handleEvent(SettingsEvent event) async {
+  Future<void> handleEvent(Event event) async {
     switch (event) {
       case SettingsLoadStorage _:
         final settings = await _loadSettings();
-        _bus.fire(SettingsLoadedStorage(settings));
+        emit(SettingsLoadedStorage(settings));
       case SettingsUpdateStorage _:
         await _updateSettings(event.settings);
-        _bus.fire(SettingsUpdatedStorage(event.settings));
+        emit(SettingsUpdatedStorage(event.settings));
       default:
         break;
     }
@@ -66,7 +60,6 @@ class SettingsStorageSqlite {
 
   Future<Settings> _loadSettings() async {
     final rows = await _db.getAll('SELECT * FROM ${SettingsTable.tableName}');
-    print(rows);
 
     final settingsMap = <String, dynamic>{};
     for (final row in rows) {
@@ -92,7 +85,6 @@ class SettingsStorageSqlite {
     if (hex.length == 6) {
       hex = 'FF$hex'; // opaque
     }
-    print('parse color string $colorStr');
     return int.parse(hex, radix: 16);
   }
 
@@ -100,7 +92,6 @@ class SettingsStorageSqlite {
     final themeValue = settings.theme;
     final accentColorValue =
         '#${settings.accentColor.toRadixString(16).padLeft(8, '0')}';
-    print('Sqlite storage settings: $accentColorValue');
 
     // Use INSERT OR REPLACE to upsert
     await _db.execute(

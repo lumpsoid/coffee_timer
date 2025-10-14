@@ -1,7 +1,7 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/settings/settings.dart';
-import 'package:coffee_timer/core/theme/theme.dart';
 import 'package:flutter/material.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -16,18 +16,29 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final SettingsHub _settingsHub = SettingsHub.instance;
   final _selectedTheme = ValueNotifier<String>('light');
-  final _accentColor = ValueNotifier<Color>(ThemeManager.instance.accentColor);
+  final _accentColor = ValueNotifier<Color>(const Color(0x00000000));
+
+  late final StreamSubscription<Event> _sub;
+
+  void _emit(Event event) {
+    SettingsEventBus.instance.fire(event);
+  }
 
   @override
   void initState() {
     super.initState();
-    _settingsHub.bus.stream.listen(_handleEvent);
-    SettingsHub.instance.bus.fire(const SettingsLoad());
+    _sub = SettingsEventBus.instance.stream.listen(_handleEvent);
+    _emit(const SettingsLoad());
   }
 
-  void _handleEvent(SettingsEvent event) {
+  @override
+  void dispose() {
+    unawaited(_sub.cancel());
+    super.dispose();
+  }
+
+  void _handleEvent(Event event) {
     switch (event) {
       case SettingsLoaded():
         _accentColor.value = Color(event.settings.accentColor);
@@ -43,7 +54,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
     _selectedTheme.value = theme;
 
-    _settingsHub.bus.fire(SettingsThemeChanged(theme));
+    _emit(SettingsThemeChanged(theme));
   }
 
   @override
@@ -92,7 +103,7 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 20),
             ElevatedButton(
               onPressed: () {
-                _settingsHub.bus.fire(const SettingsLoad());
+                _emit(const SettingsLoad());
               },
               child: const Text('Refresh Settings'),
             ),
@@ -140,7 +151,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   onTap: () {
                     Navigator.of(context).pop(); // close dialog
 
-                    SettingsHub.instance.bus.fire(
+                    _emit(
                       SettingsAccentColorChanged(option.color.toARGB32()),
                     );
                   },

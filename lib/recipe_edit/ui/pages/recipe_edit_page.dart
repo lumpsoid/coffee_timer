@@ -27,7 +27,7 @@ class RecipeEditPage extends StatefulWidget {
 }
 
 class _RecipeEditPageState extends State<RecipeEditPage> {
-  final RecipeEventBus _bus = RecipeHub.instance.bus;
+  final RecipeEventBus _bus = RecipeEventBus.instance;
 
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;

@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/audio_asset.dart';
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/buses/buses.dart';
 import 'package:coffee_timer/core/recipe/entities/entities.dart';
 import 'package:coffee_timer/core/recipe/events/events.dart';
@@ -12,13 +14,13 @@ class RecipeActor {
   }
 
   final RecipeEventBus _bus;
-  late final StreamSubscription<RecipeEvent> _subscription;
+  late final StreamSubscription<Event> _subscription;
 
   final _recipes = <Recipe>[];
   Recipe? _currentRecipe;
   RecipeStep? _currentStep;
 
-  void _handleEvent(RecipeEvent event) {
+  void _handleEvent(Event event) {
     switch (event) {
       case RecipesLoad _:
         if (_recipes.isEmpty) {
@@ -63,8 +65,13 @@ class RecipeActor {
 
       case RecipeSelect _:
         _currentRecipe = event.recipe;
+        _bus.fire(const AudioLoadAsset(AudioAsset.timer));
+
       case RecipeDeselect _:
         _currentRecipe = null;
+        _resetTimerState();
+        _bus.fire(const WakelockDisable());
+        _bus.fire(const AudioUnloadAssetLatest());
 
       case RecipeCreate(:final recipe):
         _bus.fire(RecipeCreateStorage(recipe));
@@ -78,8 +85,7 @@ class RecipeActor {
         _startTimer(initialStepIndex: 0);
       case RecipeTimerStartFromStep():
         _startTimer(initialStepIndex: event.stepIndex);
-      case RecipeTimerEnded():
-        _resetTimer();
+
       case RecipeTimerReset():
         _resetTimer();
       default:
@@ -93,7 +99,6 @@ class RecipeActor {
   int _totalRemainingSeconds = 0;
 
   void _startTimer({required int initialStepIndex}) {
-    _secondTimer?.cancel();
     _resetTimerState();
 
     if (_currentRecipe == null || _currentRecipe!.steps.isEmpty) return;
@@ -106,13 +111,14 @@ class RecipeActor {
     // Fire initial UI tick
     final (minutes, seconds) = _formatRemainingSeconds(_stepRemainingSeconds);
     _bus
-      ..fire(RecipeTimerTick(minutes: minutes, seconds: seconds))
+      ..fire(const WakelockEnable())
       ..fire(
-        RecipeTimerStepChanged(
+        RecipeTimerStarted(
           index: _currentStepIndex,
           step: _currentStep!,
         ),
-      );
+      )
+      ..fire(RecipeTimerTick(minutes: minutes, seconds: seconds));
 
     // Tick every second
     _secondTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -138,23 +144,7 @@ class RecipeActor {
         if (_currentStepIndex >= _currentRecipe!.steps.length) {
           // All steps done
           _resetTimer();
-          _currentStep = null;
-          _secondTimer?.cancel();
-
-          _bus
-            ..fire(const RecipeTimerTick(minutes: '00', seconds: '00'))
-            ..fire(
-              const RecipeTimerStepChanged(
-                index: null,
-                step: RecipeStep(
-                  id: '',
-                  name: 'Recipe ended',
-                  durationSeconds: 0,
-                ),
-              ),
-            )
-            ..fire(const RecipeTimerEnded());
-
+          _bus.fire(const Vibrate());
           return;
         }
 
@@ -166,6 +156,8 @@ class RecipeActor {
           _stepRemainingSeconds,
         );
         _bus
+          ..fire(const Vibrate())
+          ..fire(const AudioPlayTimerSound())
           ..fire(RecipeTimerTick(minutes: newMinutes, seconds: newSeconds))
           ..fire(
             RecipeTimerStepChanged(
@@ -189,6 +181,8 @@ class RecipeActor {
   }
 
   void _resetTimerState() {
+    if (_secondTimer == null) return;
+
     _secondTimer?.cancel();
     _secondTimer = null;
     _currentStep = null;
@@ -199,7 +193,9 @@ class RecipeActor {
 
   void _resetTimer() {
     _resetTimerState();
-    _bus.fire(const RecipeTimerTick.empty());
+    _bus
+      ..fire(const WakelockDisable())
+      ..fire(const RecipeTimerEnded());
   }
 
   void dispose() {

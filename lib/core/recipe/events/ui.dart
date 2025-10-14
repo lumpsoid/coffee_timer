@@ -57,6 +57,16 @@ class RecipeTimerStart extends RecipeEvent {
   const RecipeTimerStart();
 }
 
+class RecipeTimerStarted extends RecipeEvent {
+  const RecipeTimerStarted({
+    required this.index,
+    required this.step,
+  });
+
+  final int? index;
+  final RecipeStep step;
+}
+
 class RecipeTimerTick extends RecipeEvent {
   const RecipeTimerTick({
     required this.minutes,

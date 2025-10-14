@@ -46,14 +46,16 @@ class RecipeSummaryTile extends StatelessWidget {
                       text: name,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    TextSpan(
-                      text: ' — ',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    TextSpan(
-                      text: description,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+                    if (description.isNotEmpty) ...[
+                      TextSpan(
+                        text: ' — ',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      TextSpan(
+                        text: description,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
                   ],
                 ),
               ),

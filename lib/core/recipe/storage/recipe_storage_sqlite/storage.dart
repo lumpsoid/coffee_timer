@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/buses/buses.dart';
 import 'package:coffee_timer/core/recipe/entities/entities.dart';
 import 'package:coffee_timer/core/recipe/events/events.dart';
@@ -11,26 +12,23 @@ import 'package:sqlite_async/sqlite_async.dart';
 class RecipeStorageSqlite {
   RecipeStorageSqlite({
     required RecipeEventBus bus,
-  }) : _bus = bus {
+    required SqliteDatabase db,
+  }) : _bus = bus,
+       _db = db {
     _bus.stream.listen(_handleEvent);
   }
 
   final RecipeEventBus _bus;
-  late final SqliteDatabase _db;
+  final SqliteDatabase _db;
 
   Future<void> initialize() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final dbPath = p.join(dir.path, 'recipes.db');
-
-    _db = SqliteDatabase(path: dbPath);
-
     await MigrationRunner.run(
       db: _db,
       migrations: allMigrations,
     );
   }
 
-  Future<void> _handleEvent(RecipeEvent event) async {
+  Future<void> _handleEvent(Event event) async {
     switch (event) {
       case RecipesLoadStorage():
         final recipes = await _loadRecipes();

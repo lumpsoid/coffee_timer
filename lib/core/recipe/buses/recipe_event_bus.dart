@@ -1,18 +1,23 @@
 import 'dart:async';
 
-import 'package:coffee_timer/core/recipe/events/events.dart';
+import 'package:coffee_timer/core/events/events.dart';
 
-class RecipeEventBus {
-  factory RecipeEventBus() => _instance;
+abstract class RecipeEventBus {
+  static final RecipeEventBus instance = _RecipeEventBusImpl();
 
-  RecipeEventBus._internal();
+  Stream<Event> get stream;
+  void dispose();
+  void fire(Event event);
+}
 
-  static final RecipeEventBus _instance = RecipeEventBus._internal();
+class _RecipeEventBusImpl implements RecipeEventBus {
+  final _controller = StreamController<Event>.broadcast();
 
-  final _controller = StreamController<RecipeEvent>.broadcast();
-
-  Stream<RecipeEvent> get stream => _controller.stream;
+  @override
+  Stream<Event> get stream => _controller.stream;
+  @override
   void dispose() => _controller.close();
 
-  void fire(RecipeEvent event) => _controller.add(event);
+  @override
+  void fire(Event event) => _controller.add(event);
 }

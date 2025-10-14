@@ -1,3 +1,4 @@
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/settings/settings.dart';
 import 'package:flutter/material.dart';
 
@@ -55,12 +56,7 @@ class ThemeManager extends ChangeNotifier {
   String get currentTheme => _currentTheme;
   Color get accentColor => _accentColor;
 
-  void initialize() {
-    SettingsHub.instance.bus.stream.listen(_handleEvent);
-    SettingsHub.instance.bus.fire(const SettingsLoad());
-  }
-
-  void _handleEvent(SettingsEvent event) {
+  void handleEvent(Event event) {
     switch (event) {
       case SettingsLoaded(:final settings):
       case SettingsUpdated(:final settings):

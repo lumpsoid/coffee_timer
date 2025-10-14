@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/recipe.dart';
 import 'package:coffee_timer/recipe_details/widgets/widgets.dart';
 import 'package:coffee_timer/recipe_edit/ui/ui.dart';
@@ -19,11 +20,9 @@ class RecipeDetailPage extends StatefulWidget {
 }
 
 class _RecipeDetailPageState extends State<RecipeDetailPage> {
-  final RecipeEventBus _bus = RecipeHub.instance.bus;
+  late final StreamSubscription<Event> _sub;
 
-  late final StreamSubscription<RecipeEvent> _sub;
-
-  final step = ValueNotifier<RecipeStep>(const RecipeStep.empty());
+  final stepNotifier = ValueNotifier<RecipeStep>(const RecipeStep.empty());
   final stepDuration = ValueNotifier<Duration?>(null);
   final currentStepIndex = ValueNotifier<int>(0);
   late final runAndIndex = Listenable.merge([started, currentStepIndex]);
@@ -36,39 +35,50 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   void initState() {
     super.initState();
 
-    _sub = _bus.stream.listen((event) {
-      switch (event) {
-        case RecipeModified():
-          recipe.value = event.recipe;
+    _sub = context.recipeEventBus.stream.listen(_handleEvent);
+  }
 
-        case RecipeSelect():
-          recipe.value = event.recipe;
+  void _handleEvent(Event event) {
+    switch (event) {
+      case RecipeModified():
+        recipe.value = event.recipe;
 
-        case RecipeTimerTick():
-          timerMinutes.value = event.minutes;
-          timerSeconds.value = event.seconds;
+      case RecipeSelect():
+        recipe.value = event.recipe;
 
-        case RecipeTimerStepChanged():
-          step.value = event.step;
-          currentStepIndex.value = event.index ?? 0;
-          stepDuration.value = event.step.durationSeconds == 0
-              ? null
-              : Duration(seconds: event.step.durationSeconds);
+      case RecipeTimerTick():
+        timerMinutes.value = event.minutes;
+        timerSeconds.value = event.seconds;
 
-        case RecipeTimerStartFromStep():
-        case RecipeTimerStart():
-          started.value = true;
+      case RecipeTimerStarted(:final index, :final step):
+      case RecipeTimerStepChanged(:final index, :final step):
+        stepNotifier.value = step;
+        currentStepIndex.value = index ?? 0;
+        stepDuration.value = step.durationSeconds == 0
+            ? null
+            : Duration(seconds: step.durationSeconds);
 
-        case RecipeTimerEnded():
-        case RecipeTimerReset():
-        case RecipeTimerPause():
-          started.value = false;
-          stepDuration.value = null;
+      case RecipeTimerStartFromStep():
+      case RecipeTimerStart():
+        started.value = true;
 
-        default:
-          return;
-      }
-    });
+      case RecipeTimerEnded():
+        started.value = false;
+        stepDuration.value = null;
+
+        stepNotifier.value = const RecipeStep.empty();
+        currentStepIndex.value = 0;
+        timerMinutes.value = '';
+        timerSeconds.value = '';
+
+      case RecipeTimerReset():
+      case RecipeTimerPause():
+        started.value = false;
+        stepDuration.value = null;
+
+      default:
+        return;
+    }
   }
 
   @override
@@ -85,9 +95,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   Widget build(BuildContext context) {
     return PopScope(
       onPopInvokedWithResult: (poped, result) {
-        _bus
-          ..fire(const RecipeTimerReset())
-          ..fire(const RecipeDeselect());
+        context.recipeEventBus.fire(const RecipeDeselect());
       },
       child: Scaffold(
         appBar: AppBar(
@@ -136,9 +144,13 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                       return GestureDetector(
                         onTap: () {
                           if (isStarted) {
-                            _bus.fire(const RecipeTimerReset());
+                            context.recipeEventBus.fire(
+                              const RecipeTimerReset(),
+                            );
                           } else {
-                            _bus.fire(const RecipeTimerStart());
+                            context.recipeEventBus.fire(
+                              const RecipeTimerStart(),
+                            );
                           }
                         },
                         child: LayoutBuilder(
@@ -155,7 +167,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                                   ? Column(
                                       children: [
                                         ValueListenableBuilder(
-                                          valueListenable: step,
+                                          valueListenable: stepNotifier,
                                           builder: (context, s, _) {
                                             return Text(s.name);
                                           },
@@ -212,7 +224,9 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                                             ),
                                             const SizedBox(height: 4),
                                             _RecipeInfoText(
-                                              icon: const Icon(Icons.timer_outlined),
+                                              icon: const Icon(
+                                                Icons.timer_outlined,
+                                              ),
                                               text: r.totalDurationString,
                                             ),
                                           ],
@@ -248,7 +262,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                               isTicking: isTicking,
                               stepName: step.name,
                               durationSeconds: step.durationSeconds,
-                              onLongPress: () => _bus.fire(
+                              onLongPress: () => context.recipeEventBus.fire(
                                 RecipeTimerStartFromStep(i),
                               ),
                             );

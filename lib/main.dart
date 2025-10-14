@@ -1,22 +1,50 @@
-import 'package:coffee_timer/core/recipe/recipe.dart';
-import 'package:coffee_timer/core/settings/settings.dart';
-import 'package:coffee_timer/core/theme/theme.dart';
+import 'dart:async';
+
+import 'package:coffee_timer/core/core.dart';
 import 'package:coffee_timer/recipe_list/recipe_list.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:sqlite_async/sqlite_async.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  RecipeHub.instance.actor;
-  await RecipeHub.instance.storage.initialize();
-  RecipeHub.instance.bus.stream.listen((event) {
-    print('RecipeHub: event $event');
-  });
-  // Initialize settings storage
-  SettingsHub.instance.actor;
-  await SettingsHub.instance.storage.initialize();
 
-  // Initialize theme manager
-  ThemeManager.instance.initialize();
+  final dir = await getApplicationDocumentsDirectory();
+  final dbPath = p.join(dir.path, 'recipes.db');
+
+  final db = SqliteDatabase(path: dbPath);
+
+  final recipeBus = RecipeEventBus.instance;
+
+  RecipeActor(bus: recipeBus);
+  await RecipeStorageSqlite(db: db, bus: recipeBus).initialize();
+
+  final audioPlayerLeaf = AudioPlayerLeaf();
+
+  unawaited(audioPlayerLeaf.handle(const AudioInitialize()));
+
+  recipeBus.stream.listen((event) {
+    // debug part
+    // ignore: avoid_print
+    print('RecipeHub: event $event');
+    unawaited(audioPlayerLeaf.handle(event));
+    unawaited(VibrateFlutterLeaf.handle(event));
+    WakelockLeaf.handle(event);
+  });
+
+  // Initialize settings
+  final settingsBus = SettingsEventBus.instance..init();
+
+  SettingsActor(emit: settingsBus.fire);
+  final settingsStorage = SettingsStorageSqlite(db: db, emit: settingsBus.fire);
+  await settingsStorage.initialize();
+
+  settingsBus.stream.listen(settingsStorage.handleEvent);
+  settingsBus.stream.listen(ThemeManager.instance.handleEvent);
+
+  settingsBus.fire(const SettingsLoad());
+
   runApp(const MyApp());
 }
 
