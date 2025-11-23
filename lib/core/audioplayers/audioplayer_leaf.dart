@@ -2,18 +2,20 @@ import 'dart:async';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:coffee_timer/core/audio_asset.dart';
+import 'package:coffee_timer/core/di/hub.dart';
 import 'package:coffee_timer/core/events/events.dart';
 
-class AudioPlayerLeaf {
+class AudioPlayerLeaf extends Leaf {
   AudioPlayerLeaf();
 
   AudioPlayer? _audioPlayer;
   String _loadedAsset = '';
 
-  Future<void> handle(Event event) async {
+  @override
+  Future<void> handleEvent(Event event) async {
     switch (event) {
       case AudioInitialize _:
-        await _init();
+        await initialize();
 
       case AudioDispose _:
         await _audioPlayer?.dispose();
@@ -32,7 +34,7 @@ class AudioPlayerLeaf {
 
       case AudioPlayTimerSound _:
         if (_loadedAsset != AudioAsset.timer) {
-          await _init();
+          await initialize();
           _loadedAsset = AudioAsset.timer;
           await _audioPlayer!.setSource(AssetSource(_loadedAsset));
         }
@@ -43,7 +45,8 @@ class AudioPlayerLeaf {
     }
   }
 
-  Future<void> _init() async {
+  @override
+  Future<void> initialize() async {
     if (_audioPlayer != null) return;
 
     _audioPlayer = AudioPlayer();

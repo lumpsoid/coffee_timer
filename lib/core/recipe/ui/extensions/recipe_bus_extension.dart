@@ -1,6 +1,7 @@
-import 'package:coffee_timer/core/recipe/buses/buses.dart';
+import 'package:coffee_timer/core/di.dart';
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:flutter/widgets.dart';
 
 extension RecipeEventBusX on BuildContext {
-  RecipeEventBus get recipeEventBus => RecipeEventBus.instance;
+  Stream<Event> get recipeStream => kernel.getStream('recipe');
 }

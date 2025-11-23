@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:coffee_timer/core/core.dart';
+import 'package:coffee_timer/core/di/hub.dart';
 import 'package:coffee_timer/recipe_list/recipe_list.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
@@ -15,23 +16,43 @@ Future<void> main() async {
 
   final db = SqliteDatabase(path: dbPath);
 
-  final recipeBus = RecipeEventBus.instance;
-
-  RecipeActor(bus: recipeBus);
-  await RecipeStorageSqlite(db: db, bus: recipeBus).initialize();
-
-  final audioPlayerLeaf = AudioPlayerLeaf();
-
-  unawaited(audioPlayerLeaf.handle(const AudioInitialize()));
-
-  recipeBus.stream.listen((event) {
-    // debug part
-    // ignore: avoid_print
-    print('RecipeHub: event $event');
-    unawaited(audioPlayerLeaf.handle(event));
-    unawaited(VibrateFlutterLeaf.handle(event));
-    WakelockLeaf.handle(event);
-  });
+  Hub()
+    ..registerBus('recipe')
+    ..registerLeaf(
+      busName: 'recipe',
+      name: 'audioPlayer',
+      leaf: AudioPlayerLeaf(),
+    )
+    ..registerLeaf(
+      busName: 'recipe',
+      name: 'recipeActor',
+      leaf: RecipeActor(),
+    )
+    ..registerLeaf(
+      busName: 'recipe',
+      name: 'recipeStorage',
+      leaf: RecipeStorageSqlite(db: db),
+    )
+    ..subscribe(
+      busName: 'recipe',
+      moduleName: 'observer',
+      handler: (event) {
+        // debug part
+        // ignore: avoid_print
+        print('RecipeHub: event $event');
+      },
+    )
+    ..subscribe(
+      busName: 'recipe',
+      moduleName: 'recipeToVibrate',
+      handler: VibrateFlutterLeaf.handle,
+    )
+    ..subscribe(
+      busName: 'recipe',
+      moduleName: 'recipeToWakeLock',
+      handler: WakelockLeaf.handle,
+    )
+    ..emitToLeaf('audioPlayer', const AudioInitialize());
 
   // Initialize settings
   final settingsBus = SettingsEventBus.instance..init();

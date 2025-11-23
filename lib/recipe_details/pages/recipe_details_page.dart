@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/di.dart';
 import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/recipe.dart';
 import 'package:coffee_timer/recipe_details/widgets/widgets.dart';
@@ -35,7 +36,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   void initState() {
     super.initState();
 
-    _sub = context.recipeEventBus.stream.listen(_handleEvent);
+    _sub = kernel.getStream('recipe').listen(_handleEvent);
+  }
+
+  void _emit(Event event) {
+    kernel.emit('recipe', event);
   }
 
   void _handleEvent(Event event) {
@@ -95,7 +100,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
   Widget build(BuildContext context) {
     return PopScope(
       onPopInvokedWithResult: (poped, result) {
-        context.recipeEventBus.fire(const RecipeDeselect());
+        _emit(const RecipeDeselect());
       },
       child: Scaffold(
         appBar: AppBar(
@@ -144,11 +149,11 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                       return GestureDetector(
                         onTap: () {
                           if (isStarted) {
-                            context.recipeEventBus.fire(
+                            _emit(
                               const RecipeTimerReset(),
                             );
                           } else {
-                            context.recipeEventBus.fire(
+                            _emit(
                               const RecipeTimerStart(),
                             );
                           }
@@ -262,7 +267,7 @@ class _RecipeDetailPageState extends State<RecipeDetailPage> {
                               isTicking: isTicking,
                               stepName: step.name,
                               durationSeconds: step.durationSeconds,
-                              onLongPress: () => context.recipeEventBus.fire(
+                              onLongPress: () => _emit(
                                 RecipeTimerStartFromStep(i),
                               ),
                             );

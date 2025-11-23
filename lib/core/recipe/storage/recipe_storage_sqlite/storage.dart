@@ -1,26 +1,20 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/di/hub.dart';
 import 'package:coffee_timer/core/events/events.dart';
-import 'package:coffee_timer/core/recipe/buses/buses.dart';
 import 'package:coffee_timer/core/recipe/entities/entities.dart';
 import 'package:coffee_timer/core/recipe/events/events.dart';
 import 'package:coffee_timer/core/recipe/storage/recipe_storage_sqlite/recipe_storage_sqlite.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import 'package:sqlite_async/sqlite_async.dart';
 
-class RecipeStorageSqlite {
+class RecipeStorageSqlite extends Leaf {
   RecipeStorageSqlite({
-    required RecipeEventBus bus,
     required SqliteDatabase db,
-  }) : _bus = bus,
-       _db = db {
-    _bus.stream.listen(_handleEvent);
-  }
+  }) : _db = db;
 
-  final RecipeEventBus _bus;
   final SqliteDatabase _db;
 
+  @override
   Future<void> initialize() async {
     await MigrationRunner.run(
       db: _db,
@@ -28,23 +22,24 @@ class RecipeStorageSqlite {
     );
   }
 
-  Future<void> _handleEvent(Event event) async {
+  @override
+  Future<void> handleEvent(Event event) async {
     switch (event) {
       case RecipesLoadStorage():
         final recipes = await _loadRecipes();
-        _bus.fire(RecipesLoadedStorage(recipes));
+        emit(RecipesLoadedStorage(recipes));
 
       case RecipeCreateStorage(:final recipe):
         final createdRecipe = await _createRecipe(recipe);
-        _bus.fire(RecipeCreatedStorage(createdRecipe));
+        emit(RecipeCreatedStorage(createdRecipe));
 
       case RecipeUpdateStorage(:final recipe):
         final updatedRecipe = await _updateRecipe(recipe);
-        _bus.fire(RecipeUpdatedStorage(updatedRecipe));
+        emit(RecipeUpdatedStorage(updatedRecipe));
 
       case RecipeDeleteStorage(:final id):
         await _deleteRecipe(id);
-        _bus.fire(RecipeDeletedStorage(id));
+        emit(RecipeDeletedStorage(id));
 
       default:
         break;

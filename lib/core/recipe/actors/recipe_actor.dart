@@ -1,42 +1,36 @@
 import 'dart:async';
 
 import 'package:coffee_timer/core/audio_asset.dart';
+import 'package:coffee_timer/core/di/hub.dart';
 import 'package:coffee_timer/core/events/events.dart';
-import 'package:coffee_timer/core/recipe/buses/buses.dart';
 import 'package:coffee_timer/core/recipe/entities/entities.dart';
 import 'package:coffee_timer/core/recipe/events/events.dart';
 
-class RecipeActor {
-  RecipeActor({
-    required RecipeEventBus bus,
-  }) : _bus = bus {
-    _subscription = _bus.stream.listen(_handleEvent);
-  }
-
-  final RecipeEventBus _bus;
-  late final StreamSubscription<Event> _subscription;
+class RecipeActor extends Leaf {
+  RecipeActor();
 
   final _recipes = <Recipe>[];
   Recipe? _currentRecipe;
   RecipeStep? _currentStep;
 
-  void _handleEvent(Event event) {
+  @override
+  Future<void> handleEvent(Event event) {
     switch (event) {
       case RecipesLoad _:
         if (_recipes.isEmpty) {
-          _bus.fire(const RecipesLoadStorage());
+          emit(const RecipesLoadStorage());
         } else {
-          _bus.fire(RecipesLoaded(_recipes));
+          emit(RecipesLoaded(_recipes));
         }
       case RecipesLoadedStorage(:final recipes):
         _recipes.addAll(recipes);
-        _bus.fire(RecipesLoaded(recipes));
+        emit(RecipesLoaded(recipes));
 
       case RecipeCreatedStorage(:final recipe):
         _recipes.add(event.recipe);
-        _bus.fire(RecipesLoaded(_recipes));
+        emit(RecipesLoaded(_recipes));
         if (_currentRecipe != null) {
-          _bus.fire(RecipeModified(recipe));
+          emit(RecipeModified(recipe));
         }
 
       case RecipeUpdatedStorage(:final recipe):
@@ -51,35 +45,35 @@ class RecipeActor {
           // old one modified
           _recipes[indexRecipe] = event.recipe;
         }
-        _bus.fire(RecipesLoaded(_recipes));
+        emit(RecipesLoaded(_recipes));
         if (_currentRecipe != null) {
-          _bus.fire(RecipeModified(recipe));
+          emit(RecipeModified(recipe));
         }
 
       case RecipeDeletedStorage(:final id):
         _recipes.removeWhere((r) => r.id == id);
-        _bus.fire(RecipesLoaded(_recipes));
+        emit(RecipesLoaded(_recipes));
         if (_currentRecipe != null && _currentRecipe!.id == id) {
-          _bus.fire(const RecipeModified(Recipe.empty));
+          emit(const RecipeModified(Recipe.empty));
         }
 
       case RecipeSelect _:
         _currentRecipe = event.recipe;
-        _bus.fire(const AudioLoadAsset(AudioAsset.timer));
+        emit(const AudioLoadAsset(AudioAsset.timer));
 
       case RecipeDeselect _:
         _currentRecipe = null;
         _resetTimerState();
-        _bus.fire(const WakelockDisable());
-        _bus.fire(const AudioUnloadAssetLatest());
+        emit(const WakelockDisable());
+        emit(const AudioUnloadAssetLatest());
 
       case RecipeCreate(:final recipe):
-        _bus.fire(RecipeCreateStorage(recipe));
+        emit(RecipeCreateStorage(recipe));
       case RecipeUpdate _:
         _currentRecipe = event.recipe;
-        _bus.fire(RecipeUpdateStorage(event.recipe));
+        emit(RecipeUpdateStorage(event.recipe));
       case RecipeDelete(:final id):
-        _bus.fire(RecipeDeleteStorage(id));
+        emit(RecipeDeleteStorage(id));
 
       case RecipeTimerStart():
         _startTimer(initialStepIndex: 0);
@@ -91,6 +85,7 @@ class RecipeActor {
       default:
         break;
     }
+    return Future.value();
   }
 
   Timer? _secondTimer;
@@ -110,15 +105,14 @@ class RecipeActor {
 
     // Fire initial UI tick
     final (minutes, seconds) = _formatRemainingSeconds(_stepRemainingSeconds);
-    _bus
-      ..fire(const WakelockEnable())
-      ..fire(
-        RecipeTimerStarted(
-          index: _currentStepIndex,
-          step: _currentStep!,
-        ),
-      )
-      ..fire(RecipeTimerTick(minutes: minutes, seconds: seconds));
+    emit(const WakelockEnable());
+    emit(
+      RecipeTimerStarted(
+        index: _currentStepIndex,
+        step: _currentStep!,
+      ),
+    );
+    emit(RecipeTimerTick(minutes: minutes, seconds: seconds));
 
     // Tick every second
     _secondTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -135,7 +129,7 @@ class RecipeActor {
 
       // Fire tick
       final (minutes, seconds) = _formatRemainingSeconds(_stepRemainingSeconds);
-      _bus.fire(RecipeTimerTick(minutes: minutes, seconds: seconds));
+      emit(RecipeTimerTick(minutes: minutes, seconds: seconds));
 
       // Check if step is complete
       if (_stepRemainingSeconds <= 0) {
@@ -144,7 +138,7 @@ class RecipeActor {
         if (_currentStepIndex >= _currentRecipe!.steps.length) {
           // All steps done
           _resetTimer();
-          _bus.fire(const Vibrate());
+          emit(const Vibrate());
           return;
         }
 
@@ -155,16 +149,16 @@ class RecipeActor {
         final (newMinutes, newSeconds) = _formatRemainingSeconds(
           _stepRemainingSeconds,
         );
-        _bus
-          ..fire(const Vibrate())
-          ..fire(const AudioPlayTimerSound())
-          ..fire(RecipeTimerTick(minutes: newMinutes, seconds: newSeconds))
-          ..fire(
-            RecipeTimerStepChanged(
-              index: _currentStepIndex,
-              step: _currentStep!,
-            ),
-          );
+
+        emit(const Vibrate());
+        emit(const AudioPlayTimerSound());
+        emit(RecipeTimerTick(minutes: newMinutes, seconds: newSeconds));
+        emit(
+          RecipeTimerStepChanged(
+            index: _currentStepIndex,
+            step: _currentStep!,
+          ),
+        );
       }
     });
   }
@@ -193,14 +187,7 @@ class RecipeActor {
 
   void _resetTimer() {
     _resetTimerState();
-    _bus
-      ..fire(const WakelockDisable())
-      ..fire(const RecipeTimerEnded());
-  }
-
-  void dispose() {
-    unawaited(
-      _subscription.cancel(),
-    );
+    emit(const WakelockDisable());
+    emit(const RecipeTimerEnded());
   }
 }

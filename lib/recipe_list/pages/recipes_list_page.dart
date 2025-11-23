@@ -1,8 +1,8 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/di.dart';
 import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/recipe.dart';
-import 'package:coffee_timer/core/settings/settings.dart';
 import 'package:coffee_timer/recipe_details/pages/pages.dart';
 import 'package:coffee_timer/recipe_edit/ui/ui.dart';
 import 'package:coffee_timer/recipe_list/widgets/widgets.dart';
@@ -23,7 +23,6 @@ class RecipeListPage extends StatefulWidget {
 }
 
 class _RecipeListPageState extends State<RecipeListPage> {
-  final RecipeEventBus _bus = RecipeEventBus.instance;
   late final StreamSubscription<Event> _sub;
   final _recipes = ValueNotifier<List<Recipe>>([]);
 
@@ -31,23 +30,29 @@ class _RecipeListPageState extends State<RecipeListPage> {
   void initState() {
     super.initState();
 
-    _sub = _bus.stream.listen((event) {
-      switch (event) {
-        case RecipesLoaded():
-          _recipes.value = event.recipes;
+    _sub = kernel.getStream('recipe').listen(_handleEvent);
 
-        default:
-          return;
-      }
-    });
-
-    _bus.fire(const RecipesLoad());
+    _emit(const RecipesLoad());
   }
 
   @override
   void dispose() {
     unawaited(_sub.cancel());
     super.dispose();
+  }
+
+  void _emit(Event event) {
+    kernel.emit('recipe', event);
+  }
+
+  void _handleEvent(Event event) {
+    switch (event) {
+      case RecipesLoaded():
+        _recipes.value = event.recipes;
+
+      default:
+        return;
+    }
   }
 
   void _onRecipeTap(Recipe recipe) {
@@ -58,7 +63,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
       ),
     );
     WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _bus.fire(RecipeSelect(recipe)),
+      (_) => _emit(RecipeSelect(recipe)),
     );
   }
 
@@ -177,7 +182,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
             TextButton(
               onPressed: () {
                 Navigator.of(ctx).pop(); // close dialog
-                _bus.fire(RecipeDelete(id: recipe.id));
+                _emit(RecipeDelete(id: recipe.id));
               },
               child: const Text(
                 'Delete',

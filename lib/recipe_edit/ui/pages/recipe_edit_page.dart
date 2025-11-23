@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:coffee_timer/core/di.dart';
+import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/recipe.dart';
 import 'package:coffee_timer/recipe_list/pages/pages.dart';
 import 'package:flutter/material.dart' hide Step;
@@ -27,8 +29,6 @@ class RecipeEditPage extends StatefulWidget {
 }
 
 class _RecipeEditPageState extends State<RecipeEditPage> {
-  final RecipeEventBus _bus = RecipeEventBus.instance;
-
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _descController;
@@ -68,6 +68,10 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
       c.dispose();
     }
     super.dispose();
+  }
+
+  void _emit(Event event) {
+    kernel.emit('recipe', event);
   }
 
   void _addEmptyStep([String? name]) {
@@ -120,9 +124,9 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
     );
 
     if (widget.initial.isEmpty) {
-      _bus.fire(RecipeCreate(recipe));
+      _emit(RecipeCreate(recipe));
     } else {
-      _bus.fire(RecipeUpdate(recipe));
+      _emit(RecipeUpdate(recipe));
     }
 
     Navigator.of(context).pop(recipe);
@@ -299,7 +303,7 @@ class _RecipeEditPageState extends State<RecipeEditPage> {
             TextButton(
               onPressed: () {
                 Navigator.of(ctx).pop(); // close dialog
-                _bus.fire(RecipeDelete(id: id));
+                _emit(RecipeDelete(id: id));
                 Navigator.of(ctx).popUntil((r) => false);
                 unawaited(
                   Navigator.of(ctx).push(RecipeListPage.route()),
