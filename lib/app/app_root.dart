@@ -7,6 +7,7 @@ import 'package:coffee_timer/core/core.dart';
 import 'package:coffee_timer/core/di/hub.dart';
 import 'package:coffee_timer/infrastructure/database/app_database.dart';
 import 'package:coffee_timer/infrastructure/recipe/sqlite_recipe_repository.dart';
+import 'package:coffee_timer/infrastructure/recipe/uuid_recipe_ids.dart';
 import 'package:coffee_timer/infrastructure/settings/sqlite_settings_repository.dart';
 import 'package:coffee_timer/ui/recipe_list/recipe_list_page.dart';
 import 'package:coffee_timer/ui/settings/theme_controller.dart';
@@ -16,9 +17,9 @@ import 'package:sqlite_async/sqlite_async.dart';
 /// The single construction root: hosts [MaterialApp] and wires the app's
 /// modules once, after the database has been opened and migrated.
 ///
-/// Settings and the recipe *list* run on the new module/controller stack
-/// (registered into `Cells`); recipe detail/edit still ride the legacy event
-/// bus until later phases strangle it (see `docs/pivot-spec.md`).
+/// Settings and the recipe *list* + *editor* run on the new module/controller
+/// stack (registered into `Cells`); the recipe detail/timer page still rides
+/// the legacy event bus until Phase 4 strangles it (see `docs/pivot-spec.md`).
 class AppRoot extends StatefulWidget {
   const AppRoot({required this.dbPath, super.key});
 
@@ -85,11 +86,14 @@ class _AppRootState extends State<AppRoot> {
       )
       ..emitToLeaf('audioPlayer', const AudioInitialize());
 
-    // New stack for the recipe *list*: reads recipes straight from SQLite via
-    // the narrow ports, no bus. Detail/edit still go through the Hub above.
-    // Schema is already migrated by `AppDatabase`, so the tables exist.
+    // New stack for the recipe *list* and *editor*: reads/writes straight
+    // through the narrow ports, no bus. Only the detail/timer page still goes
+    // through the Hub above. Schema is already migrated by `AppDatabase`.
+    final repository = SqliteRecipeRepository(db);
     Cells.recipeModule.value = RecipeModule(
-      repository: SqliteRecipeRepository(db),
+      read: repository,
+      write: repository,
+      ids: const UuidRecipeIds(),
     );
   }
 

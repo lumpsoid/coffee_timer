@@ -63,8 +63,56 @@ void main() {
     });
   });
 
+  group('RecipeStep.labelOrDefault', () {
+    test('keeps trimmed input, falls back to Step N when blank', () {
+      expect(RecipeStep.labelOrDefault('  Bloom ', 1), 'Bloom');
+      expect(RecipeStep.labelOrDefault('', 3), 'Step 3');
+      expect(RecipeStep.labelOrDefault('   ', 2), 'Step 2');
+    });
+  });
+
+  group('Recipe mutations', () {
+    final base = _recipe([30, 45]);
+
+    test('renamed / describedAs return new instances, id preserved', () {
+      final renamed = base.renamed(RecipeName.tryParse('V60')!);
+      expect(renamed.name.value, 'V60');
+      expect(renamed.id, base.id);
+      expect(base.name.value, 'Recipe', reason: 'original untouched');
+
+      expect(base.describedAs('pour slowly').description, 'pour slowly');
+    });
+
+    test('withStepAdded appends without mutating the original', () {
+      final added = base.withStepAdded(_step(10));
+      expect(added.steps.length, 3);
+      expect(base.steps.length, 2);
+    });
+
+    test('withStepRemovedAt drops the step at the index', () {
+      final removed = base.withStepRemovedAt(0);
+      expect(removed.steps.single.duration.seconds, 45);
+      expect(base.steps.length, 2);
+    });
+
+    test('blank starts empty and builds up', () {
+      final built = Recipe.blank(
+        id: RecipeId.tryParse('x')!,
+        name: RecipeName.tryParse('Aero')!,
+      ).describedAs('quick').withStepAdded(_step(20));
+      expect(built.description, 'quick');
+      expect(built.steps.single.duration.seconds, 20);
+    });
+  });
+
   group('BrewMetrics', () {
     const metrics = BrewMetrics();
+
+    test('durationLabelOf formats a raw seconds list', () {
+      expect(metrics.durationLabelOf([65]), '1:05');
+      expect(metrics.durationLabelOf([]), '0:00');
+      expect(metrics.durationLabelOf([5999, 5999]), '99:99');
+    });
 
     test('grams scale with step count', () {
       final r = _recipe([30, 30, 30]);

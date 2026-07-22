@@ -4,6 +4,7 @@ import 'package:coffee_timer/app/cells.dart';
 import 'package:coffee_timer/domain/recipe/brew_metrics.dart';
 import 'package:coffee_timer/domain/recipe/recipe.dart';
 import 'package:coffee_timer/ui/navigation/route_args.dart';
+import 'package:coffee_timer/ui/recipe_edit/recipe_edit_page.dart';
 import 'package:coffee_timer/ui/recipe_list/legacy_recipe_nav.dart';
 import 'package:coffee_timer/ui/recipe_list/recipe_list_controller.dart';
 import 'package:coffee_timer/ui/recipe_list/recipe_summary_tile.dart';
@@ -53,12 +54,16 @@ class _RecipeListPageState extends State<RecipeListPage> {
   }
 
   Future<void> _openCreate() async {
-    await LegacyRecipeNav.openEdit(context, const RecipeEditArgs.create());
+    await Navigator.of(
+      context,
+    ).push(RecipeEditPage.route(const RecipeEditArgs.create()));
     _reloadIfMounted();
   }
 
   Future<void> _openEdit(Recipe recipe) async {
-    await LegacyRecipeNav.openEdit(context, RecipeEditArgs.edit(recipe));
+    await Navigator.of(
+      context,
+    ).push(RecipeEditPage.route(RecipeEditArgs.edit(recipe)));
     _reloadIfMounted();
   }
 

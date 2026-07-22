@@ -13,4 +13,12 @@ class RecipeStep {
   final StepId id;
   final String name;
   final StepDuration duration;
+
+  /// The name to store for a step at [position] (1-based), given the raw text a
+  /// user typed. Blank input falls back to `Step N` — the one home for that
+  /// rule, so no form re-implements it.
+  static String labelOrDefault(String raw, int position) {
+    final trimmed = raw.trim();
+    return trimmed.isEmpty ? 'Step $position' : trimmed;
+  }
 }
