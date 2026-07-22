@@ -10,7 +10,7 @@ works **today**. This doc is the target and the migration path.
 
 ---
 
-## Status (updated 2026-07-22)
+## Status (updated 2026-07-23)
 
 Work happens on branch `feat/architecture-pivot`, committed per phase.
 
@@ -18,7 +18,7 @@ Work happens on branch `feat/architecture-pivot`, committed per phase.
 |-------|-------|---------|
 | 0 — Scaffold | ✅ done | `bf7ecff` (docs), `6698b22` (cells/RouteArgs/AppRoot) |
 | 1 — Settings | ✅ done | `17f0b8d` |
-| 2 — Recipe list (+ vendored migrator) | ✅ done | `18e52aa` |
+| 2 — Recipe list (+ vendored migrator) | ✅ done | `34b9df5` |
 | 3 — Recipe edit | ⏳ next | — |
 | 4 — Details + timer | ⬜ | — |
 | 5 — Teardown | ⬜ | — |
@@ -102,13 +102,17 @@ implements domain-owned ports).
 lib/
 ├── domain/            Pure. No Flutter, no async, no I/O. Values, entities, policies, states.
 ├── application/       Use cases. Orchestrate: load via ports → ask domain → save. No decisions.
-├── infrastructure/    Adapters. SQLite repos, hardware wrappers. DTO↔domain mapping lives here.
+├── infrastructure/    Adapters. SQLite repos (recipe, settings), database/ (AppDatabase +
+│                      app_migrations), hardware wrappers. DTO↔domain mapping lives here.
 ├── ui/                Controllers (ChangeNotifier), pages, widgets, RouteArgs. Cosmetics only.
-└── app/               Composition root: Cell<T>, Cells, AppRoot, modules (controller factories).
+├── app/               Composition root: Cell<T>, Cells, AppRoot, modules (controller factories).
+└── sql_migrator/      Vendored, app-agnostic migration engine (its own domain/ + infra/). See §5a.
 ```
 
 Feature folders slice *within* these where it helps (e.g.
-`domain/recipe/…`, `ui/recipe_list/…`). One barrel per folder as today.
+`domain/recipe/…`, `ui/recipe_list/…`). Explicit per-file imports, **no
+per-folder barrels** in the new layers (see the locked-in decision above); the
+old `core/*` barrels stay only until their code is deleted.
 
 ### Layer rules
 - **domain** never imports `flutter`, `sqlite`, `dart:async` timers, or DTOs.
@@ -518,14 +522,16 @@ abstract interface class RecipeWriteRepository { Future<Recipe> upsert(Recipe r)
 
 | Area | Domain | Application (ports/use cases) | Infrastructure | UI |
 |------|--------|-------------------------------|----------------|----|
-| Recipe | `Recipe`, `RecipeStep`, `RecipeId`, `StepId`, `RecipeName`, `StepDuration`, `BrewMetrics` | `RecipeReadRepository`, `RecipeWriteRepository`; `SaveRecipe`, `DeleteRecipe`, `LoadRecipes` | `SqliteRecipeRepository` (+ existing migrations, DTO mappers) | `RecipeListController`, `RecipeEditController` + pages/tiles |
+| Recipe | `Recipe`, `RecipeStep`, `RecipeId`, `StepId`, `RecipeName`, `StepDuration`, `BrewMetrics` | `RecipeReadRepository`, `RecipeWriteRepository`; `SaveRecipe`, `DeleteRecipe`, `LoadRecipes` | `SqliteRecipeRepository` (row↔domain mappers) | `RecipeListController`, `RecipeEditController` + pages/tiles |
 | Timer | `TimerState` (sealed), `BrewTimeline`, `TimerTransition` | — (drives via recipe read) | — | `RecipeDetailsController` + circular-timer widgets |
-| Settings | `ThemeSelection`, `AccentColor`, `Settings` | `SettingsReadRepository`, `SettingsWriteRepository` | `SqliteSettingsRepository` (+ existing kv table) | `SettingsController`, `ThemeController` + page |
+| Settings | `ThemeSelection`, `AccentColor`, `Settings` | `SettingsReadRepository`, `SettingsWriteRepository` | `SqliteSettingsRepository` | `SettingsController`, `ThemeController` + page |
+| Database | — | — | `AppDatabase`, `app_migrations` (recipe/step/settings schema, one ledger); `lib/sql_migrator/` engine (§5a) | — (opened at boot by `AppRoot`) |
 | Effects | — | — | `AudioModule`, `VibrationModule`, `WakelockModule` (plugin wrappers) | injected into controllers |
 
 Everything under `lib/core/di`, `lib/core/modules/base_module.dart`,
 `lib/core/events`, `*/buses`, `*/actors`, and the dead `TimerController`
-disappears (§9).
+disappears (§9). The migration files under `lib/core/recipe/storage/**` are
+already gone (Phase 2, §9).
 
 ---
 
@@ -563,7 +569,7 @@ phase.
 - **verify:** new code analyze-clean; +7 domain tests; `flutter build linux`
   compiles. *(Live theme/accent click-through not run headlessly.)*
 
-### Phase 2 — Recipe list — ✅ done (`18e52aa`)
+### Phase 2 — Recipe list — ✅ done (`34b9df5`)
 - **domain:** `Recipe`/`RecipeStep` + value objects `RecipeId`, `StepId`,
   `RecipeName` (non-empty, `untitled` fallback), `StepDuration` (strict
   `tryParse` for input + lenient `clamped` for the boundary), and `BrewMetrics`
@@ -591,7 +597,7 @@ phase.
 - **verify:** new code analyze-clean; `flutter test` green (31); `flutter build
   linux` compiles; runtime launch on a fresh DB applies v1–v3 cleanly and the
   list loads / detail round-trips through the bridge. (Stale dev DB from the
-  old `user_version` scheme was wiped — see §5a.) Committed `18e52aa`.
+  old `user_version` scheme was wiped — see §5a.) Committed `34b9df5`.
 
 ### Phase 3 — Recipe edit
 - **domain:** entity methods (`renamed`, `withStepAdded/Removed`), `RecipeName`,
@@ -653,8 +659,12 @@ phase.
   bounds, `RecipeName` emptiness, `BrewMetrics` caps/formulas, and especially
   `BrewTimeline` (start / tick / step-advance / finish) with no `Timer` or DB.
   These are the tests that "make sure it won't fail."
-- **Infrastructure:** a handful of repository tests against an in-memory SQLite
-  DB (round-trip a `Recipe`, settings kv).
+- **Infrastructure:** a handful of repository tests against a real SQLite DB
+  (round-trip a `Recipe`; tables built through `Migrator.migrateTo(1)`), plus
+  settings kv.
+- **Migrator (`sql_migrator`):** unit tests via `InMemoryExecutor` — apply
+  pending in order, idempotent re-run, `migrateTo`, rollback, duplicate-version
+  rejection. No real DB needed.
 - **Controllers:** thin — inject fake/in-memory ports + no-op effect modules;
   assert state transitions and that the right effect module method was called on
   a transition. Because decisions live in the domain, controller tests need no
