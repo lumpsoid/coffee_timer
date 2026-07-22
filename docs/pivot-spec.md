@@ -38,47 +38,33 @@ Work happens on branch `feat/architecture-pivot`, committed per phase.
   (page) calls `ThemeController.apply(next)` (app-lifetime, in `Cells.theme`)
   then saves. No shared event/stream between them.
 - **The database is opened + migrated once by `AppDatabase`, before any UI
-  mounts** (settled in Phase 2; supersedes Phase 1's per-repo `initialize()`).
-  `AppRoot.initState` fires an async `_bootstrap`: `await AppDatabase.open()`
-  (runs all migrations to completion) → wire modules → `setState`. The widget
-  shows a spinner until then, so **no repository query can race table
-  creation** — the bug that first surfaced as a raw sqlite error on the recipe
-  list. See the new [§5a Database + migrations](#5a-database--migrations).
-  Repositories no longer create their own tables (`SqliteSettingsRepository`
-  lost its `initialize()`; `SqliteRecipeRepository` never had one).
-- **Vendored migrator, not `PRAGMA user_version`** (Phase 2). A self-contained
-  `lib/sql_migrator/` (borrowed from another project, package-renamed, its
-  checksum machinery cut) owns schema versioning via an append-only
-  `Migration` log and a `_schema_migrations` ledger. A `SqliteAsyncExecutor`
-  adapts it to `sqlite_async`. This replaced the old
-  `core/recipe/storage/**/migration*.dart` (`MigrationRunner` + `user_version`),
-  which is deleted. *Migration ownership consolidated: recipe, step and
-  settings tables all live in one ledger (`app_migrations.dart`).*
-- **Async theme init still fire-and-forget** (`unawaited(theme.load())` after
-  wiring). A sub-frame default-theme flash can still occur, but now *behind the
-  boot spinner* rather than over the first real frame. Accepted.
-- **Repositories implement multiple narrow ports.** One class
-  (`SqliteSettingsRepository`, `SqliteRecipeRepository`) implements both the
-  read and write ports; callers still depend only on the narrow port they need.
+  mounts** (Phase 2; supersedes Phase 1's per-repo `initialize()`).
+  `AppRoot._bootstrap` awaits `AppDatabase.open()` → wires modules →
+  `setState`; a spinner shows until then, so no query can race table creation.
+  Repositories no longer create tables. Migrator is vendored, not
+  `user_version`; one `_schema_migrations` ledger owns recipe/step/settings
+  schema. Full detail in [§5a](#5a-database--migrations).
+- **Async theme init is fire-and-forget** (`unawaited(theme.load())`); a
+  sub-frame default-theme flash can occur behind the boot spinner. Accepted.
+- **Narrow ports end to end.** Each repo (`SqliteSettingsRepository`,
+  `SqliteRecipeRepository`) implements both the read and write ports; every
+  caller — including `RecipeModule`, which takes `read`/`write`, not the
+  concrete repo — depends only on the port it needs, so tests wire in-memory
+  fakes and `LegacyRecipeNav` reads through `module.read`.
 - **Verification bar per phase:** `flutter analyze` clean *for new code* (legacy
   `core/*` issues are tracked down as that code is deleted), `flutter test`
   green (domain carries the tests), and `flutter build linux --debug` compiles.
-- **UI is verified with Flutter widget tests, not binary screenshots** (settled
-  in Phase 3). A `testWidgets` drive of the real pages/navigation/controllers
-  over an **in-memory fake port** is the accepted evidence for a UI slice
-  (`sqlite_async` runs on isolates that don't settle under the widget-test
-  clock, so the real DB stays behind the fake here; the real SQLite path is
-  covered by the repository test). Booting the built binary once to confirm it
-  starts + migrates is fine; screenshotting it is not.
-- **The legacy edit page is not deleted with Phase 3** — the still-legacy detail
-  page (Phase 4) navigates to it and relies on its bus-driven refresh. Both die
-  together in Phase 4. The recipe *list*'s create/edit/delete already run on the
-  new editor; only the detail→edit button stays legacy. Deleting it now would
-  regress that page to stale data after an edit.
-- **`RecipeModule` depends on the narrow read/write ports, not the concrete
-  `SqliteRecipeRepository`** (Phase 3). `AppRoot` passes one instance as both
-  `read` and `write`; a test wires an in-memory fake. `LegacyRecipeNav` reads
-  through `module.read`.
+- **UI is verified with Flutter widget tests, not binary screenshots** (Phase 3).
+  A `testWidgets` drive of the real pages/navigation/controllers over an
+  in-memory fake port is the accepted evidence for a UI slice (`sqlite_async`
+  isolates don't settle under the widget-test clock, so the real SQLite path
+  stays in the repository test). Booting the binary once to confirm it starts +
+  migrates is fine; screenshotting it is not.
+- **The legacy edit page survives Phase 3** — the still-legacy detail page
+  navigates to it and relies on its bus-driven refresh, so deleting it now would
+  leave that page stale after an edit. The list's create/edit/delete already run
+  on the new editor; **Phase 4 deletes the legacy detail *and* edit pages
+  together.**
 
 ---
 
@@ -616,33 +602,24 @@ phase.
   old `user_version` scheme was wiped — see §5a.) Committed `34b9df5`.
 
 ### Phase 3 — Recipe edit — ✅ done (`a3a94f4`)
-- **domain:** `Recipe` gained named immutable ops (`blank`, `renamed`,
-  `describedAs`, `withStepAdded`, `withStepRemovedAt`, `copyWith`);
-  `RecipeStep.labelOrDefault` is the one home for the blank-step-name → `Step N`
-  rule; `BrewMetrics` grew `totalSecondsOf`/`durationLabelOf` (raw-seconds
-  variants) so the editor shows a live total before it has a `Recipe`.
-  `RecipeName`/`StepDuration` smart constructors replace the form's ad-hoc
-  checks (the field validators just map a null `tryParse` → a message).
-- **ports/use cases:** `SaveRecipe`, `DeleteRecipe` (thin, over the write port);
-  `RecipeIds` port + `UuidRecipeIds` impl so id minting stays at the boundary
-  and the domain/ui stay free of `uuid`.
-- **ui:** `RecipeEditController` holds the raw form model (strings tolerate
-  in-progress input), assembles a valid domain `Recipe` at save via smart
-  constructors + minted ids, and persists through the use cases; new
-  `RecipeEditPage` drives it (create/edit/delete), pops on success, and the list
-  reloads on return — no `popUntil` dance. `RecipeEditArgs` already carried the
-  domain `Recipe`; `.route({initial})` is gone (the new page takes typed args).
-- **strangle:** the list navigates to the new editor; it no longer emits
-  `RecipeCreate/Update/Delete`. `LegacyRecipeNav.openEdit` removed; the legacy
-  edit page stays *only* for the legacy detail page's edit button (Phase 4
-  deletes both — see the locked-in decision above). `RecipeModule` moved to the
-  narrow ports.
-- **verify:** +10 domain tests; a `RecipeEditController` unit suite (fake write
-  port + fake `RecipeIds`); and a widget test driving the real
-  list→create→edit→delete flow over an in-memory repo, asserting persistence +
-  id preservation + the blank-name gate. 50 pass; new code analyze-clean;
-  `flutter build linux --debug` compiles; the real binary boots and migrates to
-  v3.
+- **domain:** `Recipe` named ops (`blank`, `renamed`, `describedAs`,
+  `withStepAdded`, `withStepRemovedAt`, `copyWith`); `RecipeStep.labelOrDefault`
+  owns the blank-step-name → `Step N` rule; `BrewMetrics` gained
+  `totalSecondsOf`/`durationLabelOf` so the editor shows a live total pre-assembly.
+- **application:** `SaveRecipe`, `DeleteRecipe`; `RecipeIds` port + `UuidRecipeIds`
+  keep id minting at the boundary.
+- **ui:** `RecipeEditController` holds the raw form model, assembles a valid
+  `Recipe` at save (smart constructors + minted ids), persists via the use cases;
+  `RecipeEditPage` (create/edit/delete) pops on success, list reloads on return —
+  no `popUntil` dance. `.route({initial})` gone; validators just map a null
+  `tryParse` → a message.
+- **strangle:** list navigates to the new editor; no more
+  `RecipeCreate/Update/Delete`. `LegacyRecipeNav.openEdit` removed. Legacy edit
+  page kept for the legacy detail page (both deleted in Phase 4).
+- **verify:** +10 domain tests, a `RecipeEditController` unit suite, and a widget
+  test driving the real list→create→edit→delete flow over an in-memory repo
+  (persistence + id preservation + blank-name gate). 50 pass; new code
+  analyze-clean; `build linux --debug` compiles.
 
 ### Phase 4 — Recipe details + timer (the core)
 - **domain:** `TimerState` sealed, `BrewTimeline`, `TimerTransition` — with unit
