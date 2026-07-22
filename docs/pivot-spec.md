@@ -19,8 +19,8 @@ Work happens on branch `feat/architecture-pivot`, committed per phase.
 | 0 — Scaffold | ✅ done | `bf7ecff` (docs), `6698b22` (cells/RouteArgs/AppRoot) |
 | 1 — Settings | ✅ done | `17f0b8d` |
 | 2 — Recipe list (+ vendored migrator) | ✅ done | `34b9df5` |
-| 3 — Recipe edit | ⏳ next | — |
-| 4 — Details + timer | ⬜ | — |
+| 3 — Recipe edit | ✅ done | `a3a94f4` |
+| 4 — Details + timer | ⏳ next | — |
 | 5 — Teardown | ⬜ | — |
 
 **Decisions locked in while building (deviations from the first draft):**
@@ -63,6 +63,22 @@ Work happens on branch `feat/architecture-pivot`, committed per phase.
 - **Verification bar per phase:** `flutter analyze` clean *for new code* (legacy
   `core/*` issues are tracked down as that code is deleted), `flutter test`
   green (domain carries the tests), and `flutter build linux --debug` compiles.
+- **UI is verified with Flutter widget tests, not binary screenshots** (settled
+  in Phase 3). A `testWidgets` drive of the real pages/navigation/controllers
+  over an **in-memory fake port** is the accepted evidence for a UI slice
+  (`sqlite_async` runs on isolates that don't settle under the widget-test
+  clock, so the real DB stays behind the fake here; the real SQLite path is
+  covered by the repository test). Booting the built binary once to confirm it
+  starts + migrates is fine; screenshotting it is not.
+- **The legacy edit page is not deleted with Phase 3** — the still-legacy detail
+  page (Phase 4) navigates to it and relies on its bus-driven refresh. Both die
+  together in Phase 4. The recipe *list*'s create/edit/delete already run on the
+  new editor; only the detail→edit button stays legacy. Deleting it now would
+  regress that page to stale data after an edit.
+- **`RecipeModule` depends on the narrow read/write ports, not the concrete
+  `SqliteRecipeRepository`** (Phase 3). `AppRoot` passes one instance as both
+  `read` and `write`; a test wires an in-memory fake. `LegacyRecipeNav` reads
+  through `module.read`.
 
 ---
 
@@ -599,15 +615,34 @@ phase.
   list loads / detail round-trips through the bridge. (Stale dev DB from the
   old `user_version` scheme was wiped — see §5a.) Committed `34b9df5`.
 
-### Phase 3 — Recipe edit
-- **domain:** entity methods (`renamed`, `withStepAdded/Removed`), `RecipeName`,
-  `StepDuration` validation replacing the form's ad-hoc checks.
-- **ports/use cases:** `RecipeWriteRepository`; `SaveRecipe`, `DeleteRecipe`.
-- **ui:** `RecipeEditController` + new `RecipeEditPage`, `RecipeEditArgs`
-  (create/edit). Remove `.route({initial})`.
-- **strangle:** edit page stops emitting `RecipeCreate/Update/Delete` on the bus;
-  list navigates to the *new* edit page.
-- **verify:** create, edit, delete round-trip persists. Commit.
+### Phase 3 — Recipe edit — ✅ done (`a3a94f4`)
+- **domain:** `Recipe` gained named immutable ops (`blank`, `renamed`,
+  `describedAs`, `withStepAdded`, `withStepRemovedAt`, `copyWith`);
+  `RecipeStep.labelOrDefault` is the one home for the blank-step-name → `Step N`
+  rule; `BrewMetrics` grew `totalSecondsOf`/`durationLabelOf` (raw-seconds
+  variants) so the editor shows a live total before it has a `Recipe`.
+  `RecipeName`/`StepDuration` smart constructors replace the form's ad-hoc
+  checks (the field validators just map a null `tryParse` → a message).
+- **ports/use cases:** `SaveRecipe`, `DeleteRecipe` (thin, over the write port);
+  `RecipeIds` port + `UuidRecipeIds` impl so id minting stays at the boundary
+  and the domain/ui stay free of `uuid`.
+- **ui:** `RecipeEditController` holds the raw form model (strings tolerate
+  in-progress input), assembles a valid domain `Recipe` at save via smart
+  constructors + minted ids, and persists through the use cases; new
+  `RecipeEditPage` drives it (create/edit/delete), pops on success, and the list
+  reloads on return — no `popUntil` dance. `RecipeEditArgs` already carried the
+  domain `Recipe`; `.route({initial})` is gone (the new page takes typed args).
+- **strangle:** the list navigates to the new editor; it no longer emits
+  `RecipeCreate/Update/Delete`. `LegacyRecipeNav.openEdit` removed; the legacy
+  edit page stays *only* for the legacy detail page's edit button (Phase 4
+  deletes both — see the locked-in decision above). `RecipeModule` moved to the
+  narrow ports.
+- **verify:** +10 domain tests; a `RecipeEditController` unit suite (fake write
+  port + fake `RecipeIds`); and a widget test driving the real
+  list→create→edit→delete flow over an in-memory repo, asserting persistence +
+  id preservation + the blank-name gate. 50 pass; new code analyze-clean;
+  `flutter build linux --debug` compiles; the real binary boots and migrates to
+  v3.
 
 ### Phase 4 — Recipe details + timer (the core)
 - **domain:** `TimerState` sealed, `BrewTimeline`, `TimerTransition` — with unit
