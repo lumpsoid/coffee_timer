@@ -18,8 +18,8 @@ Work happens on branch `feat/architecture-pivot`, committed per phase.
 |-------|-------|---------|
 | 0 — Scaffold | ✅ done | `bf7ecff` (docs), `6698b22` (cells/RouteArgs/AppRoot) |
 | 1 — Settings | ✅ done | `17f0b8d` |
-| 2 — Recipe list | ⏳ next | — |
-| 3 — Recipe edit | ⬜ | — |
+| 2 — Recipe list (+ vendored migrator) | ✅ done | `18e52aa` |
+| 3 — Recipe edit | ⏳ next | — |
 | 4 — Details + timer | ⬜ | — |
 | 5 — Teardown | ⬜ | — |
 
@@ -37,12 +37,29 @@ Work happens on branch `feat/architecture-pivot`, committed per phase.
   result into a long-lived controller via `apply(...)`. Here `SettingsController`
   (page) calls `ThemeController.apply(next)` (app-lifetime, in `Cells.theme`)
   then saves. No shared event/stream between them.
-- **Async init in `AppRoot.initState`** (repo `initialize()` → controller
-  `load()`, fire-and-forget via `unawaited`). Consequence: settings load *after*
-  the first frame, a sub-frame default-theme flash on cold start. Accepted.
+- **The database is opened + migrated once by `AppDatabase`, before any UI
+  mounts** (settled in Phase 2; supersedes Phase 1's per-repo `initialize()`).
+  `AppRoot.initState` fires an async `_bootstrap`: `await AppDatabase.open()`
+  (runs all migrations to completion) → wire modules → `setState`. The widget
+  shows a spinner until then, so **no repository query can race table
+  creation** — the bug that first surfaced as a raw sqlite error on the recipe
+  list. See the new [§5a Database + migrations](#5a-database--migrations).
+  Repositories no longer create their own tables (`SqliteSettingsRepository`
+  lost its `initialize()`; `SqliteRecipeRepository` never had one).
+- **Vendored migrator, not `PRAGMA user_version`** (Phase 2). A self-contained
+  `lib/sql_migrator/` (borrowed from another project, package-renamed, its
+  checksum machinery cut) owns schema versioning via an append-only
+  `Migration` log and a `_schema_migrations` ledger. A `SqliteAsyncExecutor`
+  adapts it to `sqlite_async`. This replaced the old
+  `core/recipe/storage/**/migration*.dart` (`MigrationRunner` + `user_version`),
+  which is deleted. *Migration ownership consolidated: recipe, step and
+  settings tables all live in one ledger (`app_migrations.dart`).*
+- **Async theme init still fire-and-forget** (`unawaited(theme.load())` after
+  wiring). A sub-frame default-theme flash can still occur, but now *behind the
+  boot spinner* rather than over the first real frame. Accepted.
 - **Repositories implement multiple narrow ports.** One class
-  (`SqliteSettingsRepository`) implements both the read and write ports; callers
-  still depend only on the narrow port they need.
+  (`SqliteSettingsRepository`, `SqliteRecipeRepository`) implements both the
+  read and write ports; callers still depend only on the narrow port they need.
 - **Verification bar per phase:** `flutter analyze` clean *for new code* (legacy
   `core/*` issues are tracked down as that code is deleted), `flutter test`
   green (domain carries the tests), and `flutter build linux --debug` compiles.
@@ -401,6 +418,57 @@ lifetime; `dispose()` does the wakelock-off / audio-unload cleanup.
 
 ---
 
+## 5a. Database + migrations
+
+One SQLite file, opened and migrated **once** before any repository is handed
+it. This is the single owner of schema for the whole app.
+
+### The vendored migrator — `lib/sql_migrator/`
+A self-contained migration engine (lifted from another project, package-renamed
+to `coffee_timer`, checksum machinery cut). It is decoupled from any DB package
+via a `MigrationExecutor` port, and from the app entirely — it knows nothing
+about recipes or settings.
+
+```
+lib/sql_migrator/
+├── domain/        MigrationExecutor, MigrationLogger, Migration, MigrationRecord,
+│                  MigratorConfig, MigrationStatus, exceptions (pure)
+└── infra/         Migrator (engine), PrintMigrationLogger,
+                   SqliteAsyncExecutor (sqlite_async adapter),
+                   InMemoryExecutor (for unit-testing migrations)
+```
+
+Rules baked into `Migrator`:
+- **Append-only log.** Migrations are a replayable list keyed by version; a
+  shipped migration body is *frozen* — schema changes are new, higher-versioned
+  migrations appended at the end. Editing a shipped one silently forks the
+  schema between fresh and existing installs. (Full rationale in the class doc.)
+- **Ledger, not `user_version`.** Applied versions live in a
+  `_schema_migrations` table; each migration + its ledger row commit in one
+  transaction, so schema and ledger can't diverge.
+- **Checksum-free.** The upstream version verified migration bodies via SHA-256
+  checksums; that machinery was cut as noise for this app.
+
+### App wiring — `lib/infrastructure/database/`
+- `app_migrations.dart` — the append-only `Migration` list for *this* app:
+  v1 `recipe`+`step` tables, v2 example-recipe seed, v3 `settings` kv table.
+  (Recipe, step and settings schema share one ledger.)
+- `app_database.dart` — `AppDatabase.open()` opens the `SqliteDatabase`, runs
+  `Migrator(...).migrate()` to completion, and returns the ready DB.
+  `useLocking: false` (single-isolate app).
+
+`AppRoot._bootstrap` awaits `AppDatabase.open()` first, *then* wires modules and
+`setState`s. So migrations always finish before the first query — the fix for
+the sqlite "no such table" race (a repo `SELECT` had jumped ahead of the old
+`MigrationRunner`'s not-yet-committed `CREATE TABLE`).
+
+> Migration-system migration: a DB created under the old `user_version` scheme
+> has no `_schema_migrations` ledger, so the new migrator would replay `v1` and
+> collide with existing tables. There are no shipped users yet, so the dev DB is
+> simply wiped. A future adopter migration could seed the ledger instead.
+
+---
+
 ## 6. Navigation — `RouteArgs`, not events merged into the system
 
 One typed args class per navigable page; carried explicitly, not smuggled
@@ -495,16 +563,35 @@ phase.
 - **verify:** new code analyze-clean; +7 domain tests; `flutter build linux`
   compiles. *(Live theme/accent click-through not run headlessly.)*
 
-### Phase 2 — Recipe list — ⏳ next
-- **domain/infra:** `Recipe`/`RecipeStep`/value objects + `BrewMetrics`;
-  `RecipeReadRepository` + `SqliteRecipeRepository.all()/byId()`; DTO↔domain
-  mappers (reuse existing SQL + migrations).
-- **ui:** `RecipeListController` (load, delete); new `RecipeListPage` +
-  `RecipeSummaryTile` reading `BrewMetrics` for grams/duration; navigation via
-  `RouteArgs` (still pushing the *old* detail/edit pages through a thin adapter
-  that unpacks args → old `RecipeSelect`/`route` for now).
-- **strangle:** list page no longer emits `RecipesLoad`/`RecipeDelete` on the bus.
-- **verify:** list loads, delete works, still opens old detail/edit. Commit.
+### Phase 2 — Recipe list — ✅ done (`18e52aa`)
+- **domain:** `Recipe`/`RecipeStep` + value objects `RecipeId`, `StepId`,
+  `RecipeName` (non-empty, `untitled` fallback), `StepDuration` (strict
+  `tryParse` for input + lenient `clamped` for the boundary), and `BrewMetrics`
+  (grams/duration formulas, the `6000`s cap, `M:SS`/`99:99` label — one home).
+  +10 domain tests.
+- **ports + infra:** `RecipeReadRepository` (`all`/`byId`) +
+  `RecipeWriteRepository` (`upsert`/`delete`); `SqliteRecipeRepository`
+  implements both, smart constructors at the row boundary (corrupt-PK rows
+  dropped, never surfaced as invalid entities). +1 repo round-trip test
+  (real sqlite, tables via `Migrator.migrateTo(1)`).
+- **database (new, see §5a):** replaced the legacy `MigrationRunner`/
+  `user_version` with the vendored `sql_migrator` + `AppDatabase`; recipe/step/
+  settings schema now migrate once at boot. +5 migrator tests
+  (`InMemoryExecutor`).
+- **ui:** `RecipeListController` (load, delete, error field); new
+  `RecipeListPage` (create-on-mount / dispose, reload-on-return) +
+  `RecipeSummaryTile` reading `BrewMetrics`; `RecipeModule` in `Cells`;
+  `RecipeDetailsArgs`/`RecipeEditArgs` added to `RouteArgs`. Navigation goes
+  through a **temporary** `LegacyRecipeNav` bridge (`ui/recipe_list/`) that
+  maps a domain `Recipe` → old core `Recipe` and drives the still-legacy
+  detail/edit pages via the bus/`route()`; deleted in Phases 3–4.
+- **strangle:** old `lib/recipe_list/` deleted; list no longer emits
+  `RecipesLoad`/`RecipeDelete`. Legacy `RecipeStorageSqlite.initialize()` no
+  longer migrates (the new stack owns it); its old migration files are deleted.
+- **verify:** new code analyze-clean; `flutter test` green (31); `flutter build
+  linux` compiles; runtime launch on a fresh DB applies v1–v3 cleanly and the
+  list loads / detail round-trips through the bridge. (Stale dev DB from the
+  old `user_version` scheme was wiped — see §5a.) Committed `18e52aa`.
 
 ### Phase 3 — Recipe edit
 - **domain:** entity methods (`renamed`, `withStepAdded/Removed`), `RecipeName`,
@@ -555,6 +642,8 @@ phase.
 | `ThemeManager` | `ThemeController` (in `Cells.theme`) |
 | dead `TimerController` | `RecipeDetailsController` + `TimerState` |
 | `.route({initial})` helpers, post-frame `RecipeSelect` | `RouteArgs` + page-scoped controllers |
+| `MigrationRunner` + `PRAGMA user_version` (`storage/**/migration*.dart`) | `lib/sql_migrator/` + `AppDatabase` (one `_schema_migrations` ledger) — *done, Phase 2* |
+| per-repo `initialize()` table creation | migrations in `app_migrations.dart` — *done, Phase 2* |
 
 ---
 

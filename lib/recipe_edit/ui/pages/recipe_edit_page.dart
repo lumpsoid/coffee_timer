@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:coffee_timer/core/di.dart';
 import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/recipe.dart';
-import 'package:coffee_timer/recipe_list/pages/pages.dart';
+import 'package:coffee_timer/ui/recipe_list/recipe_list_page.dart';
 import 'package:flutter/material.dart' hide Step;
 import 'package:uuid/uuid.dart';
 

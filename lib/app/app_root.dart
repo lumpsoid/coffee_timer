@@ -1,21 +1,24 @@
 import 'dart:async';
 
 import 'package:coffee_timer/app/cells.dart';
+import 'package:coffee_timer/app/recipe_module.dart';
 import 'package:coffee_timer/app/settings_module.dart';
 import 'package:coffee_timer/core/core.dart';
 import 'package:coffee_timer/core/di/hub.dart';
+import 'package:coffee_timer/infrastructure/database/app_database.dart';
+import 'package:coffee_timer/infrastructure/recipe/sqlite_recipe_repository.dart';
 import 'package:coffee_timer/infrastructure/settings/sqlite_settings_repository.dart';
-import 'package:coffee_timer/recipe_list/recipe_list.dart';
+import 'package:coffee_timer/ui/recipe_list/recipe_list_page.dart';
 import 'package:coffee_timer/ui/settings/theme_controller.dart';
 import 'package:flutter/material.dart';
 import 'package:sqlite_async/sqlite_async.dart';
 
 /// The single construction root: hosts [MaterialApp] and wires the app's
-/// modules once in [State.initState].
+/// modules once, after the database has been opened and migrated.
 ///
-/// Settings run on the new module/controller stack (registered into `Cells`);
-/// recipes still ride the legacy event bus until later phases strangle it
-/// (see `docs/pivot-spec.md`).
+/// Settings and the recipe *list* run on the new module/controller stack
+/// (registered into `Cells`); recipe detail/edit still ride the legacy event
+/// bus until later phases strangle it (see `docs/pivot-spec.md`).
 class AppRoot extends StatefulWidget {
   const AppRoot({required this.dbPath, super.key});
 
@@ -26,14 +29,21 @@ class AppRoot extends StatefulWidget {
 }
 
 class _AppRootState extends State<AppRoot> {
-  late final ThemeController _theme;
+  ThemeController? _theme;
 
   @override
   void initState() {
     super.initState();
-    final db = SqliteDatabase(path: widget.dbPath);
+    unawaited(_bootstrap());
+  }
+
+  /// Opens + migrates the database, then wires every module. The UI below only
+  /// builds once this completes, so no repository query can outrun a migration.
+  Future<void> _bootstrap() async {
+    final db = await AppDatabase(path: widget.dbPath).open();
     _wireRecipe(db);
     _wireSettings(db);
+    if (mounted) setState(() {});
   }
 
   void _wireRecipe(SqliteDatabase db) {
@@ -74,29 +84,44 @@ class _AppRootState extends State<AppRoot> {
         handler: WakelockLeaf.handle,
       )
       ..emitToLeaf('audioPlayer', const AudioInitialize());
+
+    // New stack for the recipe *list*: reads recipes straight from SQLite via
+    // the narrow ports, no bus. Detail/edit still go through the Hub above.
+    // Schema is already migrated by `AppDatabase`, so the tables exist.
+    Cells.recipeModule.value = RecipeModule(
+      repository: SqliteRecipeRepository(db),
+    );
   }
 
   void _wireSettings(SqliteDatabase db) {
     final repository = SqliteSettingsRepository(db);
-    _theme = ThemeController(repository);
-    Cells.theme.value = _theme;
+    final theme = ThemeController(repository);
+    Cells.theme.value = theme;
     Cells.settingsModule.value = SettingsModule(
       repository: repository,
-      theme: _theme,
+      theme: theme,
     );
-    unawaited(repository.initialize().then((_) => _theme.load()));
+    _theme = theme;
+    unawaited(theme.load());
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = _theme;
+    if (theme == null) {
+      return const MaterialApp(
+        debugShowCheckedModeBanner: false,
+        home: Scaffold(body: Center(child: CircularProgressIndicator())),
+      );
+    }
     return ListenableBuilder(
-      listenable: _theme,
+      listenable: theme,
       builder: (context, child) {
         return MaterialApp(
           title: 'Recipe App',
-          themeMode: _theme.mode,
-          theme: _theme.light,
-          darkTheme: _theme.dark,
+          themeMode: theme.mode,
+          theme: theme.light,
+          darkTheme: theme.dark,
           home: const RecipeListPage(),
         );
       },

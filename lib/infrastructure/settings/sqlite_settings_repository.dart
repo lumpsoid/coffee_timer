@@ -6,6 +6,7 @@ import 'package:sqlite_async/sqlite_async.dart';
 
 /// Key-value SQLite storage for [Settings]. Wire-compatible with the previous
 /// `settings` table (a `theme` row and an `accent_color` row as `#AARRGGBB`).
+/// The table is created by `AppDatabase`'s migrations, not here.
 ///
 /// This is the only place raw rows and hex strings appear: the smart
 /// constructors ([ThemeSelection.fromStorage], [AccentColor.tryFromHex]) run
@@ -19,16 +20,6 @@ class SqliteSettingsRepository
   static const _accentKey = 'accent_color';
 
   final SqliteDatabase _db;
-
-  /// Creates the table if it does not exist. Call once before first use.
-  Future<void> initialize() async {
-    await _db.execute('''
-      CREATE TABLE IF NOT EXISTS $_table (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL
-      )
-    ''');
-  }
 
   @override
   Future<Settings> load() async {

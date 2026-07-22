@@ -4,7 +4,6 @@ import 'package:coffee_timer/core/di/hub.dart';
 import 'package:coffee_timer/core/events/events.dart';
 import 'package:coffee_timer/core/recipe/entities/entities.dart';
 import 'package:coffee_timer/core/recipe/events/events.dart';
-import 'package:coffee_timer/core/recipe/storage/recipe_storage_sqlite/recipe_storage_sqlite.dart';
 import 'package:sqlite_async/sqlite_async.dart';
 
 class RecipeStorageSqlite extends Leaf {
@@ -16,10 +15,8 @@ class RecipeStorageSqlite extends Leaf {
 
   @override
   Future<void> initialize() async {
-    await MigrationRunner.run(
-      db: _db,
-      migrations: allMigrations,
-    );
+    // Migrations are now owned by SqliteRecipeRepository (the new stack), which
+    // runs them once at boot. Running them here too would race and double-seed.
   }
 
   @override

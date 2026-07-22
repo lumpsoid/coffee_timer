@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+/// One row in the recipe list: name/description plus the brew figures. Pure
+/// cosmetics — all values are computed by the caller (`BrewMetrics`).
 class RecipeSummaryTile extends StatelessWidget {
   const RecipeSummaryTile({
     required this.name,
@@ -62,7 +64,6 @@ class RecipeSummaryTile extends StatelessWidget {
               const SizedBox(height: 8),
               const Divider(height: 1),
               const SizedBox(height: 8),
-              // Parameters row
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
