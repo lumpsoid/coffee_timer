@@ -10,6 +10,45 @@ works **today**. This doc is the target and the migration path.
 
 ---
 
+## Status (updated 2026-07-22)
+
+Work happens on branch `feat/architecture-pivot`, committed per phase.
+
+| Phase | State | Commits |
+|-------|-------|---------|
+| 0 — Scaffold | ✅ done | `bf7ecff` (docs), `6698b22` (cells/RouteArgs/AppRoot) |
+| 1 — Settings | ✅ done | `17f0b8d` |
+| 2 — Recipe list | ⏳ next | — |
+| 3 — Recipe edit | ⬜ | — |
+| 4 — Details + timer | ⬜ | — |
+| 5 — Teardown | ⬜ | — |
+
+**Decisions locked in while building (deviations from the first draft):**
+
+- **No barrels in new layers.** `domain/`, `application/`, `infrastructure/`,
+  `ui/` use explicit per-file imports rather than a per-folder barrel. The old
+  `core/*` barrels stay only until their code is deleted. (Draft §1 said "one
+  barrel per folder"; explicit imports won for clarity and to avoid entity vs
+  barrel name clashes like `settings/settings.dart`.)
+- **`one_member_abstracts` lint disabled** in `analysis_options.yaml` — narrow
+  single-method ports (§5) are the intended shape everywhere, not a smell.
+- **Two-controller theme pattern** (settled in Phase 1, applies to any
+  app-lifetime state): a page-scoped controller edits + persists and pushes the
+  result into a long-lived controller via `apply(...)`. Here `SettingsController`
+  (page) calls `ThemeController.apply(next)` (app-lifetime, in `Cells.theme`)
+  then saves. No shared event/stream between them.
+- **Async init in `AppRoot.initState`** (repo `initialize()` → controller
+  `load()`, fire-and-forget via `unawaited`). Consequence: settings load *after*
+  the first frame, a sub-frame default-theme flash on cold start. Accepted.
+- **Repositories implement multiple narrow ports.** One class
+  (`SqliteSettingsRepository`) implements both the read and write ports; callers
+  still depend only on the narrow port they need.
+- **Verification bar per phase:** `flutter analyze` clean *for new code* (legacy
+  `core/*` issues are tracked down as that code is deleted), `flutter test`
+  green (domain carries the tests), and `flutter build linux --debug` compiles.
+
+---
+
 ## 0. Principles (the whole point)
 
 1. **Small classes, composed.** Complex behavior emerges from wiring small
@@ -297,37 +336,48 @@ A `StatefulWidget` that hosts `MaterialApp`. `initState` opens the DB, builds
 modules, and populates the cells **once**. This replaces `main.dart`'s bus
 wiring.
 
+**Current shape** (`lib/app/app_root.dart`) — mid-strangle: settings run on the
+new module/`Cells` stack; recipes still ride the legacy `Hub` until Phases 2–4.
+Wiring is split per feature so each block can be deleted independently.
+
 ```dart
-// app/app_root.dart
-class AppRoot extends StatefulWidget { … }
 class _AppRootState extends State<AppRoot> {
+  late final ThemeController _theme;
+
   @override void initState() {
     super.initState();
     final db = SqliteDatabase(path: widget.dbPath);
-    final audio = AudioModule()..initialize();
-    // wire modules
-    Cells.recipeModule.value = RecipeModule(
-      recipes: SqliteRecipeRepository(db)..ensureMigrated(),
-      audio: audio, vibration: VibrationModule(), wakelock: WakelockModule());
-    Cells.settingsModule.value = SettingsModule(SqliteSettingsRepository(db));
-    // long-lived controller
-    Cells.theme.value = ThemeController(Cells.settingsModule.value.repository)..load();
+    _wireRecipe(db);    // legacy Hub + leaves (temporary)
+    _wireSettings(db);  // new stack ↓
   }
-  @override Widget build(BuildContext c) => ListenableBuilder(
-    listenable: Cells.theme.value,
-    builder: (c, _) => MaterialApp(
-      themeMode: Cells.theme.value.mode,
-      theme: Cells.theme.value.light, darkTheme: Cells.theme.value.dark,
+
+  void _wireSettings(SqliteDatabase db) {
+    final repository = SqliteSettingsRepository(db);
+    _theme = ThemeController(repository);
+    Cells.theme.value = _theme;
+    Cells.settingsModule.value =
+        SettingsModule(repository: repository, theme: _theme);
+    unawaited(repository.initialize().then((_) => _theme.load()));
+  }
+
+  @override Widget build(BuildContext context) => ListenableBuilder(
+    listenable: _theme,
+    builder: (context, _) => MaterialApp(
+      themeMode: _theme.mode, theme: _theme.light, darkTheme: _theme.dark,
       home: const RecipeListPage()));
 }
 
-// main.dart shrinks to:
-void main() async {
+// main.dart is already the thin bootstrap:
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final dir = await getApplicationDocumentsDirectory();
   runApp(AppRoot(dbPath: p.join(dir.path, 'recipes.db')));
 }
 ```
+
+By the end of Phase 4, `_wireRecipe` is replaced by a `RecipeModule`
+registered into `Cells` (like `RecipeModule` in §5 above), and `_theme` may
+read from `Cells.theme` rather than a local field.
 
 ### Feature page lifecycle (create on mount, dispose on unmount)
 ```dart
@@ -417,30 +467,35 @@ Ground rule: **`flutter analyze` is clean and the app runs after every phase.**
 New code lands alongside the old bus; each phase strangles one slice. Commit per
 phase.
 
-### Phase 0 — Scaffold (no behavior change)
-- Add `app/cell.dart`, `app/cells.dart`, `ui/navigation/route_args.dart`.
-- Add `AppRoot` that, for now, just hosts the existing `MaterialApp`/pages and
-  keeps the current bus wiring inside `initState` (move `main.dart`'s body here
-  verbatim). `main.dart` becomes the thin bootstrap.
-- **DoD:** app behaves identically; cells exist but unused. Commit.
+### Phase 0 — Scaffold (no behavior change) — ✅ done (`bf7ecff`, `6698b22`)
+- Added `app/cell.dart`, `app/cells.dart`, `ui/navigation/route_args.dart`, and
+  `AppRoot` hosting `MaterialApp` with the existing bus wiring moved into
+  `initState`; `main.dart` reduced to the thin bootstrap. Replaced the stale
+  counter `widget_test.dart` with `Cell` unit tests.
+- **Result:** behaviour unchanged (bar the accepted first-frame theme flash);
+  cells present but unused.
 
-### Phase 1 — Settings (smallest feature, proves the pattern)
-- **domain:** `ThemeSelection`, `AccentColor`, `Settings` (value objects; smart
-  constructors run at the DB boundary).
+### Phase 1 — Settings — ✅ done (`17f0b8d`)
+- **domain:** `ThemeSelection` (closed enum), `AccentColor` (valid-by-construction
+  value object), `Settings` (named ops, no setters).
 - **ports + infra:** `SettingsReadRepository` / `SettingsWriteRepository`;
-  `SqliteSettingsRepository` reusing the existing `settings` kv table + defaults.
-- **ui:** `SettingsController` (ChangeNotifier) and `ThemeController` (long-lived,
-  in `Cells.theme`); new `SettingsPage` reading the controller; theme/accent
-  changes call controller methods → repo → `notifyListeners()`.
-- **strangle:** delete `SettingsEventBus`, the never-subscribed `SettingsActor`,
-  `settings/events/*`, old `SettingsStorageSqlite` wiring in the root, old
-  `ThemeManager` (replaced by `ThemeController`). `AppRoot` now builds the
-  settings module + theme controller from cells.
-- **verify:** change theme + accent, kill/relaunch → persisted; app themes live.
-  *(This phase also fixes the current dead-`SettingsActor` bug for free.)*
-- Commit.
+  `SqliteSettingsRepository` implementing both, wire-compatible with the existing
+  `settings` kv table (smart constructors run at the boundary; `initialize()`
+  creates the table, no seed — `load()` falls back to `Settings.fallback`).
+- **ui:** `ThemeController` (app-lifetime, in `Cells.theme`) + page-scoped
+  `SettingsController`; rebuilt `SettingsPage` creates its controller on mount /
+  disposes on unmount. Edit flow: `SettingsController` → domain `withX` →
+  `ThemeController.apply` (live) → `save` (persist). The two-controller pattern
+  above replaced any shared event/stream.
+- **strangle:** deleted `SettingsEventBus`, the never-subscribed `SettingsActor`
+  (bug fixed for free), `ThemeManager`, `SettingsTable`, the whole old
+  `lib/core/settings`, `lib/core/theme`, and `lib/settings` UI. `core/core.dart`
+  drops the settings/theme exports. Old `RecipeListPage` temporarily navigates to
+  the new `SettingsPage.route()`.
+- **verify:** new code analyze-clean; +7 domain tests; `flutter build linux`
+  compiles. *(Live theme/accent click-through not run headlessly.)*
 
-### Phase 2 — Recipe list
+### Phase 2 — Recipe list — ⏳ next
 - **domain/infra:** `Recipe`/`RecipeStep`/value objects + `BrewMetrics`;
   `RecipeReadRepository` + `SqliteRecipeRepository.all()/byId()`; DTO↔domain
   mappers (reuse existing SQL + migrations).
