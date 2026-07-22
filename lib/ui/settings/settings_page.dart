@@ -1,142 +1,114 @@
 import 'dart:async';
 
-import 'package:coffee_timer/core/events/events.dart';
-import 'package:coffee_timer/core/settings/settings.dart';
+import 'package:coffee_timer/app/cells.dart';
+import 'package:coffee_timer/domain/settings/accent_color.dart';
+import 'package:coffee_timer/domain/settings/theme_selection.dart';
+import 'package:coffee_timer/ui/settings/settings_controller.dart';
 import 'package:flutter/material.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
-  static MaterialPageRoute<void> route() {
-    return MaterialPageRoute(builder: (_) => const SettingsPage());
-  }
+  static MaterialPageRoute<void> route() =>
+      MaterialPageRoute(builder: (_) => const SettingsPage());
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  final _selectedTheme = ValueNotifier<String>('light');
-  final _accentColor = ValueNotifier<Color>(const Color(0x00000000));
-
-  late final StreamSubscription<Event> _sub;
-
-  void _emit(Event event) {
-    SettingsEventBus.instance.fire(event);
-  }
+  late final SettingsController _controller;
 
   @override
   void initState() {
     super.initState();
-    _sub = SettingsEventBus.instance.stream.listen(_handleEvent);
-    _emit(const SettingsLoad());
+    _controller = Cells.settingsModule.value.newController();
+    unawaited(_controller.load());
   }
 
   @override
   void dispose() {
-    unawaited(_sub.cancel());
+    _controller.dispose();
     super.dispose();
   }
 
-  void _handleEvent(Event event) {
-    switch (event) {
-      case SettingsLoaded():
-        _accentColor.value = Color(event.settings.accentColor);
-        _selectedTheme.value = event.settings.theme;
-      case SettingsUpdated(:final settings):
-        _selectedTheme.value = settings.theme;
-        _accentColor.value = Color(settings.accentColor);
-    }
+  void _onThemeChanged(ThemeSelection? value) {
+    if (value == null) return;
+    unawaited(_controller.setTheme(value));
   }
 
-  void _onThemeChanged(String? theme) {
-    if (theme == null) return;
-
-    _selectedTheme.value = theme;
-
-    _emit(SettingsThemeChanged(theme));
+  void _onAccentChanged(Color color) {
+    final accent = AccentColor.tryFromArgb(color.toARGB32());
+    if (accent == null) return;
+    unawaited(_controller.setAccent(accent));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Theme',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            ValueListenableBuilder(
-              valueListenable: _selectedTheme,
-              builder: (context, currentTheme, _) {
-                return DropdownButtonFormField<String>(
-                  initialValue: currentTheme,
+        child: ListenableBuilder(
+          listenable: _controller,
+          builder: (context, _) {
+            final settings = _controller.settings;
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Theme',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<ThemeSelection>(
+                  initialValue: settings.theme,
                   decoration: const InputDecoration(
                     border: OutlineInputBorder(),
                     labelText: 'Select Theme',
                   ),
                   items: const [
                     DropdownMenuItem(
-                      value: 'light',
+                      value: ThemeSelection.light,
                       child: Text('Light'),
                     ),
                     DropdownMenuItem(
-                      value: 'dark',
+                      value: ThemeSelection.dark,
                       child: Text('Dark'),
                     ),
                     DropdownMenuItem(
-                      value: 'system',
+                      value: ThemeSelection.system,
                       child: Text('System'),
                     ),
                   ],
                   onChanged: _onThemeChanged,
-                );
-              },
-            ),
-            const SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                _emit(const SettingsLoad());
-              },
-              child: const Text('Refresh Settings'),
-            ),
-            // Accent color picker
-            ValueListenableBuilder(
-              valueListenable: _accentColor,
-              builder: (context, c, _) {
-                return ListTile(
+                ),
+                const SizedBox(height: 20),
+                ListTile(
                   title: const Text('Accent Color'),
                   trailing: AnimatedContainer(
                     duration: const Duration(milliseconds: 300),
                     width: 14,
                     height: 14,
                     decoration: BoxDecoration(
-                      color: c,
-                      borderRadius: BorderRadius.circular(
-                        7,
-                      ),
+                      color: Color(settings.accent.argb),
+                      borderRadius: BorderRadius.circular(7),
                     ),
                   ),
                   onTap: () => _showAccentColorPicker(context),
-                );
-              },
-            ),
-          ],
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
   }
 
   void _showAccentColorPicker(BuildContext context) {
+    final selected = Color(_controller.settings.accent.argb);
     unawaited(
-      showDialog(
+      showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Choose Accent Color'),
@@ -146,14 +118,12 @@ class _SettingsPageState extends State<SettingsPage> {
               spacing: 12,
               runSpacing: 12,
               children: predefinedAccentColors.map((option) {
-                final isSelected = option.color == _accentColor.value;
+                final isSelected =
+                    option.color.toARGB32() == selected.toARGB32();
                 return GestureDetector(
                   onTap: () {
-                    Navigator.of(context).pop(); // close dialog
-
-                    _emit(
-                      SettingsAccentColorChanged(option.color.toARGB32()),
-                    );
+                    Navigator.of(context).pop();
+                    _onAccentChanged(option.color);
                   },
                   child: Column(
                     mainAxisSize: MainAxisSize.min,

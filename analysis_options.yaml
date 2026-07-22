@@ -3,5 +3,9 @@ include: package:very_good_analysis/analysis_options.yaml
 linter:
   rules:
     public_member_api_docs: false
+    # Narrow, single-purpose ports are intentional across the architecture
+    # pivot (see docs/pivot-spec.md §5), so single-method abstract interfaces
+    # are expected rather than a smell.
+    one_member_abstracts: false
 formatter:
   page_width: 80

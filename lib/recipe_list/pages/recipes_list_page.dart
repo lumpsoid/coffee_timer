@@ -6,7 +6,7 @@ import 'package:coffee_timer/core/recipe/recipe.dart';
 import 'package:coffee_timer/recipe_details/pages/pages.dart';
 import 'package:coffee_timer/recipe_edit/ui/ui.dart';
 import 'package:coffee_timer/recipe_list/widgets/widgets.dart';
-import 'package:coffee_timer/settings/ui/ui.dart';
+import 'package:coffee_timer/ui/settings/settings_page.dart';
 import 'package:flutter/material.dart';
 
 class RecipeListPage extends StatefulWidget {
