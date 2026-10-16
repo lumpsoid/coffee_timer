@@ -21,13 +21,16 @@ lib/                  Flutter GUI: view state, widgets, platform effects
 
 Dependencies point down the arrows only.
 
-- **core** decides. It exposes a plain Rust API: commands in, changes out.
-  Recipe rules, brew metrics, and the timer state machine live here.
-- **store** persists. It loads and saves core types in SQLite and runs the
-  migrations. No decisions; no rinf.
-- **hub** translates. It turns Dart signals into core commands, owns the
-  clock, calls the core, performs effects (via the store or by signalling
-  Dart), and turns core output into Rust signals. It holds no business `if`.
+- **core** decides. It exposes feature controllers: actions in, state and
+  effects out. Recipe rules, brew metrics, and the timer state machine live
+  here. It defines the store and id-generator traits it needs, and never
+  implements them.
+- **store** persists. It implements the core's store traits over SQLite and
+  runs the migrations. No decisions; no rinf.
+- **hub** translates. It builds the controllers with their infrastructure,
+  turns Dart signals into controller actions, owns the tick interval, signals
+  platform effects to Dart, and turns controller state into Rust signals. It
+  holds no business `if`.
 - **cli** is a second head on the same core and store. It is the proof that the
   core does not need rinf; if the CLI cannot do something without Flutter,
   logic leaked into the hub or Dart.
@@ -37,50 +40,66 @@ Dependencies point down the arrows only.
 
 ## The core API
 
-The core owns state and returns what changed:
+The core is a set of **feature controllers**, each owning one state object.
+An action takes plain values, mutates the state, and returns only what state
+cannot hold (one-shot effects, or a `CatalogChange`). Tests run an action and
+assert the state.
 
 ```rust
 // native/core
-pub struct Core { /* state */ }
+pub struct RecipeCatalog { state: Vec<Recipe>, store: Box<dyn RecipeStore> }
+pub struct EditorController { state: Draft, ids: Box<dyn IdGen> }
+pub struct BrewController { state: BrewState }
 
-impl Core {
-    pub fn handle(&mut self, command: Command) -> Output;
-    pub fn snapshot(&self) -> Snapshot;
+impl EditorController {
+    pub fn save(&mut self, catalog: &mut RecipeCatalog) -> Result<CatalogChange, SaveError>;
 }
-
-pub struct Output {
-    pub changes: Vec<Change>,   // view state diffs
-    pub effects: Vec<Effect>,   // things the shell must do
+impl BrewController {
+    pub fn start(&mut self, from: usize, catalog: &RecipeCatalog) -> Result<Vec<Effect>, BrewError>;
+    pub fn tick(&mut self, catalog: &RecipeCatalog) -> Vec<Effect>;
+    pub fn state(&self) -> &BrewState;
 }
 ```
 
-- `Command`, `Change`, `Effect`, `Snapshot` are core types. They do not
-  derive `RustSignal`/`DartSignal` — the core does not depend on rinf.
-- Time and new ids enter as `Command` payloads. `handle` never reads the
-  clock, a timer, a UUID generator, or the database. That keeps every rule
-  testable with plain values (`cargo test -p coffee_timer_core`).
+Two ways in, one rule for choosing:
+
+| Dependency | Enters through | Why |
+|---|---|---|
+| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` / hub, fakes in tests |
+| Shared controller: `RecipeCatalog` | method argument (`&` / `&mut`) | Shared mutable state; the borrow checker proves who reads and who writes, with no `Rc<RefCell>` and no runtime borrow failures |
+
+- The controller that owns data owns its persistence: `RecipeCatalog`
+  writes through its store before updating its state; `SettingsController`
+  likewise. A failed write leaves the state unchanged and returns `Err`.
+- No coordinator object owns the features; a flow belongs to the controller
+  of the feature that starts it.
+- Core types do not derive `RustSignal`/`DartSignal` — the core does not
+  depend on rinf.
+- No controller reads the clock: the timer counts the ticks it is given.
 - An `Effect` is a decision already made, for the shell to carry out:
-  `PlayStepSound`, `Vibrate`, `KeepScreenOn(bool)`, `SaveRecipe(..)`, …
-  Fetching never decides; deciding never fetches.
+  `PlayStepSound`, `Vibrate { ms }`, `KeepScreenOn(bool)`.
+- A `CatalogChange` (`Upserted` / `Removed`) is already persisted when it is
+  returned. The shell passes it on unconditionally: send it as a list diff,
+  hand it to `BrewController::on_catalog_change`.
 
 ### The timer
 
-The core holds the timer as a state machine (idle / running at step *n* with
-*s* seconds left / finished). It never sleeps or schedules. The hub owns a
-`tokio::time::interval` and sends `Command::Tick` while a brew is running; the
-core answers with the new remaining time as a `Change` and, at a step
-boundary or the end, the matching `Effect`s. "Advance at zero, finish after
-the last step" lives in the core and nowhere else.
+`BrewController` holds the timer as a state machine (idle / running at step
+*n* with *s* seconds left). It never sleeps or schedules. The hub creates a
+`tokio::time::interval` when a brew starts, drops it when the brew ends, and
+calls `tick` on each beat. "Advance at zero, finish after the last step"
+lives in the controller and nowhere else.
 
 ## The hub
 
 ```
 native/hub/src/
-  lib.rs              starts the runtime, opens the store, spawns one task per feature
+  lib.rs              starts the runtime, opens the store, spawns the hub task
   signals/
     mod.rs
     <feature>.rs      the signal types for one feature
-  <feature>.rs        listener loop + core ↔ signal mapping
+  run.rs              the hub task: owns the controllers, one select! loop
+  <feature>.rs        controller state ↔ signal mapping for one feature
 ```
 
 ### Signals are the Dart contract
@@ -89,7 +108,7 @@ native/hub/src/
   feature. They are DTOs shaped for the GUI, not core types re-exported.
 - Mapping is `From`/`Into` between core types and signal types, in the hub.
   Pure, no decisions — if a mapping needs an `if` on business meaning, the
-  core should have returned a different `Change` or `Effect`.
+  controller should have returned a different state, `Effect`, or change.
 - Run `rinf gen` after any change in `signals/`. Generated Dart is
   gitignored, so also run it on a fresh checkout before `flutter analyze`.
 
@@ -101,35 +120,31 @@ So each inbound signal has exactly one listener loop, in the hub task that
 owns the feature. Signals sent before the loop starts are queued, not lost.
 
 ```rust
-// native/hub/src/brew.rs  (shape, not final code)
-pub async fn run(mut core: Core) {
-    let starts = StartBrew::get_dart_signal_receiver();
-    let mut ticks = interval(Duration::from_secs(1));
-    loop {
-        let command = tokio::select! {
-            Some(pack) = starts.recv() => Command::from(pack.message),
-            _ = ticks.tick() => Command::Tick { now: now_millis() },
-        };
-        let output = core.handle(command);
-        for change in output.changes {
-            BrewUpdate::from(change).send_signal_to_dart();
+// native/hub/src/run.rs  (shape, not final code)
+loop {
+    tokio::select! {
+        Some(pack) = start_brew.recv() => {
+            let effects = brew.start(pack.message.from, &catalog)?;
+            BrewUpdate::from(brew.state()).send_signal_to_dart();
+            perform(effects);
         }
-        for effect in output.effects {
-            perform(effect).await;  // store write, or PlatformEffect signal to Dart
-        }
+        Some(_) = next_tick(&mut interval) => { /* brew.tick(&catalog) … */ }
+        // … one arm per Dart signal
     }
 }
 ```
 
-The task that owns `Core` is the only code that touches it, so commands are
-handled one at a time and need no locking. Several inbound signal types for
-one feature are merged with `tokio::select!` rather than sharing `Core`
-across tasks.
+One hub task owns every controller, so actions run one at a time and need
+no locking. All inbound signal types are merged with `tokio::select!` rather
+than sharing controllers across tasks.
 
 ### Outbound: one enum signal per feature
 
-Each feature sends **one** `RustSignal` type for view state — an enum
-carrying either a full snapshot or a diff:
+Each feature sends **one** `RustSignal` type for view state. Brew, editor,
+and settings send their **whole view state** after every action (a few
+hundred bytes); Dart replaces it. The recipe list is a keyed collection that
+can grow, so it sends a snapshot and then diffs, mapped one-to-one from
+`CatalogChange`:
 
 ```rust
 #[derive(Serialize, RustSignal)]
@@ -158,8 +173,9 @@ So every feature has a ready signal:
 
 1. Dart creates the feature's view-state holder, subscribes to its update
    stream, then sends `<Feature>Ready`.
-2. The hub answers with `Snapshot` built from `core.snapshot()`.
-3. Every update after that is a diff.
+2. The hub answers with the feature's current state (`Snapshot` for the
+   recipe list), read from the owning controller.
+3. Every update after that is a new state, or a list diff.
 
 This also covers Flutter hot restart, where Dart state resets but Rust keeps
 running.
@@ -169,7 +185,7 @@ running.
 Rust cannot find the app's documents directory on every platform by itself.
 Dart resolves it (`path_provider`) and sends it once in a `Boot` signal; the
 hub opens and migrates the store at that path, loads recipes and
-settings into the core, and only then starts the feature tasks. Until the
+settings into the controllers, and only then starts the hub task. Until the
 first snapshot arrives the GUI shows a spinner.
 
 ## Flutter
@@ -178,9 +194,10 @@ first snapshot arrives the GUI shows a spinner.
   app start and kept for the app's lifetime. It subscribes with
   `rustSignalStream.listen` — not `StreamBuilder`, which may skip messages
   that arrive within one frame and would drop diffs and timer ticks.
-- Folding is mechanical: `Snapshot` replaces; diffs insert / update /
-  remove by id. A value the GUI needs but cannot fold mechanically (a
-  `M:SS` label, grams, total duration) is computed in Rust and sent.
+- Applying an update is mechanical: a state or `Snapshot` replaces; list
+  diffs insert / update / remove by id. A value the GUI needs but cannot
+  derive mechanically (a `M:SS` label, grams, total duration, step status)
+  is computed in Rust and sent.
 - One `PlatformEffect` listener calls `audioplayers`, `vibration`, and
   `wakelock_plus`. It maps each variant to one plugin call, no conditions.
 - Widgets read holders and send intents (`StartBrew(...).sendSignalToRust()`).
@@ -196,7 +213,7 @@ first snapshot arrives the GUI shows a spinner.
 
 | Layer | How | Gate |
 |---|---|---|
-| core | plain-value unit tests, incl. the timer state machine tick by tick | `cargo test` |
+| core | run an action, assert the controller state (timer tick by tick); fake stores and ids | `cargo test` |
 | store | round-trip tests against an in-memory SQLite | `cargo test` |
 | hub mapping | unit test a `From` impl only when it is non-trivial | `cargo test` |
 | hub loops | not unit tested — kept thin enough to read | `cargo clippy --all-targets` |

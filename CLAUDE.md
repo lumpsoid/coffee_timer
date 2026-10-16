@@ -16,13 +16,16 @@ settings are stored locally.
 
 ## Architectural commitments
 
-1. Rust owns state. It sends **diffs** to Flutter as `RustSignal`s; Dart
-   rebuilds view state from those signals. Dart sends user intents as
-   `DartSignal`s.
+1. Rust owns state, in feature controllers that each own one state object;
+   shared data lives in a shared controller passed into actions. Rust sends
+   view state to Flutter as `RustSignal`s (whole state per feature; diffs
+   for the recipe list); Dart replaces its view state from them. Dart sends
+   user intents as `DartSignal`s.
 2. The core is usable without Flutter: exercised by `cargo test` and a CLI.
    The core is built and tested first; the Flutter GUI comes after.
 3. Port behavior verbatim: step bounds, brew metrics, labels, and timer
-   behavior must match the current app exactly. Structure is free.
+   behavior must match the current app exactly. Structure is free. Legacy
+   bugs are fixed, not ported; each fix is listed in the port plan.
 4. No panics in Rust (`unwrap`/`expect`); return `Result`.
 
 ## Gates
@@ -30,6 +33,11 @@ settings are stored locally.
 - `cargo clippy --all-targets` and `cargo test`
 - `rinf gen` after changing any signal struct
 - `flutter analyze` / `flutter test` for the GUI
+
+## Plan
+
+[docs/port-plan.md](./docs/port-plan.md) — phases, controller layout, timer
+rules.
 
 ## Behavior reference
 
