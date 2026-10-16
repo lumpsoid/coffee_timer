@@ -1,0 +1,10 @@
+[package]
+name = "coffee_timer_store"
+version.workspace = true
+edition.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+coffee_timer_core = { path = "../core" }
