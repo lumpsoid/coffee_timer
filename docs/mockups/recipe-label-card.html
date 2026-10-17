@@ -73,14 +73,54 @@
   .old hr { border: 0; border-top: 1px solid var(--app-rule); margin: 8px 0; }
   .old .row { display: flex; justify-content: space-between; font-size: 14px; }
 
-  /* ---- Label tones: the one variable a recipe contributes ---- */
-  .tone-roast   { --l-bg: #3d2a1f; --l-ink: #f2e4cf; --l-accent: #d39a58; --l-stain: 230,190,140; }
-  .tone-caramel { --l-bg: #d7a66b; --l-ink: #2f1d10; --l-accent: #7a4520; --l-stain: 90,50,20; }
-  .tone-crema   { --l-bg: #f1e2c6; --l-ink: #4a2e1b; --l-accent: #b06f36; --l-stain: 110,70,35; }
+  /* ---- Label tones (from brew time), each with three shades (from id) ---- */
+  .tone-roast   { --l-ink: #f2e4cf; --l-accent: #d39a58; --l-stain: 230,190,140; }
+  .tone-caramel { --l-ink: #2f1d10; --l-accent: #7a4520; --l-stain: 90,50,20; }
+  .tone-crema   { --l-ink: #4a2e1b; --l-accent: #b06f36; --l-stain: 110,70,35; }
+  .tone-roast.shade-0   { --l-bg: #3d2a1f; }  /* dark chocolate */
+  .tone-roast.shade-1   { --l-bg: #2a211d; }  /* near-black espresso */
+  .tone-roast.shade-2   { --l-bg: #4b2b22; }  /* mahogany */
+  .tone-caramel.shade-0 { --l-bg: #d7a66b; }
+  .tone-caramel.shade-1 { --l-bg: #c99156; }  /* toffee */
+  .tone-caramel.shade-2 { --l-bg: #dcb07e; }  /* honey */
+  .tone-crema.shade-0   { --l-bg: #f1e2c6; }
+  .tone-crema.shade-1   { --l-bg: #ead7b4; }  /* oat */
+  .tone-crema.shade-2   { --l-bg: #f4e7d6; }  /* milk */
   /* Dark theme: same bags, as if the room lights were dimmed. */
-  .dark .tone-roast   { --l-bg: #2e1f17; --l-ink: #e6d5bd; --l-accent: #c08646; }
-  .dark .tone-caramel { --l-bg: #8a6239; --l-ink: #f6e6cf; --l-accent: #f0c58e; --l-stain: 250,215,170; }
-  .dark .tone-crema   { --l-bg: #cdbb9b; --l-ink: #3a2414; --l-accent: #8c5526; }
+  .dark .label { filter: brightness(.8) saturate(.9); }
+
+  /* ---- Paper textures (from id), drawn in the tone's stain colour ---- */
+  .texture { position: absolute; inset: 0; pointer-events: none; opacity: .5; }
+  .tex-kraft {     /* long paper fibres */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012 .55' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.6 1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E");
+    opacity: .16; mix-blend-mode: multiply;
+  }
+  .tone-roast .tex-kraft { mix-blend-mode: screen; filter: invert(1); opacity: .10; }
+  .tex-linen {
+    background:
+      repeating-linear-gradient(0deg,  rgba(var(--l-stain), .10) 0 1px, transparent 1px 3px),
+      repeating-linear-gradient(90deg, rgba(var(--l-stain), .08) 0 1px, transparent 1px 4px);
+  }
+  .tex-halftone {  /* print dots, fading toward the centre */
+    background: radial-gradient(circle, rgba(var(--l-stain), .22) 1.1px, transparent 1.6px) 0 0 / 7px 7px;
+    -webkit-mask: radial-gradient(ellipse at 100% 0, #000, #0000 70%);
+            mask: radial-gradient(ellipse at 100% 0, #000, #0000 70%);
+    opacity: 1;
+  }
+  .tex-pinstripe {
+    background: repeating-linear-gradient(-45deg, rgba(var(--l-stain), .11) 0 1px, transparent 1px 9px);
+  }
+  .tex-topo {      /* origin-map contour lines */
+    background:
+      repeating-radial-gradient(ellipse 140% 90% at 8% 120%, transparent 0 11px, rgba(var(--l-stain), .16) 11px 12px),
+      repeating-radial-gradient(ellipse 80% 120% at 105% -10%, transparent 0 13px, rgba(var(--l-stain), .10) 13px 14px);
+  }
+  .tex-burlap {    /* coarse jute weave */
+    background:
+      repeating-linear-gradient(0deg,  rgba(var(--l-stain), .12) 0 2px, transparent 2px 5px),
+      repeating-linear-gradient(90deg, rgba(var(--l-stain), .12) 0 2px, transparent 2px 5px);
+    opacity: .7;
+  }
 
   /* ---- The label card ---- */
   .label {
@@ -223,6 +263,18 @@
       <span>Dark theme</span>
     </div>
   </div>
+
+  <h2>Espresso-heavy list: same tone, different labels</h2>
+  <div class="phones">
+    <div class="phone-wrap">
+      <div class="phone" id="espresso-light"></div>
+      <span>All under 2:00, so all roast. Texture and shade still differ.</span>
+    </div>
+    <div class="phone-wrap">
+      <div class="phone dark" id="espresso-dark"></div>
+      <span>Same, dark theme</span>
+    </div>
+  </div>
   <p class="muted" style="font-size:13px;margin-top:14px">
     Espresso and Pour Over are the seeded recipes. AeroPress and French Press are
     made-up examples to show all three tones (coffee and water follow the
@@ -239,6 +291,23 @@
     </tbody>
   </table>
   <p class="muted" style="font-size:13px">Thresholds are named config next to <code>BrewMetrics</code>. Rust sends the tone as an enum on <code>RecipeSummary</code>; Dart only maps it to colours.</p>
+
+  <h2>Variant rule (also Rust core)</h2>
+  <table>
+    <thead><tr><th>Part</th><th>Comes from</th><th>Choices</th></tr></thead>
+    <tbody>
+      <tr><td>Tone</td><td>Total brew time</td><td>roast · caramel · crema</td></tr>
+      <tr><td>Texture</td><td>Stable hash of the recipe id</td><td>kraft fibres · linen · halftone · pinstripe · contour map · burlap</td></tr>
+      <tr><td>Shade</td><td>Same hash</td><td>3 shades within the tone</td></tr>
+      <tr><td>Stain spot</td><td>Same hash</td><td>2 positions</td></tr>
+    </tbody>
+  </table>
+  <p class="muted" style="font-size:13px">
+    Keyed by id, so a recipe keeps its label when renamed, reordered or after
+    its neighbours are deleted. Editing step times can move it to another tone,
+    and that's intended. 6 textures × 3 shades = 18 looks per tone, so two
+    neighbours occasionally match by chance.
+  </p>
 
   <h2>Details for a longer look</h2>
   <div class="notes">
@@ -271,19 +340,30 @@
 </main>
 
 <script>
-  // Mockup data. Labels as Rust would send them.
+  // Mockup data, as Rust would send it. `variant` stands in for the id hash:
+  // texture = variant % 6, shade = floor(variant / 6) % 3, stain = variant % 2.
   const recipes = [
-    { name: "Espresso",     desc: "strong coffee",       coffee: "20 g", water: "100 g", time: "0:55", tone: "roast" },
-    { name: "Pour Over",    desc: "light and clean",     coffee: "30 g", water: "150 g", time: "3:10", tone: "caramel" },
-    { name: "French Press", desc: "full body, slow",     coffee: "40 g", water: "200 g", time: "5:20", tone: "crema" },
-    { name: "AeroPress",    desc: "quick and punchy",    coffee: "30 g", water: "150 g", time: "1:45", tone: "roast" },
+    { name: "Espresso",     desc: "strong coffee",       coffee: "20 g", water: "100 g", time: "0:55", tone: "roast",   variant: 0 },
+    { name: "Pour Over",    desc: "light and clean",     coffee: "30 g", water: "150 g", time: "3:10", tone: "caramel", variant: 4 },
+    { name: "French Press", desc: "full body, slow",     coffee: "40 g", water: "200 g", time: "5:20", tone: "crema",   variant: 1 },
+    { name: "AeroPress",    desc: "quick and punchy",    coffee: "30 g", water: "150 g", time: "1:45", tone: "roast",   variant: 11 },
   ];
+  const espressos = [
+    { name: "Espresso",  desc: "strong coffee",    coffee: "20 g", water: "100 g", time: "0:55", tone: "roast", variant: 0 },
+    { name: "Ristretto", desc: "short and sweet",  coffee: "20 g", water: "100 g", time: "0:40", tone: "roast", variant: 9 },
+    { name: "Lungo",     desc: "long pull",        coffee: "20 g", water: "100 g", time: "1:20", tone: "roast", variant: 13 },
+    { name: "Doppio",    desc: "double shot",      coffee: "30 g", water: "150 g", time: "1:05", tone: "roast", variant: 4 },
+    { name: "Turbo Shot",desc: "fast and bright",  coffee: "20 g", water: "100 g", time: "0:30", tone: "roast", variant: 2 },
+    { name: "Blooming",  desc: "pre-infused",      coffee: "30 g", water: "150 g", time: "1:35", tone: "roast", variant: 17 },
+  ];
+  const textures = ["kraft", "linen", "halftone", "pinstripe", "topo", "burlap"];
   const filled = { crema: 1, caramel: 2, roast: 3 };
   const bean = on => `<svg viewBox="0 0 9 12" class="${on ? "on" : "off"}">
     <ellipse cx="4.5" cy="6" rx="3.7" ry="5.2"/>
     <path class="crease" d="M4.6 1.2 C3 4, 6 8, 4.4 10.8"/></svg>`;
-  const card = (r, i) => `
-    <article class="label tone-${r.tone}${i % 2 ? " alt-stain" : ""}">
+  const card = r => `
+    <article class="label tone-${r.tone} shade-${Math.floor(r.variant / 6) % 3}${r.variant % 2 ? " alt-stain" : ""}">
+      <div class="texture tex-${textures[r.variant % 6]}"></div>
       <div class="stain"></div>
       <div class="beans" title="${r.tone}">${[0,1,2].map(b => bean(b < filled[r.tone])).join("")}</div>
       <div class="badge"><h3 class="name">${r.name}</h3></div>
@@ -294,10 +374,14 @@
         <div><dt>Time</dt><dd class="time">${r.time}</dd></div>
       </dl>
     </article>`;
-  for (const id of ["light", "dark"]) {
+  const fill = (id, list) => {
     document.getElementById(id).innerHTML =
-      `<div class="appbar">Recipes</div>` + recipes.map(card).join("");
-  }
+      `<div class="appbar">Recipes</div>` + list.map(card).join("");
+  };
+  fill("light", recipes);
+  fill("dark", recipes);
+  fill("espresso-light", espressos);
+  fill("espresso-dark", espressos);
 </script>
 </body>
 </html>
