@@ -23,10 +23,11 @@ Dependencies point down the arrows only.
 
 - **core** decides. It exposes feature controllers: actions in, state and
   effects out. Recipe rules, brew metrics, and the timer state machine live
-  here. It defines the store and id-generator traits it needs, and never
-  implements them.
-- **store** persists. It implements the core's store traits over SQLite and
-  runs the migrations. No decisions; no rinf.
+  here. It defines the store and id-generator traits it needs (`ports/`)
+  and implements them only as test fakes (`fakes/`, behind `test-fakes`).
+- **store** persists. It implements the core's store traits over SQLite,
+  runs the migrations, and provides the UUID v7 `IdGen` (`UuidIds`) both
+  heads use. No decisions; no rinf.
 - **hub** translates. It builds the controllers with their infrastructure,
   turns Dart signals into controller actions, owns the tick interval, signals
   platform effects to Dart, and turns controller state into Rust signals. It
@@ -46,7 +47,7 @@ cannot hold (one-shot effects, or a `CatalogChange`). Tests run an action and
 assert the state.
 
 ```rust
-// native/core
+// native/core (fields abridged)
 pub struct RecipeCatalog { state: Vec<Recipe>, store: Box<dyn RecipeStore> }
 pub struct EditorController { state: EditorState, ids: Box<dyn IdGen> }
 pub struct BrewController { state: BrewState }
@@ -65,7 +66,7 @@ Two ways in, one rule for choosing:
 
 | Dependency | Enters through | Why |
 |---|---|---|
-| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` / hub, fakes in tests |
+| Infrastructure: `RecipeStore`, `SettingsStore`, `IdGen` | constructor (`Box<dyn Trait>`) | Border dependency; traits live in core, real impls in `store` (`SqliteStore`, `UuidIds`), fakes in core's `fakes/` |
 | Shared controller: `RecipeCatalog` | method argument (`&` / `&mut`) | Shared mutable state; the borrow checker proves who reads and who writes, with no `Rc<RefCell>` and no runtime borrow failures |
 
 - The controller that owns data owns its persistence: `RecipeCatalog`
@@ -81,6 +82,8 @@ Two ways in, one rule for choosing:
 - A `CatalogChange` (`Upserted` / `Removed`) is already persisted when it is
   returned. The shell passes it on unconditionally: send it as a list diff,
   hand it to `BrewController::on_catalog_change`.
+- `RecipeCatalog::load` returns no change (`Result<(), StoreError>`); it
+  runs once at boot, and the list snapshot is read from `state()`.
 
 ### The timer
 
@@ -143,8 +146,10 @@ than sharing controllers across tasks.
 Each feature sends **one** `RustSignal` type for view state. Brew, editor,
 and settings send their **whole view state** after every action (a few
 hundred bytes); Dart replaces it. The recipe list is a keyed collection that
-can grow, so it sends a snapshot and then diffs, mapped one-to-one from
-`CatalogChange`:
+can grow, so it sends a snapshot (`RecipeListUpdate::snapshot`, from
+`RecipeCatalog::state()`) and then diffs. Each diff is built from a
+`CatalogChange` and the catalog (`RecipeListUpdate::of`): the changed row
+as the catalog now holds it, or `Removed` when it holds no such id.
 
 ```rust
 #[derive(Serialize, RustSignal)]
@@ -190,8 +195,10 @@ running.
 Rust cannot find the app's documents directory on every platform by itself.
 Dart resolves it (`path_provider`) and sends it once in a `Boot` signal; the
 hub opens and migrates the store at that path, loads recipes and
-settings into the controllers, and only then starts the hub task. Until the
-first snapshot arrives the GUI shows a spinner.
+settings into the controllers, and only then starts the hub task. If that
+fails it sends `BootFailed { message }` and waits for another `Boot`; Dart
+shows the message with a Retry that resends `Boot`. Until both the first
+recipe-list snapshot and the settings arrive the GUI shows a spinner.
 
 ## Flutter
 

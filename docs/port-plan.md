@@ -1,5 +1,9 @@
 # Port plan: Rust core + rinf + Flutter GUI
 
+> The port is complete (phases 0–9 committed). This plan is kept as the
+> record of decisions and fixes; for how the app works today see
+> [architecture.md](architecture.md) and [modules.md](modules.md).
+
 Port the current Dart app to a Rust core driven through rinf, with Flutter as
 a GUI that decides nothing. Behavior is the spec (see `CLAUDE.md`); structure
 is new. Legacy bugs are fixed, not ported. There are no installs to migrate.
@@ -13,8 +17,9 @@ cannot hold. A test runs an action and asserts the state.
 Dependencies enter two ways:
 
 - **Infrastructure** (store, id generator) is constructor-injected as
-  `Box<dyn Trait>`. The traits live in core; `coffee_timer_store` and the hub
-  implement them; tests use fakes (`Vec`-backed store, sequential ids).
+  `Box<dyn Trait>`. The traits live in core (`ports/`); `coffee_timer_store`
+  implements them (`SqliteStore`, `UuidIds`); tests use the fakes in core's
+  `fakes/` (`Vec`-backed store, sequential ids).
 - **Shared controllers** (`RecipeCatalog`) are passed as action arguments
   (`&` / `&mut`), so every cross-feature dependency is in a signature and the
   borrow checker proves who reads and who writes. Injecting them would need
@@ -27,7 +32,11 @@ object: a flow is owned by the controller of the feature that starts it.
 native/core/src/
   model/            RecipeId, StepId, RecipeName, StepDuration, RecipeStep,
                     Recipe, BrewMetrics, AccentColor, ThemeSelection, Settings
+  ports/            RecipeStore, SettingsStore, IdGen, StoreError
+  fakes/            FakeRecipeStore, FakeSettingsStore, SequentialIds
+                    (cfg(test) / feature `test-fakes` only)
   catalog/          RecipeCatalog       state: Vec<Recipe>         (shared)
+                    CatalogChange, RecipeSummary
   settings/         SettingsController  state: Settings
   brew/             BrewController      state: BrewState
   editor/           EditorController    state: EditorState
@@ -35,10 +44,16 @@ native/core/src/
 
 | Controller | Actions (shape, not final) | Returns |
 |---|---|---|
-| `RecipeCatalog` (store) | `load()`, `upsert(recipe)`, `remove(id)` | `Result<CatalogChange, StoreError>` |
+| `RecipeCatalog` (store) | `load()`; snapshot via `state()` | `Result<(), StoreError>` |
+| | `upsert(recipe)`, `remove(id)` | `Result<CatalogChange, StoreError>` |
 | `SettingsController` (store) | `load()`, `set_theme`, `set_accent` | `Result<(), StoreError>` |
-| `BrewController` | `open(&id, &catalog)`, `start(from)`, `tick()`, `reset`, `leave`, `on_catalog_change(&change, &catalog)` | `Vec<Effect>` |
-| `EditorController` (ids) | `new_draft`, `edit(id, &catalog)`, `set_name`, `set_step_duration(row, raw)`, `add_step(preset)`, `remove_step(row)`, `save(&mut catalog)`, `delete(&mut catalog)` | `Result<CatalogChange, SaveError>` |
+| `BrewController` | `open(&id, &catalog)`, `tick()`, `reset`, `leave`, `on_catalog_change(&change, &catalog)` | `Vec<Effect>` |
+| | `start(from)` | `Result<Vec<Effect>, BrewError>` |
+| `EditorController` (ids) | `new_draft`, `close` | — |
+| | `edit(id, &catalog)`, `set_name`, `set_description`, `set_step_name(row, raw)`, `set_step_duration(row, raw)`, `remove_step(row)` | `Result<(), EditError>` |
+| | `add_step(preset)` | `Result<StepId, EditError>` |
+| | `save(&mut catalog)` | `Result<CatalogChange, SaveError>` |
+| | `delete(&mut catalog)` | `Result<CatalogChange, DeleteError>` |
 
 ```rust
 let mut catalog = RecipeCatalog::new(Box::new(FakeRecipeStore::default()));
@@ -55,7 +70,8 @@ Draft mutators return `Err(EditError)` when no draft is open or the row id is un
 `CatalogChange` is returned after the catalog has persisted it. Each shell
 passes it on with no conditions:
 
-1. send `RecipeListUpdate::from(&change)` — GUI diff
+1. send `RecipeListUpdate::of(&change, &catalog)` — GUI diff, the row read
+   back from the catalog
 2. `brew.on_catalog_change(&change, &catalog)` — brew decides whether its recipe moved
 
 Effects are one-shot instructions: `Vibrate { ms }`, `PlayStepSound`,
@@ -64,8 +80,10 @@ Effects are one-shot instructions: `Vibrate { ms }`, `PlayStepSound`,
 
 ## Signals
 
-- The recipe list is a keyed, growing collection: `Snapshot` / `Upserted` /
-  `Removed`, mapped one-to-one from `CatalogChange`.
+- The recipe list is a keyed, growing collection: `Snapshot` (built from
+  `RecipeCatalog::state()`), then `Upserted` / `Removed` diffs built from
+  each `CatalogChange` and the catalog (`RecipeListUpdate::of`); plus the
+  one-shot `Failed` notice (see GUI fixes).
 - Brew, editor, settings: after an action the hub sends the feature's **whole
   view state** (a few hundred bytes). Dart replaces, it does not fold.
 - Labels (`20g`, `1:35`, `MM:SS`, `Ns`), step status (`Done` / `Current` /
@@ -103,7 +121,7 @@ Fixed / changed:
 ## Domain fixes (`model/`)
 
 - `AccentColor` hex parsing rejects a sign and whitespace (legacy
-  `int.tryParse` accepted `-`/spaces → negative ARGB).
+  `int.tryParse` accepted `+`/`-`/spaces; `-` gave a negative ARGB).
 - Default theme is `System` everywhere (legacy `Settings.fallback` was light
   while missing storage gave system).
 - `Recipe::with_step_removed_at` returns `Err` for an index past the end
@@ -169,7 +187,7 @@ Fixed / changed:
 | 4 | `EditorController`: rows keyed by row id, live labels, field errors, strict save, ≥1 row, presets "Add coffee" / "Add water" / "Wait" | `cargo test` |
 | 5 | `store`: implements `RecipeStore` / `SettingsStore` with rusqlite (bundled), schema v1 (`recipe`, `step` with `position`, `settings`) seeded with Espresso and Pour Over, `user_version` for later migrations, in-memory round-trip tests | `cargo test` |
 | 6 | `cli` on controllers + store: list / show / new / delete / brew / settings | `cargo run -p coffee_timer_cli` |
-| 7 | `hub`: `Boot { db_dir }`, `<Feature>Ready` → state, uuid v7 `IdGen`, one task owning all controllers, per-brew interval | `rinf gen`, clippy |
+| 7 | `hub`: `Boot { db_dir }`, `<Feature>Ready` → state, uuid v7 `IdGen` (`coffee_timer_store::UuidIds`, shared with the CLI), one task owning all controllers, per-brew interval | `rinf gen`, clippy |
 | 8 | Flutter: one holder per feature; keep display widgets (`CircularTimer`, `StepListTile`, `RecipeSummaryTile`, `FixedDigit`); one `PlatformEffect` performer; delete legacy Dart and unused packages | `flutter analyze` / `flutter test` + device run |
 | 9 | Rewrite `docs/README.md`, `architecture.md`, `modules.md` | — |
 
