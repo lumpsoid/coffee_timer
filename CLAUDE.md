@@ -22,28 +22,27 @@ settings are stored locally.
    for the recipe list); Dart replaces its view state from them. Dart sends
    user intents as `DartSignal`s.
 2. The core is usable without Flutter: exercised by `cargo test` and a CLI.
-   The core is built and tested first; the Flutter GUI comes after.
-3. Port behavior verbatim: step bounds, brew metrics, labels, and timer
-   behavior must match the current app exactly. Structure is free. Legacy
-   bugs are fixed, not ported; each fix is listed in the port plan.
+   If the CLI cannot do something without Flutter, logic leaked out of core.
+3. Behavior carried over from the legacy app (step bounds, brew metrics,
+   labels, timer behavior) is fixed; change it only deliberately. The legacy
+   bugs fixed during the port are listed in the port plan; don't reintroduce
+   them.
 4. No panics in Rust (`unwrap`/`expect`); return `Result`.
 
 ## Gates
 
-- `cargo clippy --all-targets` and `cargo test`
-- `rinf gen` after changing any signal struct
+- `cargo clippy --all-targets -- -D warnings` and `cargo test`
+- `rinf gen` after changing any signal struct, and on a fresh checkout
+  before `flutter analyze` (the generated bindings are gitignored)
 - `flutter analyze` / `flutter test` for the GUI
-
-## Plan
-
-[docs/port-plan.md](./docs/port-plan.md) — phases, controller layout, timer
-rules.
 
 ## Behavior reference
 
-The current Dart app is the spec for *what* to build, not how.
+The port is complete; the code is the specification.
 
-- `lib/domain/` — value rules and `BrewMetrics`; port these exactly.
-- [docs/README.md](./docs/README.md), [architecture.md](./docs/architecture.md),
-  [modules.md](./docs/modules.md) — how the legacy app behaves today,
-  including the timer in `RecipeActor`, and its known quirks.
+- [docs/README.md](./docs/README.md) — what the app does, build/run, gates, CLI.
+- [docs/architecture.md](./docs/architecture.md) — controllers, catalog-change
+  flow, timer, handshake, startup, error surfacing.
+- [docs/modules.md](./docs/modules.md) — module-by-module guide.
+- [docs/port-plan.md](./docs/port-plan.md) — record of port decisions and of
+  every legacy bug fixed.
