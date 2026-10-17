@@ -143,3 +143,14 @@ fn failed_remove_leaves_state_unchanged() -> TestResult {
     assert_eq!(ids(&catalog), ["a", "b"]);
     Ok(())
 }
+
+// get
+
+#[test]
+fn get_finds_a_recipe_by_id() -> TestResult {
+    let catalog = loaded(stored_ab()?)?;
+    let found = catalog.get(&RecipeId::try_parse("b")?).ok_or("missing b")?;
+    assert_eq!(found.name().as_str(), "Pour Over");
+    assert!(catalog.get(&RecipeId::try_parse("missing")?).is_none());
+    Ok(())
+}

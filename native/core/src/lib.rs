@@ -3,6 +3,7 @@
 
 pub mod brew;
 pub mod catalog;
+pub mod editor;
 #[cfg(any(test, feature = "test-fakes"))]
 pub mod fakes;
 pub mod model;

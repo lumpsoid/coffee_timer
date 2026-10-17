@@ -28,7 +28,7 @@ impl BrewController {
     /// shows "Empty recipe". A running brew stops silently.
     pub fn open(&mut self, id: &RecipeId, catalog: &RecipeCatalog) -> Vec<Effect> {
         let effects = self.stop_silently();
-        self.state = match catalog.state().iter().find(|r| r.id() == id) {
+        self.state = match catalog.get(id) {
             Some(recipe) => BrewState::Idle(BrewView::of(recipe.clone(), &self.metrics)),
             None => BrewState::Empty,
         };

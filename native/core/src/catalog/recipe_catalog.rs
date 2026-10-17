@@ -47,6 +47,11 @@ impl RecipeCatalog {
         Ok(CatalogChange::Removed(id))
     }
 
+    /// The recipe with `id`, if the catalog holds it.
+    pub fn get(&self, id: &RecipeId) -> Option<&Recipe> {
+        self.state.iter().find(|r| r.id() == id)
+    }
+
     pub fn state(&self) -> &[Recipe] {
         &self.state
     }

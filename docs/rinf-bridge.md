@@ -48,7 +48,7 @@ assert the state.
 ```rust
 // native/core
 pub struct RecipeCatalog { state: Vec<Recipe>, store: Box<dyn RecipeStore> }
-pub struct EditorController { state: Draft, ids: Box<dyn IdGen> }
+pub struct EditorController { state: EditorState, ids: Box<dyn IdGen> }
 pub struct BrewController { state: BrewState }
 
 impl EditorController {

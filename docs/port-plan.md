@@ -30,7 +30,7 @@ native/core/src/
   catalog/          RecipeCatalog       state: Vec<Recipe>         (shared)
   settings/         SettingsController  state: Settings
   brew/             BrewController      state: BrewState
-  editor/           EditorController    state: Draft
+  editor/           EditorController    state: EditorState
 ```
 
 | Controller | Actions (shape, not final) | Returns |
@@ -44,11 +44,13 @@ native/core/src/
 let mut catalog = RecipeCatalog::new(Box::new(FakeRecipeStore::default()));
 let mut editor = EditorController::new(Box::new(SequentialIds::default()));
 editor.new_draft();
-editor.set_name("V60");
+editor.set_name("V60")?;
 let change = editor.save(&mut catalog)?;
 assert_eq!(catalog.state().len(), 1);
 assert_eq!(change, CatalogChange::Upserted(RecipeId::try_parse("r1")?));
 ```
+
+Draft mutators return `Err(EditError)` when no draft is open or the row id is unknown.
 
 `CatalogChange` is returned after the catalog has persisted it. Each shell
 passes it on with no conditions:
@@ -116,6 +118,24 @@ Fixed / changed:
   had no `ORDER BY` and relied on rowid order implicitly). Phase 5:
   `ORDER BY rowid` (or a position column) on load, and an upsert keeps the
   existing position (`ON CONFLICT DO UPDATE`, not `INSERT OR REPLACE`).
+
+## Editor fixes
+
+- Field errors are hidden until the first save attempt, then follow the
+  text live (legacy left them stale until the next Save: no
+  `autovalidateMode`).
+- Durations parse as decimal only (legacy `int.tryParse` accepted `0x`
+  hex).
+- Saving a duration outside 0–5999 is rejected with `0–5999 seconds`
+  (the legacy controller clamped it, unreachable through the page
+  validator).
+- Editing a recipe with no steps shows one blank row (≥1 row). Legacy
+  showed zero rows and could save a recipe with zero steps.
+- One editor: the legacy details page's edit button opened a stale second
+  editor (`lib/recipe_edit/`: `Enter a name`, no upper bound, step ids
+  reused by index). Phase 8 routes every edit to `EditorController`.
+- Phase 8: the delete dialog shows the saved recipe's name, not the
+  untrimmed typed text.
 
 ## Phases
 

@@ -22,6 +22,24 @@ impl StepDuration {
         }
     }
 
+    /// Parses typed text strictly: trimmed, then a decimal integer with an
+    /// optional sign (legacy `int.tryParse(text.trim())`), then the bound.
+    /// Text that is not an integer is [`ModelError::StepDurationNotANumber`]
+    /// (`Enter seconds`); an integer out of range is
+    /// [`ModelError::StepDurationOutOfRange`] (`0–5999 seconds`).
+    pub fn try_parse_text(raw: &str) -> Result<Self, ModelError> {
+        let seconds =
+            parse_seconds(raw).ok_or_else(|| ModelError::StepDurationNotANumber(raw.to_owned()))?;
+        Self::try_parse(seconds)
+    }
+
+    /// Reads typed text leniently, for a label shown while typing: an
+    /// integer is clamped into range, anything else is zero (legacy
+    /// `StepDuration.clamped(int.tryParse(text.trim()) ?? 0)`).
+    pub fn clamped_text(raw: &str) -> Self {
+        parse_seconds(raw).map_or(Self::ZERO, Self::clamped)
+    }
+
     /// Clamps `raw` into `0..=MAX_STEP_SECONDS`.
     pub fn clamped(raw: i64) -> Self {
         let bounded = raw.clamp(0, i64::from(Self::MAX_STEP_SECONDS));
@@ -50,4 +68,10 @@ impl StepDuration {
     pub fn seconds_label(self) -> String {
         format!("{}s", self.0)
     }
+}
+
+/// `raw` trimmed, as a signed decimal integer; none if it is not one (or
+/// does not fit in an `i64`).
+fn parse_seconds(raw: &str) -> Option<i64> {
+    raw.trim().parse().ok()
 }

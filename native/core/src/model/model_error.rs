@@ -3,12 +3,13 @@ use std::fmt;
 /// Why a model value could not be built or an operation was rejected.
 ///
 /// Texts match the legacy form messages where the legacy app had one
-/// (`Enter a recipe name`, `0–5999 seconds`).
+/// (`Enter a recipe name`, `Enter seconds`, `0–5999 seconds`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelError {
     EmptyRecipeId,
     EmptyStepId,
     BlankRecipeName,
+    StepDurationNotANumber(String),
     StepDurationOutOfRange(i64),
     AccentOutOfRange(i64),
     MalformedAccentHex(String),
@@ -21,6 +22,7 @@ impl fmt::Display for ModelError {
             Self::EmptyRecipeId => write!(f, "Recipe id is empty"),
             Self::EmptyStepId => write!(f, "Step id is empty"),
             Self::BlankRecipeName => write!(f, "Enter a recipe name"),
+            Self::StepDurationNotANumber(_) => write!(f, "Enter seconds"),
             Self::StepDurationOutOfRange(_) => write!(
                 f,
                 "0–{} seconds",

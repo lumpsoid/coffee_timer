@@ -94,6 +94,48 @@ fn step_duration_error_text_matches_legacy_validator() {
 }
 
 #[test]
+fn step_duration_try_parse_text_reads_trimmed_signed_integers_strictly() -> TestResult {
+    assert_eq!(StepDuration::try_parse_text("45")?.seconds(), 45);
+    assert_eq!(StepDuration::try_parse_text("  45 ")?.seconds(), 45);
+    assert_eq!(StepDuration::try_parse_text("+5")?.seconds(), 5);
+    assert_eq!(StepDuration::try_parse_text("0")?.seconds(), 0);
+    assert_eq!(StepDuration::try_parse_text("5999")?.seconds(), 5999);
+    assert_eq!(
+        StepDuration::try_parse_text("-1"),
+        Err(ModelError::StepDurationOutOfRange(-1))
+    );
+    assert_eq!(
+        StepDuration::try_parse_text("6000"),
+        Err(ModelError::StepDurationOutOfRange(6000))
+    );
+    for not_a_number in ["", "   ", "abc", "1.5", "1 2", "99999999999999999999"] {
+        assert_eq!(
+            StepDuration::try_parse_text(not_a_number),
+            Err(ModelError::StepDurationNotANumber(not_a_number.to_owned())),
+            "{not_a_number:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn step_duration_not_a_number_text_matches_legacy_validator() {
+    assert_eq!(
+        ModelError::StepDurationNotANumber("x".to_owned()).to_string(),
+        "Enter seconds"
+    );
+}
+
+#[test]
+fn step_duration_clamped_text_is_lenient() {
+    assert_eq!(StepDuration::clamped_text(" 65 ").seconds(), 65);
+    assert_eq!(StepDuration::clamped_text("10000").seconds(), 5999);
+    assert_eq!(StepDuration::clamped_text("-5"), StepDuration::ZERO);
+    assert_eq!(StepDuration::clamped_text("abc"), StepDuration::ZERO);
+    assert_eq!(StepDuration::clamped_text(""), StepDuration::ZERO);
+}
+
+#[test]
 fn step_duration_clamped_never_leaves_the_range() {
     assert_eq!(StepDuration::clamped(-5).seconds(), 0);
     assert_eq!(StepDuration::clamped(90).seconds(), 90);
