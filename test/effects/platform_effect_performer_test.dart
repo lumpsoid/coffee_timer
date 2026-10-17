@@ -24,6 +24,15 @@ class _FakePlugins implements EffectPlugins {
   @override
   Future<void> keepScreenOn({required bool on}) async =>
       calls.add('screen $on');
+
+  @override
+  Future<void> showBrewNotification({
+    required String title,
+    String? next,
+  }) async => calls.add('notify $title | $next');
+
+  @override
+  Future<void> hideBrewNotification() async => calls.add('notify off');
 }
 
 void main() {
@@ -40,12 +49,25 @@ void main() {
     await performer.perform(const PlatformEffectVibrate(ms: 100));
     await performer.perform(const PlatformEffectKeepScreenOn(on: true));
     await performer.perform(const PlatformEffectKeepScreenOn(on: false));
+    await performer.perform(
+      const PlatformEffectShowBrewNotification(
+        title: 'Bloom · 00:35',
+        next: 'Next: Pour',
+      ),
+    );
+    await performer.perform(
+      const PlatformEffectShowBrewNotification(title: 'Pour · 00:10'),
+    );
+    await performer.perform(const PlatformEffectHideBrewNotification());
 
     expect(plugins.calls, [
       'sound',
       'vibrate 100',
       'screen true',
       'screen false',
+      'notify Bloom · 00:35 | Next: Pour',
+      'notify Pour · 00:10 | null',
+      'notify off',
     ]);
   });
 

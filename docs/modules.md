@@ -121,7 +121,8 @@ Test:
 - `StepRow` and `StepStatus` (`Done` / `Current` / `Pending`) describe the
   step list. Each row also carries its arc on the dial's step track, as
   fractions of the whole brew.
-- `Effect` is a platform command.
+- `Effect` is a platform command. `BrewNotice` is the content of the brew
+  notification.
 - `BrewError` is a rejected start.
 
 Test:

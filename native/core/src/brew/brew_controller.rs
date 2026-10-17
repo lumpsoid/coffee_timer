@@ -1,4 +1,4 @@
-use crate::brew::{BrewError, BrewState, BrewView, Effect};
+use crate::brew::{BrewError, BrewNotice, BrewState, BrewView, Effect, RunningStep};
 use crate::catalog::{CatalogChange, RecipeCatalog};
 use crate::model::{BrewMetrics, RecipeId};
 
@@ -39,8 +39,8 @@ impl BrewController {
 
     /// Runs the open recipe from step `from` (0 for the whole recipe),
     /// restarting a brew already running, as a new run
-    /// ([`RunningStep::run`](crate::brew::RunningStep::run)). On `Err`
-    /// nothing changes.
+    /// ([`RunningStep::run`]). Shows the brew notification. On `Err` nothing
+    /// changes.
     pub fn start(&mut self, from: usize) -> Result<Vec<Effect>, BrewError> {
         let view = self.state.view().ok_or(BrewError::NoRecipe)?;
         let run = self.runs.saturating_add(1);
@@ -48,14 +48,16 @@ impl BrewController {
             index: from,
             len: view.step_count(),
         })?;
+        let notice = Effect::ShowBrewNotification(BrewNotice::of(view, &step));
         self.state = BrewState::Running(view.clone(), step);
         self.runs = run;
-        Ok(vec![Effect::KeepScreenOn(true)])
+        Ok(vec![Effect::KeepScreenOn(true), notice])
     }
 
-    /// One second passes. At zero the brew moves to the next step (vibrate,
-    /// sound) or, after the last step, ends (screen-on off, vibrate, no
-    /// sound). A no-op unless running.
+    /// One second passes and the brew notification follows. At zero the brew
+    /// moves to the next step (vibrate, sound) or, after the last step, ends
+    /// (screen-on off, vibrate, no sound, notification gone). A no-op unless
+    /// running.
     pub fn tick(&mut self) -> Vec<Effect> {
         let (view, step) = match std::mem::take(&mut self.state) {
             BrewState::Running(view, step) => (view, step),
@@ -66,19 +68,22 @@ impl BrewController {
         };
         let step = step.ticked();
         if !step.remaining().is_zero() {
-            self.state = BrewState::Running(view, step);
-            return Vec::new();
+            return vec![self.keep_running(view, step)];
         }
         match view.step(step.run(), step.index() + 1) {
-            Some(next) => {
-                self.state = BrewState::Running(view, next);
-                vec![Effect::Vibrate { ms: VIBRATE_MS }, Effect::PlayStepSound]
-            }
+            Some(next) => vec![
+                Effect::Vibrate { ms: VIBRATE_MS },
+                Effect::PlayStepSound,
+                self.keep_running(view, next),
+            ],
             None => {
                 self.state = BrewState::Idle(view);
+                // The notification goes last: hiding it lets the platform
+                // stop keeping the app awake.
                 vec![
                     Effect::KeepScreenOn(false),
                     Effect::Vibrate { ms: VIBRATE_MS },
+                    Effect::HideBrewNotification,
                 ]
             }
         }
@@ -121,10 +126,17 @@ impl BrewController {
         &self.state
     }
 
+    /// Runs `step` of `view` and returns the notification showing it.
+    fn keep_running(&mut self, view: BrewView, step: RunningStep) -> Effect {
+        let notice = Effect::ShowBrewNotification(BrewNotice::of(&view, &step));
+        self.state = BrewState::Running(view, step);
+        notice
+    }
+
     /// What stopping the current brew takes, without vibration or sound.
     fn stop_silently(&self) -> Vec<Effect> {
         if self.state.is_running() {
-            vec![Effect::KeepScreenOn(false)]
+            vec![Effect::KeepScreenOn(false), Effect::HideBrewNotification]
         } else {
             Vec::new()
         }

@@ -2,6 +2,7 @@
 
 mod brew_controller;
 mod brew_error;
+mod brew_notice;
 mod brew_state;
 mod brew_view;
 mod effect;
@@ -11,6 +12,7 @@ mod step_status;
 
 pub use brew_controller::BrewController;
 pub use brew_error::BrewError;
+pub use brew_notice::BrewNotice;
 pub use brew_state::BrewState;
 pub use brew_view::BrewView;
 pub use effect::Effect;

@@ -199,16 +199,21 @@ fn fast_brew_prints_every_tick_and_effect() -> TestResult {
         "\
 start    00:02 A  |  1:current 2:pending 3:pending
 [screen on]
+[notify A · 00:02 | Next: Zero]
 tick 1   00:01 A  |  1:current 2:pending 3:pending
+[notify A · 00:01 | Next: Zero]
 tick 2   00:00 Zero  |  1:done 2:current 3:pending
 [vibrate 100ms]
 [sound]
+[notify Zero · 00:00 | Next: B]
 tick 3   00:01 B  |  1:done 2:done 3:current
 [vibrate 100ms]
 [sound]
+[notify B · 00:01]
 tick 4   idle 0:03  |  1:pending 2:pending 3:pending
 [screen off]
 [vibrate 100ms]
+[notify off]
 "
     );
     Ok(())
@@ -222,9 +227,11 @@ fn brew_from_a_later_step_starts_there() -> TestResult {
         lines.first().copied(),
         Some("start    00:25 Brew  |  1:done 2:current")
     );
-    assert_eq!(lines.len(), 2 + 25 + 2);
+    // Start and each running tick add a notification line; the end adds
+    // three effect lines.
+    assert_eq!(lines.len(), 3 + 24 * 2 + 4);
     assert_eq!(
-        lines.get(lines.len() - 3).copied(),
+        lines.get(lines.len() - 4).copied(),
         Some("tick 25  idle 0:55  |  1:pending 2:pending")
     );
     Ok(())

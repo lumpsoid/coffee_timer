@@ -30,6 +30,9 @@ class PlatformEffectPerformer {
     PlatformEffectPlayStepSound() => _plugins.playStepSound(),
     PlatformEffectVibrate(:final ms) => _plugins.vibrate(ms),
     PlatformEffectKeepScreenOn(:final on) => _plugins.keepScreenOn(on: on),
+    PlatformEffectShowBrewNotification(:final title, :final next) =>
+      _plugins.showBrewNotification(title: title, next: next),
+    PlatformEffectHideBrewNotification() => _plugins.hideBrewNotification(),
     _ => Future.value(),
   };
 }
