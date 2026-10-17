@@ -1,8 +1,10 @@
 //! `RecipeCatalog`: load, upsert and remove write through the store first.
 
-use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
+use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
-use coffee_timer_core::model::{ModelError, Recipe, RecipeId, RecipeName};
+use coffee_timer_core::model::{
+    BrewMetrics, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -152,5 +154,34 @@ fn get_finds_a_recipe_by_id() -> TestResult {
     let found = catalog.get(&RecipeId::try_parse("b")?).ok_or("missing b")?;
     assert_eq!(found.name().as_str(), "Pour Over");
     assert!(catalog.get(&RecipeId::try_parse("missing")?).is_none());
+    Ok(())
+}
+
+#[test]
+fn summary_carries_the_legacy_tile_values() -> TestResult {
+    let step = |id: &str, seconds: i64| -> Result<RecipeStep, ModelError> {
+        Ok(RecipeStep::new(
+            StepId::try_parse(id)?,
+            "step".to_owned(),
+            StepDuration::try_parse(seconds)?,
+        ))
+    };
+    let recipe = Recipe::new(
+        RecipeId::try_parse("a")?,
+        RecipeName::try_parse("Espresso")?,
+        "Strong coffee".to_owned(),
+        vec![step("s1", 30)?, step("s2", 65)?],
+    );
+    assert_eq!(
+        RecipeSummary::of(&recipe, &BrewMetrics::default()),
+        RecipeSummary {
+            id: RecipeId::try_parse("a")?,
+            name: "Espresso".to_owned(),
+            description: "Strong coffee".to_owned(),
+            coffee_label: "20 g".to_owned(),
+            water_label: "100 g".to_owned(),
+            time_label: "1:35".to_owned(),
+        }
+    );
     Ok(())
 }

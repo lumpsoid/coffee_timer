@@ -13,6 +13,7 @@ pub enum ModelError {
     StepDurationOutOfRange(i64),
     AccentOutOfRange(i64),
     MalformedAccentHex(String),
+    UnknownTheme(String),
     StepIndexOutOfRange { index: usize, len: usize },
 }
 
@@ -33,6 +34,9 @@ impl fmt::Display for ModelError {
             }
             Self::MalformedAccentHex(raw) => {
                 write!(f, "Accent \"{raw}\" is not #AARRGGBB or #RRGGBB")
+            }
+            Self::UnknownTheme(raw) => {
+                write!(f, "Theme \"{raw}\" is not light, dark or system")
             }
             Self::StepIndexOutOfRange { index, len } => {
                 write!(f, "Step {index} is out of range for {len} steps")

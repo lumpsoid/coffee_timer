@@ -3,6 +3,7 @@
 mod accent_color;
 mod accent_option;
 mod brew_metrics;
+mod hyphenated;
 mod model_error;
 mod recipe;
 mod recipe_id;

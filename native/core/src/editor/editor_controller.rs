@@ -59,11 +59,11 @@ impl EditorController {
         self.draft_mut()?.set_step_duration(row, raw)
     }
 
-    /// Appends a row named after `preset`, `0` seconds long.
-    pub fn add_step(&mut self, preset: StepPreset) -> Result<(), EditError> {
+    /// Appends a row named after `preset`, `0` seconds long, and returns
+    /// its id: the key for editing the new row.
+    pub fn add_step(&mut self, preset: StepPreset) -> Result<StepId, EditError> {
         let draft = self.state.draft_mut().ok_or(EditError::NoDraft)?;
-        draft.add_step(preset, self.ids.as_mut());
-        Ok(())
+        Ok(draft.add_step(preset, self.ids.as_mut()))
     }
 
     /// Drops the row; removing the last row leaves one blank row instead.

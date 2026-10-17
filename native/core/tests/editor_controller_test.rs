@@ -378,8 +378,9 @@ fn labels_follow_the_typed_durations() -> TestResult {
     assert_eq!(row(&editor, "s1")?.duration_label, "01:05");
     assert_eq!(draft(&editor)?.total_label(), "1:05");
 
-    editor.add_step(StepPreset::Blank)?;
-    editor.set_step_duration(&sid("s2")?, "600")?;
+    let added = editor.add_step(StepPreset::Blank)?;
+    assert_eq!(added, sid("s2")?);
+    editor.set_step_duration(&added, "600")?;
     assert_eq!(row(&editor, "s2")?.duration_label, "10:00");
     assert_eq!(draft(&editor)?.total_label(), "11:05");
     Ok(())

@@ -68,10 +68,12 @@ impl Draft {
         Ok(())
     }
 
-    /// Appends a row named after `preset`, `0` seconds long.
-    pub(crate) fn add_step(&mut self, preset: StepPreset, ids: &mut dyn IdGen) {
+    /// Appends a row named after `preset`, `0` seconds long; returns its id.
+    pub(crate) fn add_step(&mut self, preset: StepPreset, ids: &mut dyn IdGen) -> StepId {
+        let id = ids.step_id();
         self.steps
-            .push(DraftStep::new(ids.step_id(), preset.step_name()));
+            .push(DraftStep::new(id.clone(), preset.step_name()));
+        id
     }
 
     /// Drops the row; removing the last row leaves one blank row instead.
@@ -183,7 +185,7 @@ impl Draft {
     /// The at-least-one-row rule.
     fn keep_a_step(&mut self, ids: &mut dyn IdGen) {
         if self.steps.is_empty() {
-            self.add_step(StepPreset::Blank, ids);
+            let _blank_row = self.add_step(StepPreset::Blank, ids);
         }
     }
 }

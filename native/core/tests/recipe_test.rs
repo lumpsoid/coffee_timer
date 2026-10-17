@@ -33,6 +33,27 @@ fn durations(seconds: &[i64]) -> Vec<StepDuration> {
 // RecipeId / StepId
 
 #[test]
+fn ids_from_u128_are_hyphenated_lowercase_uuids() {
+    let value = 0x0192_3D4E_5F60_7A8B_9CAD_BECF_D0E1_F203;
+    assert_eq!(
+        RecipeId::from_u128(value).as_str(),
+        "01923d4e-5f60-7a8b-9cad-becfd0e1f203"
+    );
+    assert_eq!(
+        StepId::from_u128(value).as_str(),
+        "01923d4e-5f60-7a8b-9cad-becfd0e1f203"
+    );
+    assert_eq!(
+        RecipeId::from_u128(0).as_str(),
+        "00000000-0000-0000-0000-000000000000"
+    );
+    assert_eq!(
+        RecipeId::from_u128(u128::MAX).as_str(),
+        "ffffffff-ffff-ffff-ffff-ffffffffffff"
+    );
+}
+
+#[test]
 fn ids_reject_empty_keep_non_empty_and_compare_by_value() -> TestResult {
     assert_eq!(RecipeId::try_parse(""), Err(ModelError::EmptyRecipeId));
     assert_eq!(StepId::try_parse(""), Err(ModelError::EmptyStepId));

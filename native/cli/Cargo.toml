@@ -7,5 +7,9 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+clap = { version = "4.6.7", features = ["derive"] }
 coffee_timer_core = { path = "../core" }
 coffee_timer_store = { path = "../store" }
+
+[dev-dependencies]
+coffee_timer_core = { path = "../core", features = ["test-fakes"] }

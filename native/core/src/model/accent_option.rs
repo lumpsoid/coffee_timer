@@ -30,6 +30,14 @@ impl AccentOption {
         }
     }
 
+    /// The option called `name`, ignoring ASCII case; none if no option
+    /// has that name.
+    pub fn named(name: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|option| option.name.eq_ignore_ascii_case(name))
+    }
+
     pub fn name(self) -> &'static str {
         self.name
     }
