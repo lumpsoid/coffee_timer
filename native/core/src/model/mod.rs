@@ -1,6 +1,7 @@
 //! Value objects and entities, valid by construction. One file per model.
 
 mod accent_color;
+mod accent_option;
 mod brew_metrics;
 mod model_error;
 mod recipe;
@@ -13,6 +14,7 @@ mod step_id;
 mod theme_selection;
 
 pub use accent_color::AccentColor;
+pub use accent_option::AccentOption;
 pub use brew_metrics::BrewMetrics;
 pub use model_error::ModelError;
 pub use recipe::Recipe;

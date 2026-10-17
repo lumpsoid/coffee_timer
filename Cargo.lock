@@ -49,6 +49,9 @@ dependencies = [
 [[package]]
 name = "coffee_timer_core"
 version = "0.1.0"
+dependencies = [
+ "coffee_timer_core",
+]
 
 [[package]]
 name = "coffee_timer_store"

@@ -1,6 +1,6 @@
 //! Port of `test/domain/settings_test.dart`.
 
-use coffee_timer_core::model::{AccentColor, ModelError, Settings, ThemeSelection};
+use coffee_timer_core::model::{AccentColor, AccentOption, ModelError, Settings, ThemeSelection};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -126,4 +126,62 @@ fn fallback_theme_matches_missing_storage() {
         Settings::FALLBACK.theme(),
         ThemeSelection::from_storage(None)
     );
+}
+
+// Settings::from_storage
+
+#[test]
+fn from_storage_reads_valid_values() -> TestResult {
+    let settings = Settings::from_storage(Some("dark"), Some("#FFF44336"));
+    assert_eq!(settings.theme(), ThemeSelection::Dark);
+    assert_eq!(settings.accent(), AccentColor::try_from_hex("#FFF44336")?);
+    Ok(())
+}
+
+#[test]
+fn from_storage_of_nothing_is_the_fallback() {
+    assert_eq!(Settings::from_storage(None, None), Settings::FALLBACK);
+}
+
+#[test]
+fn from_storage_falls_back_per_field() {
+    let bad_accent = Settings::from_storage(Some("light"), Some("#nothex"));
+    assert_eq!(bad_accent.theme(), ThemeSelection::Light);
+    assert_eq!(bad_accent.accent(), AccentColor::FALLBACK);
+
+    let bad_theme = Settings::from_storage(Some("sepia"), Some("#FF4CAF50"));
+    assert_eq!(bad_theme.theme(), ThemeSelection::System);
+    assert_eq!(bad_theme.accent().argb(), 0xFF4C_AF50);
+}
+
+// AccentOption
+
+#[test]
+fn accent_options_match_the_legacy_picker() {
+    let expected = [
+        ("Blue", "#FF2196F3"),
+        ("Red", "#FFF44336"),
+        ("Green", "#FF4CAF50"),
+        ("Purple", "#FF9C27B0"),
+        ("Orange", "#FFFF9800"),
+        ("Pink", "#FFE91E63"),
+        ("Indigo", "#FF3F51B5"),
+        ("Teal", "#FF009688"),
+        ("Cyan", "#FF00BCD4"),
+        ("Lime", "#FFCDDC39"),
+    ];
+    let actual: Vec<_> = AccentOption::ALL
+        .iter()
+        .map(|o| (o.name(), o.color().to_hex()))
+        .collect();
+    let expected: Vec<_> = expected
+        .iter()
+        .map(|&(name, hex)| (name, hex.to_owned()))
+        .collect();
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn fallback_accent_is_the_first_option() {
+    assert_eq!(AccentOption::ALL[0].color(), AccentColor::FALLBACK);
 }

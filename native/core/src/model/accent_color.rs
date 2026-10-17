@@ -9,6 +9,12 @@ impl AccentColor {
     /// Material Blue 500 — the default accent.
     pub const FALLBACK: Self = Self(0xFF21_96F3);
 
+    /// Every `u32` is a valid ARGB value, so this cannot fail. `const` so
+    /// accent presets can be declared as data.
+    pub const fn from_argb32(argb: u32) -> Self {
+        Self(argb)
+    }
+
     /// Rejects anything outside `0x00000000..=0xFFFFFFFF`.
     pub fn try_from_argb(value: i64) -> Result<Self, ModelError> {
         u32::try_from(value)

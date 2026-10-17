@@ -7,3 +7,11 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
+
+[features]
+# Test doubles for the infrastructure traits (`fakes` module). Off in
+# production builds; integration tests turn it on via the dev-dependency below.
+test-fakes = []
+
+[dev-dependencies]
+coffee_timer_core = { path = ".", features = ["test-fakes"] }

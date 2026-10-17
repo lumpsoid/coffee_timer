@@ -19,6 +19,19 @@ impl Settings {
         Self { theme, accent }
     }
 
+    /// Builds settings from raw stored values, field by field: a missing or
+    /// unrecognised theme is `System`, a missing or malformed accent is
+    /// [`AccentColor::FALLBACK`]. Never fails — bad storage never blocks the
+    /// app.
+    pub fn from_storage(theme: Option<&str>, accent_hex: Option<&str>) -> Self {
+        Self {
+            theme: ThemeSelection::from_storage(theme),
+            accent: accent_hex
+                .and_then(|raw| AccentColor::try_from_hex(raw).ok())
+                .unwrap_or(AccentColor::FALLBACK),
+        }
+    }
+
     pub fn with_theme(self, theme: ThemeSelection) -> Self {
         Self { theme, ..self }
     }

@@ -14,6 +14,13 @@ impl RecipeId {
         Ok(Self(raw.to_owned()))
     }
 
+    /// `r{n}` — non-empty by construction. Only for the
+    /// `SequentialIds` test fake.
+    #[cfg(any(test, feature = "test-fakes"))]
+    pub(crate) fn sequential(n: u64) -> Self {
+        Self(format!("r{n}"))
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }

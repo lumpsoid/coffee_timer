@@ -96,6 +96,16 @@ Fixed / changed:
 - `Recipe::with_step_removed_at` returns `Err` for an index past the end
   (legacy threw a `RangeError`).
 
+## Catalog and settings fixes
+
+- Settings and catalog writes go to the store first; a failed write leaves
+  state unchanged and returns `Err` (legacy `settings_controller.dart`
+  `_apply` updated state before an unawaited save and ignored failures).
+- Recipes load in insertion order explicitly (legacy `SELECT * FROM recipe`
+  had no `ORDER BY` and relied on rowid order implicitly). Phase 5:
+  `ORDER BY rowid` (or a position column) on load, and an upsert keeps the
+  existing position (`ON CONFLICT DO UPDATE`, not `INSERT OR REPLACE`).
+
 ## Phases
 
 | # | Phase | Gate |
