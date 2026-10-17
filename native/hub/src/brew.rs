@@ -1,6 +1,8 @@
 //! Brew state and effects → brew signals.
 
-use coffee_timer_core::brew::{BrewState, BrewView, Effect, RunningStep, StepRow, StepStatus};
+use coffee_timer_core::brew::{
+    BrewNotice, BrewState, BrewView, Effect, RunningStep, StepRow, StepStatus,
+};
 use coffee_timer_core::model::StepDuration;
 
 use crate::signals::{BrewRecipe, BrewStep, BrewStepStatus, BrewTimer, BrewUpdate, PlatformEffect};
@@ -79,6 +81,10 @@ impl From<Effect> for PlatformEffect {
             Effect::PlayStepSound => Self::PlayStepSound,
             Effect::Vibrate { ms } => Self::Vibrate { ms },
             Effect::KeepScreenOn(on) => Self::KeepScreenOn { on },
+            Effect::ShowBrewNotification(BrewNotice { title, next }) => {
+                Self::ShowBrewNotification { title, next }
+            }
+            Effect::HideBrewNotification => Self::HideBrewNotification,
         }
     }
 }

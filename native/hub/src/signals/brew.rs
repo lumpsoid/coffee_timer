@@ -106,6 +106,19 @@ pub struct BrewTimer {
 #[derive(Serialize, RustSignal)]
 pub enum PlatformEffect {
     PlayStepSound,
-    Vibrate { ms: u32 },
-    KeepScreenOn { on: bool },
+    Vibrate {
+        ms: u32,
+    },
+    KeepScreenOn {
+        on: bool,
+    },
+    /// Show or refresh the ongoing notification of a running brew; on
+    /// Android it keeps the brew ticking in the background.
+    ShowBrewNotification {
+        /// `Bloom · 00:35`.
+        title: String,
+        /// `Next: Pour`; none on the last step.
+        next: Option<String>,
+    },
+    HideBrewNotification,
 }

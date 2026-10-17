@@ -104,7 +104,8 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   `~/.local/share/coffee_timer/coffee_timer.db`, then `./coffee_timer.db`.
 - `brew` ticks once per second until the last step ends, and prints the
   countdown, each step's status and the effects (`[vibrate 100ms]`,
-  `[sound]`, `[screen on]`/`[screen off]`). `--fast` skips the waits.
+  `[sound]`, `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`).
+  `--fast` skips the waits.
   `--from N` starts at a 0-based step.
 - `--step NAME=SECONDS` splits at the last `=`. A blank name is saved as
   `Step N`.

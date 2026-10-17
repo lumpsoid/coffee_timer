@@ -34,6 +34,11 @@ impl BrewView {
         Some(RunningStep::begin(run, index, step.clone()))
     }
 
+    /// The name of the step at `index`; none past the end.
+    pub(crate) fn step_name(&self, index: usize) -> Option<&str> {
+        self.recipe.steps().get(index).map(|step| step.name())
+    }
+
     pub(crate) fn step_count(&self) -> usize {
         self.recipe.steps().len()
     }

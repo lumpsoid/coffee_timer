@@ -2,7 +2,9 @@
 //! reference: `lib/core/recipe/actors/recipe_actor.dart` (timer) and
 //! `lib/recipe_details/pages/recipe_details_page.dart` (what is shown).
 
-use coffee_timer_core::brew::{BrewController, BrewError, BrewState, Effect, StepStatus};
+use coffee_timer_core::brew::{
+    BrewController, BrewError, BrewNotice, BrewState, Effect, StepStatus,
+};
 use coffee_timer_core::catalog::RecipeCatalog;
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
@@ -17,6 +19,19 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const BUZZ: Effect = Effect::Vibrate { ms: 100 };
 const SCREEN_ON: Effect = Effect::KeepScreenOn(true);
 const SCREEN_OFF: Effect = Effect::KeepScreenOn(false);
+const HIDE: Effect = Effect::HideBrewNotification;
+/// A running brew stops silently.
+const STOPPED: [Effect; 2] = [SCREEN_OFF, HIDE];
+/// After the last step: screen-on off, vibrate, no sound, notification gone.
+const ENDED: [Effect; 3] = [SCREEN_OFF, BUZZ, HIDE];
+
+/// The brew notification: `title`, and the next step's name if any.
+fn show(title: &str, next: Option<&str>) -> Effect {
+    Effect::ShowBrewNotification(BrewNotice {
+        title: title.to_owned(),
+        next: next.map(|name| format!("Next: {name}")),
+    })
+}
 
 /// A recipe `id` whose steps are named `Step 1`, `Step 2`, … and last
 /// `step_seconds` each.
@@ -193,7 +208,7 @@ fn open_while_running_stops_the_brew_silently() -> TestResult {
     let (mut brew, catalog) = opened(&[5])?;
     brew.start(0)?;
 
-    assert_eq!(brew.open(&id("b")?, &catalog), [SCREEN_OFF]);
+    assert_eq!(brew.open(&id("b")?, &catalog), STOPPED);
     assert!(is_idle(&brew));
     assert_eq!(brew.state().view().map(|v| v.name()), Some("Recipe b"));
     Ok(())
@@ -205,20 +220,26 @@ fn open_while_running_stops_the_brew_silently() -> TestResult {
 fn a_brew_runs_tick_by_tick_to_the_end() -> TestResult {
     let (mut brew, _catalog) = opened(&[2, 1])?;
 
-    assert_eq!(brew.start(0)?, [SCREEN_ON]);
+    assert_eq!(
+        brew.start(0)?,
+        [SCREEN_ON, show("Step 1 · 00:02", Some("Step 2"))]
+    );
     assert_eq!(timer(&brew), running(0, "00:02"));
     assert_eq!(statuses(&brew), [Current, Pending]);
 
-    assert_eq!(brew.tick(), []);
+    assert_eq!(brew.tick(), [show("Step 1 · 00:01", Some("Step 2"))]);
     assert_eq!(timer(&brew), running(0, "00:01"));
 
     // Boundary: the next step shows its full duration at once.
-    assert_eq!(brew.tick(), [BUZZ, Effect::PlayStepSound]);
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:01", None)]
+    );
     assert_eq!(timer(&brew), running(1, "00:01"));
     assert_eq!(statuses(&brew), [Done, Current]);
 
     // After the last step: screen-on off, ended, vibrate, no sound.
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
     assert_eq!(timer(&brew), None);
     assert!(is_idle(&brew));
     assert_eq!(statuses(&brew), [Pending, Pending]);
@@ -247,7 +268,10 @@ fn a_zero_second_first_step_shows_00_00_for_one_tick() -> TestResult {
     brew.start(0)?;
     assert_eq!(timer(&brew), running(0, "00:00"));
 
-    assert_eq!(brew.tick(), [BUZZ, Effect::PlayStepSound]);
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:02", None)]
+    );
     assert_eq!(timer(&brew), running(1, "00:02"));
     Ok(())
 }
@@ -257,10 +281,13 @@ fn a_zero_second_last_step_shows_00_00_for_one_tick_then_ends() -> TestResult {
     let (mut brew, _catalog) = opened(&[1, 0])?;
     brew.start(0)?;
 
-    assert_eq!(brew.tick(), [BUZZ, Effect::PlayStepSound]);
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:00", None)]
+    );
     assert_eq!(timer(&brew), running(1, "00:00"));
 
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
     assert!(is_idle(&brew));
     Ok(())
 }
@@ -270,20 +297,30 @@ fn a_zero_second_middle_step_shows_00_00_for_one_tick() -> TestResult {
     let (mut brew, _catalog) = opened(&[1, 0, 1])?;
     brew.start(0)?;
 
-    assert_eq!(brew.tick(), [BUZZ, Effect::PlayStepSound]);
+    assert_eq!(
+        brew.tick(),
+        [
+            BUZZ,
+            Effect::PlayStepSound,
+            show("Step 2 · 00:00", Some("Step 3"))
+        ]
+    );
     assert_eq!(timer(&brew), running(1, "00:00"));
-    assert_eq!(brew.tick(), [BUZZ, Effect::PlayStepSound]);
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Step 3 · 00:01", None)]
+    );
     assert_eq!(timer(&brew), running(2, "00:01"));
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
     Ok(())
 }
 
 #[test]
 fn a_single_zero_second_step_ends_after_one_tick() -> TestResult {
     let (mut brew, _catalog) = opened(&[0])?;
-    assert_eq!(brew.start(0)?, [SCREEN_ON]);
+    assert_eq!(brew.start(0)?, [SCREEN_ON, show("Step 1 · 00:00", None)]);
     assert_eq!(timer(&brew), running(0, "00:00"));
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
     assert!(is_idle(&brew));
     Ok(())
 }
@@ -302,16 +339,22 @@ fn the_longest_step_shows_99_59() -> TestResult {
 fn start_from_a_middle_step() -> TestResult {
     let (mut brew, _catalog) = opened(&[3, 2, 1])?;
 
-    assert_eq!(brew.start(1)?, [SCREEN_ON]);
+    assert_eq!(
+        brew.start(1)?,
+        [SCREEN_ON, show("Step 2 · 00:02", Some("Step 3"))]
+    );
     assert_eq!(timer(&brew), running(1, "00:02"));
     assert_eq!(statuses(&brew), [Done, Current, Pending]);
 
-    assert_eq!(brew.tick(), []);
-    assert_eq!(brew.tick(), [BUZZ, Effect::PlayStepSound]);
+    assert_eq!(brew.tick(), [show("Step 2 · 00:01", Some("Step 3"))]);
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Step 3 · 00:01", None)]
+    );
     assert_eq!(timer(&brew), running(2, "00:01"));
     assert_eq!(statuses(&brew), [Done, Done, Current]);
 
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
     assert!(is_idle(&brew));
     Ok(())
 }
@@ -321,7 +364,7 @@ fn start_from_the_last_step() -> TestResult {
     let (mut brew, _catalog) = opened(&[3, 1])?;
     brew.start(1)?;
     assert_eq!(statuses(&brew), [Done, Current]);
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
     Ok(())
 }
 
@@ -368,9 +411,12 @@ fn start_while_running_restarts_from_the_chosen_step() -> TestResult {
     brew.start(0)?;
     brew.tick();
 
-    assert_eq!(brew.start(1)?, [SCREEN_ON]);
+    assert_eq!(brew.start(1)?, [SCREEN_ON, show("Step 2 · 00:02", None)]);
     assert_eq!(timer(&brew), running(1, "00:02"));
-    assert_eq!(brew.start(0)?, [SCREEN_ON]);
+    assert_eq!(
+        brew.start(0)?,
+        [SCREEN_ON, show("Step 1 · 00:03", Some("Step 2"))]
+    );
     assert_eq!(timer(&brew), running(0, "00:03"));
     Ok(())
 }
@@ -379,11 +425,11 @@ fn start_while_running_restarts_from_the_chosen_step() -> TestResult {
 fn restart_after_the_brew_has_ended() -> TestResult {
     let (mut brew, _catalog) = opened(&[1])?;
     brew.start(0)?;
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
 
-    assert_eq!(brew.start(0)?, [SCREEN_ON]);
+    assert_eq!(brew.start(0)?, [SCREEN_ON, show("Step 1 · 00:01", None)]);
     assert_eq!(timer(&brew), running(0, "00:01"));
-    assert_eq!(brew.tick(), [SCREEN_OFF, BUZZ]);
+    assert_eq!(brew.tick(), ENDED);
     Ok(())
 }
 
@@ -415,7 +461,7 @@ fn reset_mid_brew_stops_and_turns_screen_on_off() -> TestResult {
     brew.start(0)?;
     brew.tick();
 
-    assert_eq!(brew.reset(), [SCREEN_OFF]);
+    assert_eq!(brew.reset(), STOPPED);
     assert!(is_idle(&brew));
     assert_eq!(statuses(&brew), [Pending, Pending]);
     assert_eq!(brew.tick(), []);
@@ -441,7 +487,7 @@ fn leave_mid_brew_stops_silently() -> TestResult {
     brew.start(0)?;
     brew.tick();
 
-    assert_eq!(brew.leave(), [SCREEN_OFF], "no vibration, no sound");
+    assert_eq!(brew.leave(), STOPPED, "no vibration, no sound");
     assert_eq!(brew.state(), &BrewState::Empty);
     assert_eq!(brew.tick(), []);
     Ok(())
@@ -466,7 +512,7 @@ fn an_edit_to_the_open_recipe_mid_brew_resets_to_the_new_version() -> TestResult
     let edited = recipe("a", &[10])?.renamed(RecipeName::try_parse("Ristretto")?);
     let change = catalog.upsert(edited)?;
 
-    assert_eq!(brew.on_catalog_change(&change, &catalog), [SCREEN_OFF]);
+    assert_eq!(brew.on_catalog_change(&change, &catalog), STOPPED);
     assert!(is_idle(&brew));
     let view = brew.state().view().ok_or("no view")?;
     assert_eq!(view.name(), "Ristretto");
@@ -504,9 +550,16 @@ fn an_edit_to_another_recipe_changes_nothing() -> TestResult {
     assert_eq!(brew.on_catalog_change(&change, &catalog), []);
     assert_eq!(brew.state(), &before);
 
-    assert_eq!(brew.tick(), [], "still running");
+    assert_eq!(
+        brew.tick(),
+        [show("Step 1 · 00:01", Some("Step 2"))],
+        "still running"
+    );
     assert_eq!(timer(&brew), running(0, "00:01"));
-    assert_eq!(brew.tick(), [BUZZ, Effect::PlayStepSound]);
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:02", None)]
+    );
     Ok(())
 }
 
@@ -516,7 +569,7 @@ fn deleting_the_open_recipe_mid_brew_shows_empty_recipe() -> TestResult {
     brew.start(0)?;
 
     let change = catalog.remove(id("a")?)?;
-    assert_eq!(brew.on_catalog_change(&change, &catalog), [SCREEN_OFF]);
+    assert_eq!(brew.on_catalog_change(&change, &catalog), STOPPED);
     assert_eq!(brew.state(), &BrewState::Empty);
     assert_eq!(brew.tick(), []);
     Ok(())

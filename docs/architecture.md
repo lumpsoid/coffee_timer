@@ -107,12 +107,28 @@ directly, without opening a draft.
 ## Effects
 
 An [`Effect`](../native/core/src/brew/effect.rs) is a platform command that
-a controller has already decided on: `Vibrate { ms }`, `PlayStepSound` or
-`KeepScreenOn(bool)`. Only `BrewController` returns effects. The hub maps
+a controller has already decided on: `Vibrate { ms }`, `PlayStepSound`,
+`KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
+`HideBrewNotification`. Only `BrewController` returns effects. The hub maps
 each effect to a `PlatformEffect` signal and sends it after the brew view.
 Dart's [`PlatformEffectPerformer`](../lib/effects/platform_effect_performer.dart)
 makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`,
-`[sound]`, `[screen on]` and `[screen off]`.
+`[sound]`, `[screen on]`, `[screen off]`, `[notify Bloom · 00:35 | Next:
+Pour]` and `[notify off]`.
+
+**The brew notification.** A
+[`BrewNotice`](../native/core/src/brew/brew_notice.rs) is the running step
+and its countdown, `Bloom · 00:35`, and the next step, `Next: Pour`, which
+is left out on the last step. A running brew shows it from start to stop,
+refreshed on every tick. On Android,
+[`BrewService`](../android/app/src/main/kotlin/com/example/coffee_timer/BrewService.kt)
+performs it as a foreground service that holds a partial wake lock. That
+keeps the process alive and the CPU awake, so the hub keeps ticking and the
+step effects keep firing with the app in the background or the screen off.
+Tapping the notification brings the app back. `MainActivity` asks for the
+notification permission on the first brew of each launch. If the user
+denies it, the service still runs, without a visible notification. Swiping
+the app away stops the service. Other platforms skip both effects.
 
 ## The timer
 
@@ -121,17 +137,21 @@ clock. Time arrives as `tick()`, one call per second while
 `BrewState::is_running()`.
 
 - `start(from)` begins step `from` with its full duration and returns
-  `KeepScreenOn(true)`. If no recipe is open, or `from` is out of range, it
+  `KeepScreenOn(true)` + `ShowBrewNotification`. If no recipe is open, or `from` is out of range, it
   returns `Err(BrewError)` and changes nothing. Starting while a brew is
   running restarts it.
 - `tick()` takes one second off the current step, and never goes below zero.
-  When a step reaches zero, the next step begins and the tick returns
-  `Vibrate` + `PlayStepSound`. After the last step, the brew goes back to
-  `Idle` and the tick returns `KeepScreenOn(false)` + `Vibrate`, with no
-  sound. A 0-second step shows `00:00` for one tick.
+  Every tick that leaves the brew running returns `ShowBrewNotification`
+  last. When a step reaches zero, the next step begins and the tick returns
+  `Vibrate` + `PlayStepSound` before it. After the last step, the brew goes
+  back to `Idle` and the tick returns `KeepScreenOn(false)` + `Vibrate` +
+  `HideBrewNotification`, with no sound. The hide comes last, so the app is
+  still kept awake for the final buzz. A 0-second step shows `00:00` for one
+  tick.
 - `reset()` stops the brew and keeps the recipe open. `leave()` stops the
   brew and empties the page. `open(id)` stops any running brew. All three
-  return `KeepScreenOn(false)` only when a brew was running, and never
+  return `KeepScreenOn(false)` + `HideBrewNotification` only when a brew was
+  running, and never
   vibrate or play the sound.
 - Every accepted start increments a run number, held in
   [`RunningStep`](../native/core/src/brew/running_step.rs). Each tick and
@@ -243,8 +263,9 @@ the core error text instead and exits non-zero.
 - **The performer** ([`lib/effects`](../lib/effects)):
   `PlatformEffectPerformer` listens to `PlatformEffect` and queues one call
   per effect, in arrival order, through an `EffectPlugins` interface.
-  `PluginEffects` implements the interface with `audioplayers`, `vibration`
-  and `wakelock_plus`, and loads the step sound once at startup. A failed
+  `PluginEffects` implements the interface with `audioplayers`, `vibration`,
+  `wakelock_plus` and the app's `coffee_timer/brew_notification` method
+  channel (Android only), and loads the step sound once at startup. A failed
   call is logged and does not block the next effect.
 - **Pages** ([`lib/pages`](../lib/pages)) read holders and send intents. A
   page that opens something sends the opening intent itself (`OpenBrew`,

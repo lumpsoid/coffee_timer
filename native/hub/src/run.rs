@@ -247,8 +247,8 @@ fn on_row<E: Error + 'static>(
 /// Sends the brew view, then carries out `effects`.
 fn show_brew(brew: &BrewController, effects: &[Effect]) {
     BrewUpdate::from(brew.state()).send_signal_to_dart();
-    for &effect in effects {
-        PlatformEffect::from(effect).send_signal_to_dart();
+    for effect in effects {
+        PlatformEffect::from(effect.clone()).send_signal_to_dart();
     }
 }
 

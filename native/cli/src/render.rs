@@ -67,6 +67,11 @@ pub fn effects(out: &mut impl Write, effects: &[Effect]) -> io::Result<()> {
             Effect::PlayStepSound => writeln!(out, "[sound]")?,
             Effect::KeepScreenOn(true) => writeln!(out, "[screen on]")?,
             Effect::KeepScreenOn(false) => writeln!(out, "[screen off]")?,
+            Effect::ShowBrewNotification(notice) => match &notice.next {
+                Some(next) => writeln!(out, "[notify {} | {next}]", notice.title)?,
+                None => writeln!(out, "[notify {}]", notice.title)?,
+            },
+            Effect::HideBrewNotification => writeln!(out, "[notify off]")?,
         }
     }
     Ok(())
