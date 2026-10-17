@@ -87,6 +87,15 @@ Fixed / changed:
 - Dropped: unused total-remaining counter, unreachable `99:60` cap,
   per-page audio preload/unload (Dart loads the sound once at startup).
 
+## Domain fixes (`model/`)
+
+- `AccentColor` hex parsing rejects a sign and whitespace (legacy
+  `int.tryParse` accepted `-`/spaces → negative ARGB).
+- Default theme is `System` everywhere (legacy `Settings.fallback` was light
+  while missing storage gave system).
+- `Recipe::with_step_removed_at` returns `Err` for an index past the end
+  (legacy threw a `RangeError`).
+
 ## Phases
 
 | # | Phase | Gate |
