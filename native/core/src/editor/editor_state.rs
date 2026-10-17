@@ -18,10 +18,16 @@ impl EditorState {
         }
     }
 
+    /// The open draft, for an action on it. Every action on the draft starts
+    /// here, so the previous action's notice is cleared whatever this one
+    /// does.
     pub(crate) fn draft_mut(&mut self) -> Option<&mut Draft> {
         match self {
             Self::Closed => None,
-            Self::Open(draft) => Some(draft),
+            Self::Open(draft) => {
+                draft.clear_notice();
+                Some(draft)
+            }
         }
     }
 }

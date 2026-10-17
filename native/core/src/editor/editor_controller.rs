@@ -75,28 +75,43 @@ impl EditorController {
     /// Saves the draft to `catalog` and closes it. Field errors show from
     /// the first attempt on. On `Err` the catalog is unchanged and the draft
     /// stays open: [`SaveError::Invalid`] while a field is invalid,
-    /// [`SaveError::Store`] when the write failed.
+    /// [`SaveError::Store`] when the write failed, which the draft also
+    /// shows as its notice.
     pub fn save(&mut self, catalog: &mut RecipeCatalog) -> Result<CatalogChange, SaveError> {
         let draft = self.state.draft_mut().ok_or(SaveError::NoDraft)?;
         let recipe = draft.submit().ok_or(SaveError::Invalid)?;
-        let change = catalog.upsert(recipe).map_err(SaveError::Store)?;
-        self.state = EditorState::Closed;
-        Ok(change)
+        match catalog.upsert(recipe) {
+            Ok(change) => {
+                self.state = EditorState::Closed;
+                Ok(change)
+            }
+            Err(e) => {
+                let error = SaveError::Store(e);
+                draft.notify(&error);
+                Err(error)
+            }
+        }
     }
 
     /// Deletes the edited recipe from `catalog` and closes the draft. A new
     /// recipe has nothing to delete. On `Err` the catalog is unchanged and
-    /// the draft stays open.
+    /// the draft stays open; a failed write is also the draft's notice.
     pub fn delete(&mut self, catalog: &mut RecipeCatalog) -> Result<CatalogChange, DeleteError> {
-        let draft = self.state.draft().ok_or(DeleteError::NoDraft)?;
+        let draft = self.state.draft_mut().ok_or(DeleteError::NoDraft)?;
         if !draft.can_delete() {
             return Err(DeleteError::NotSaved);
         }
-        let change = catalog
-            .remove(draft.id().clone())
-            .map_err(DeleteError::Store)?;
-        self.state = EditorState::Closed;
-        Ok(change)
+        match catalog.remove(draft.id().clone()) {
+            Ok(change) => {
+                self.state = EditorState::Closed;
+                Ok(change)
+            }
+            Err(e) => {
+                let error = DeleteError::Store(e);
+                draft.notify(&error);
+                Err(error)
+            }
+        }
     }
 
     /// Leaves the page without saving.

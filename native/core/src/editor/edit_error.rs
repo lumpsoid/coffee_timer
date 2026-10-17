@@ -2,8 +2,9 @@ use std::fmt;
 
 use crate::model::{RecipeId, StepId};
 
-/// Why a draft could not be opened or changed. The state is unchanged when
-/// one is returned.
+/// Why a draft could not be opened or changed. The draft is unchanged when
+/// one is returned, except that, like every action on it, the previous
+/// notice is cleared.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditError {
     /// No draft is open.

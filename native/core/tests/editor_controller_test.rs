@@ -707,6 +707,103 @@ fn store_failure_on_delete_surfaces_and_leaves_everything_unchanged() -> TestRes
     Ok(())
 }
 
+// Notice: the store failure a snackbar shows
+
+#[test]
+fn a_draft_opens_with_no_notice() -> TestResult {
+    let catalog = catalog(vec![v60()?])?;
+    assert_eq!(draft(&new_draft())?.notice(), None);
+    assert_eq!(draft(&editing("recipe-1", &catalog)?)?.notice(), None);
+    Ok(())
+}
+
+#[test]
+fn store_failure_on_save_is_the_notice() -> TestResult {
+    // Legacy snackbar: "Failed to save recipe: $e".
+    let mut catalog = catalog_of(FakeRecipeStore::with_recipes(vec![v60()?]).failing_writes())?;
+    let mut editor = editing("recipe-1", &catalog)?;
+
+    let error = editor.save(&mut catalog).err().ok_or("save succeeded")?;
+
+    let expected = error.to_string();
+    assert_eq!(
+        expected,
+        "Failed to save recipe: Storage failed: fake write failure"
+    );
+    assert_eq!(draft(&editor)?.notice(), Some(expected.as_str()));
+    Ok(())
+}
+
+#[test]
+fn store_failure_on_delete_is_the_notice() -> TestResult {
+    // Legacy snackbar: "Failed to delete recipe: $e".
+    let mut catalog = catalog_of(FakeRecipeStore::with_recipes(vec![v60()?]).failing_writes())?;
+    let mut editor = editing("recipe-1", &catalog)?;
+
+    let error = editor
+        .delete(&mut catalog)
+        .err()
+        .ok_or("delete succeeded")?;
+
+    let expected = error.to_string();
+    assert!(expected.starts_with("Failed to delete recipe: "));
+    assert_eq!(draft(&editor)?.notice(), Some(expected.as_str()));
+    Ok(())
+}
+
+#[test]
+fn invalid_fields_leave_no_notice() -> TestResult {
+    // Legacy showed no snackbar for an invalid form: the field errors show.
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+
+    assert_eq!(draft(&editor)?.notice(), None);
+    assert!(draft(&editor)?.name_error().is_some());
+    Ok(())
+}
+
+#[test]
+fn the_next_action_clears_the_notice() -> TestResult {
+    let mut catalog = catalog_of(FakeRecipeStore::with_recipes(vec![v60()?]).failing_writes())?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    assert!(editor.save(&mut catalog).is_err());
+
+    editor.set_description("x")?;
+
+    assert_eq!(draft(&editor)?.notice(), None);
+    Ok(())
+}
+
+#[test]
+fn a_rejected_action_also_clears_the_notice() -> TestResult {
+    let mut catalog = catalog_of(FakeRecipeStore::with_recipes(vec![v60()?]).failing_writes())?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    assert!(editor.save(&mut catalog).is_err());
+
+    let stale = sid("gone")?;
+    assert_eq!(
+        editor.set_step_name(&stale, "x"),
+        Err(EditError::UnknownStep(stale))
+    );
+
+    assert_eq!(draft(&editor)?.notice(), None);
+    Ok(())
+}
+
+#[test]
+fn a_repeated_store_failure_sets_the_notice_again() -> TestResult {
+    let mut catalog = catalog_of(FakeRecipeStore::with_recipes(vec![v60()?]).failing_writes())?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    assert!(editor.save(&mut catalog).is_err());
+    assert!(editor.delete(&mut catalog).is_err());
+
+    let notice = draft(&editor)?.notice().ok_or("no notice")?;
+    assert!(notice.starts_with("Failed to delete recipe: "));
+    Ok(())
+}
+
 // Legacy flow test: create, edit, then delete
 
 #[test]

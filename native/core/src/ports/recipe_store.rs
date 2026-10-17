@@ -7,7 +7,7 @@ use crate::ports::StoreError;
 /// Order is part of the contract: `load_all` returns recipes in stored order,
 /// `upsert` of a known id keeps its position, and `upsert` of a new id
 /// appends.
-pub trait RecipeStore {
+pub trait RecipeStore: Send {
     fn load_all(&self) -> Result<Vec<Recipe>, StoreError>;
 
     /// Inserts `recipe`, or replaces the stored recipe with the same id

@@ -1,0 +1,182 @@
+//! Brew state and effects → brew signals.
+
+use coffee_timer_core::brew::{BrewState, BrewView, Effect, RunningStep, StepRow, StepStatus};
+use coffee_timer_core::model::StepDuration;
+
+use crate::signals::{BrewRecipe, BrewStep, BrewStepStatus, BrewTimer, BrewUpdate, PlatformEffect};
+
+impl From<&BrewState> for BrewUpdate {
+    fn from(state: &BrewState) -> Self {
+        let steps = || state.step_rows().into_iter().map(BrewStep::from).collect();
+        match state {
+            BrewState::Empty => Self::Empty {
+                label: BrewState::EMPTY_LABEL.to_owned(),
+            },
+            BrewState::Idle(view) => Self::Idle {
+                recipe: recipe(view, steps()),
+            },
+            BrewState::Running(view, step) => Self::Running {
+                recipe: recipe(view, steps()),
+                timer: step.into(),
+            },
+        }
+    }
+}
+
+fn recipe(view: &BrewView, steps: Vec<BrewStep>) -> BrewRecipe {
+    BrewRecipe {
+        id: view.recipe_id().as_str().to_owned(),
+        name: view.name().to_owned(),
+        description: view.description().to_owned(),
+        coffee_label: view.coffee_label().to_owned(),
+        water_label: view.water_label().to_owned(),
+        duration_label: view.duration_label().to_owned(),
+        steps,
+    }
+}
+
+impl From<StepRow> for BrewStep {
+    fn from(row: StepRow) -> Self {
+        Self {
+            number_label: row.number_label,
+            name: row.name,
+            duration_label: row.duration_label,
+            status: row.status.into(),
+        }
+    }
+}
+
+impl From<StepStatus> for BrewStepStatus {
+    fn from(status: StepStatus) -> Self {
+        match status {
+            StepStatus::Done => Self::Done,
+            StepStatus::Current => Self::Current,
+            StepStatus::Pending => Self::Pending,
+        }
+    }
+}
+
+impl From<&RunningStep> for BrewTimer {
+    fn from(step: &RunningStep) -> Self {
+        Self {
+            // A step index beyond `u32` cannot occur (steps are typed in by
+            // hand); saturate rather than panic.
+            step_index: u32::try_from(step.index()).unwrap_or(u32::MAX),
+            step_name: step.name().to_owned(),
+            remaining_label: step.remaining_label(),
+            sweep_seconds: step.sweep().map(StepDuration::seconds),
+        }
+    }
+}
+
+impl From<Effect> for PlatformEffect {
+    fn from(effect: Effect) -> Self {
+        match effect {
+            Effect::PlayStepSound => Self::PlayStepSound,
+            Effect::Vibrate { ms } => Self::Vibrate { ms },
+            Effect::KeepScreenOn(on) => Self::KeepScreenOn { on },
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use coffee_timer_core::brew::BrewController;
+    use coffee_timer_core::catalog::RecipeCatalog;
+    use coffee_timer_core::fakes::FakeRecipeStore;
+    use coffee_timer_core::model::{Recipe, RecipeId, RecipeName, RecipeStep, StepId};
+
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn step(id: &str, name: &str, seconds: i64) -> Result<RecipeStep, Box<dyn std::error::Error>> {
+        Ok(RecipeStep::new(
+            StepId::try_parse(id)?,
+            name.to_owned(),
+            StepDuration::try_parse(seconds)?,
+        ))
+    }
+
+    /// A brew on `r1`: "Bloom" 30 s, then "Pour" 0 s.
+    fn opened() -> Result<BrewController, Box<dyn std::error::Error>> {
+        let recipe = Recipe::new(
+            RecipeId::try_parse("r1")?,
+            RecipeName::try_parse("V60")?,
+            "clean".to_owned(),
+            vec![step("s1", "Bloom", 30)?, step("s2", "Pour", 0)?],
+        );
+        let mut catalog = RecipeCatalog::new(Box::new(FakeRecipeStore::with_recipes(vec![recipe])));
+        catalog.load()?;
+        let mut brew = BrewController::new();
+        let _effects = brew.open(&RecipeId::try_parse("r1")?, &catalog);
+        Ok(brew)
+    }
+
+    fn statuses(recipe: &BrewRecipe) -> Vec<&'static str> {
+        recipe
+            .steps
+            .iter()
+            .map(|s| match s.status {
+                BrewStepStatus::Done => "done",
+                BrewStepStatus::Current => "current",
+                BrewStepStatus::Pending => "pending",
+            })
+            .collect()
+    }
+
+    #[test]
+    fn empty_carries_its_label() -> TestResult {
+        let BrewUpdate::Empty { label } = BrewUpdate::from(&BrewState::Empty) else {
+            return Err("not empty".into());
+        };
+        assert_eq!(label, "Empty recipe");
+        Ok(())
+    }
+
+    #[test]
+    fn idle_shows_the_recipe_with_every_step_pending() -> TestResult {
+        let brew = opened()?;
+        let BrewUpdate::Idle { recipe } = BrewUpdate::from(brew.state()) else {
+            return Err("not idle".into());
+        };
+        assert_eq!(recipe.id, "r1");
+        assert_eq!(recipe.name, "V60");
+        assert_eq!(recipe.description, "clean");
+        assert_eq!(recipe.duration_label, "0:30");
+        assert_eq!(statuses(&recipe), ["pending", "pending"]);
+        assert_eq!(recipe.steps[0].number_label, "1");
+        assert_eq!(recipe.steps[0].name, "Bloom");
+        assert_eq!(recipe.steps[0].duration_label, "30s");
+        Ok(())
+    }
+
+    #[test]
+    fn running_carries_the_step_index_and_its_sweep() -> TestResult {
+        let mut brew = opened()?;
+        let _effects = brew.start(0)?;
+        let _effects = brew.tick();
+        let BrewUpdate::Running { recipe, timer } = BrewUpdate::from(brew.state()) else {
+            return Err("not running".into());
+        };
+        assert_eq!(statuses(&recipe), ["current", "pending"]);
+        assert_eq!(timer.step_index, 0);
+        assert_eq!(timer.step_name, "Bloom");
+        assert_eq!(timer.remaining_label, "00:29");
+        assert_eq!(timer.sweep_seconds, Some(30));
+        Ok(())
+    }
+
+    #[test]
+    fn a_zero_second_step_has_no_sweep() -> TestResult {
+        let mut brew = opened()?;
+        let _effects = brew.start(1)?;
+        let BrewUpdate::Running { recipe, timer } = BrewUpdate::from(brew.state()) else {
+            return Err("not running".into());
+        };
+        assert_eq!(statuses(&recipe), ["done", "current"]);
+        assert_eq!(timer.step_index, 1);
+        assert_eq!(timer.sweep_seconds, None);
+        Ok(())
+    }
+}

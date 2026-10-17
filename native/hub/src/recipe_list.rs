@@ -1,0 +1,131 @@
+//! Catalog ↔ recipe list signals.
+
+use coffee_timer_core::catalog::{self, CatalogChange, RecipeCatalog};
+use coffee_timer_core::model::{BrewMetrics, Recipe};
+
+use crate::signals::{RecipeListUpdate, RecipeSummary};
+
+impl RecipeListUpdate {
+    /// Every recipe the catalog holds, in order.
+    pub fn snapshot(catalog: &RecipeCatalog) -> Self {
+        Self::Snapshot {
+            recipes: catalog.state().iter().map(summary).collect(),
+        }
+    }
+
+    /// The diff for a persisted change: the changed id's row as `catalog`
+    /// now holds it, or its removal when the catalog holds no such recipe.
+    /// Read from the catalog like `BrewController::on_catalog_change`, so
+    /// an `Upserted` id the catalog lacks (which it never returns) cannot
+    /// send a stale row.
+    pub fn of(change: &CatalogChange, catalog: &RecipeCatalog) -> Self {
+        let (CatalogChange::Upserted(id) | CatalogChange::Removed(id)) = change;
+        match catalog.get(id) {
+            Some(recipe) => Self::Upserted {
+                recipe: summary(recipe),
+            },
+            None => Self::Removed {
+                id: id.as_str().to_owned(),
+            },
+        }
+    }
+}
+
+fn summary(recipe: &Recipe) -> RecipeSummary {
+    catalog::RecipeSummary::of(recipe, &BrewMetrics::default()).into()
+}
+
+impl From<catalog::RecipeSummary> for RecipeSummary {
+    fn from(s: catalog::RecipeSummary) -> Self {
+        Self {
+            id: s.id.as_str().to_owned(),
+            name: s.name,
+            description: s.description,
+            coffee_label: s.coffee_label,
+            water_label: s.water_label,
+            time_label: s.time_label,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use coffee_timer_core::fakes::FakeRecipeStore;
+    use coffee_timer_core::model::{RecipeId, RecipeName, RecipeStep, StepDuration, StepId};
+
+    use super::*;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    fn v60() -> Result<Recipe, Box<dyn std::error::Error>> {
+        Ok(Recipe::new(
+            RecipeId::try_parse("r1")?,
+            RecipeName::try_parse("V60")?,
+            "clean".to_owned(),
+            vec![RecipeStep::new(
+                StepId::try_parse("s1")?,
+                "Add coffee".to_owned(),
+                StepDuration::try_parse(95)?,
+            )],
+        ))
+    }
+
+    fn catalog_with(recipes: Vec<Recipe>) -> Result<RecipeCatalog, Box<dyn std::error::Error>> {
+        let mut catalog = RecipeCatalog::new(Box::new(FakeRecipeStore::with_recipes(recipes)));
+        catalog.load()?;
+        Ok(catalog)
+    }
+
+    fn assert_v60_row(row: &RecipeSummary) {
+        assert_eq!(row.id, "r1");
+        assert_eq!(row.name, "V60");
+        assert_eq!(row.description, "clean");
+        assert_eq!(row.time_label, "1:35");
+        assert!(row.coffee_label.ends_with(" g"));
+        assert!(row.water_label.ends_with(" g"));
+    }
+
+    #[test]
+    fn snapshot_lists_every_recipe() -> TestResult {
+        let catalog = catalog_with(vec![v60()?])?;
+        let RecipeListUpdate::Snapshot { recipes } = RecipeListUpdate::snapshot(&catalog) else {
+            return Err("not a snapshot".into());
+        };
+        assert_eq!(recipes.len(), 1);
+        recipes.iter().for_each(assert_v60_row);
+        Ok(())
+    }
+
+    #[test]
+    fn upserted_sends_the_stored_row() -> TestResult {
+        let mut catalog = catalog_with(vec![])?;
+        let change = catalog.upsert(v60()?)?;
+        let RecipeListUpdate::Upserted { recipe } = RecipeListUpdate::of(&change, &catalog) else {
+            return Err("not upserted".into());
+        };
+        assert_v60_row(&recipe);
+        Ok(())
+    }
+
+    #[test]
+    fn removed_sends_the_id() -> TestResult {
+        let mut catalog = catalog_with(vec![v60()?])?;
+        let change = catalog.remove(RecipeId::try_parse("r1")?)?;
+        let RecipeListUpdate::Removed { id } = RecipeListUpdate::of(&change, &catalog) else {
+            return Err("not removed".into());
+        };
+        assert_eq!(id, "r1");
+        Ok(())
+    }
+
+    #[test]
+    fn an_upserted_id_the_catalog_lacks_is_removed() -> TestResult {
+        let catalog = catalog_with(vec![])?;
+        let change = CatalogChange::Upserted(RecipeId::try_parse("r9")?);
+        let RecipeListUpdate::Removed { id } = RecipeListUpdate::of(&change, &catalog) else {
+            return Err("not removed".into());
+        };
+        assert_eq!(id, "r9");
+        Ok(())
+    }
+}

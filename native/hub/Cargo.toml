@@ -18,8 +18,8 @@ workspace = true
 coffee_timer_core = { path = "../core" }
 coffee_timer_store = { path = "../store" }
 rinf = "8.11.0"
+serde = { version = "1.0.229", features = ["derive"] }
 tokio = { version = "1.45.0", features = ["rt", "macros", "time"] }
 
-# Uncomment below to target the web.
-# tokio_with_wasm = { version = "0.8.5", features = ["rt", "macros", "time"] }
-# wasm-bindgen = "0.2.100"
+[dev-dependencies]
+coffee_timer_core = { path = "../core", features = ["test-fakes"] }

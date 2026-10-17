@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
 use crate::editor::{DraftMode, EditError, EditorStepRow, StepPreset};
@@ -8,7 +10,8 @@ use crate::ports::IdGen;
 ///
 /// Holds raw text so the form can show in-progress input a model value
 /// would reject. Always has at least one step row. Field errors are hidden
-/// until the first save attempt, then follow the text.
+/// until the first save attempt, then follow the text. A save or delete the
+/// store rejected leaves a notice, cleared by the next action.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Draft {
     id: RecipeId,
@@ -17,6 +20,7 @@ pub struct Draft {
     description: String,
     steps: Vec<DraftStep>,
     errors_shown: bool,
+    notice: Option<String>,
     metrics: BrewMetrics,
 }
 
@@ -31,6 +35,7 @@ impl Draft {
             description: String::new(),
             steps: vec![DraftStep::new(ids.step_id(), StepPreset::Blank.step_name())],
             errors_shown: false,
+            notice: None,
             metrics: *metrics,
         }
     }
@@ -44,10 +49,21 @@ impl Draft {
             description: recipe.description().to_owned(),
             steps: recipe.steps().iter().map(DraftStep::of).collect(),
             errors_shown: false,
+            notice: None,
             metrics: *metrics,
         };
         draft.keep_a_step(ids);
         draft
+    }
+
+    /// Shows `failure` until the next action: a save or delete the store
+    /// rejected (legacy snackbar `Failed to save recipe: …`).
+    pub(crate) fn notify(&mut self, failure: &impl fmt::Display) {
+        self.notice = Some(failure.to_string());
+    }
+
+    pub(crate) fn clear_notice(&mut self) {
+        self.notice = None;
     }
 
     pub(crate) fn set_name(&mut self, raw: &str) {
@@ -153,6 +169,13 @@ impl Draft {
     pub fn total_label(&self) -> String {
         self.metrics
             .duration_label_of(self.steps.iter().map(DraftStep::live_duration))
+    }
+
+    /// Why the last save or delete failed in the store, for a snackbar; none
+    /// after any other outcome. Invalid fields leave no notice: their errors
+    /// are already on the fields.
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
     }
 
     /// Every step row in order, with its live label and error.

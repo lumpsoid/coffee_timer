@@ -2,6 +2,9 @@
 //! a test (disk, randomness). Controllers take them as `Box<dyn Trait>` in
 //! their constructor; `coffee_timer_store` and the hub implement them; the
 //! `fakes` module holds the test doubles.
+//!
+//! Each trait requires `Send`, so the controllers holding them can move into
+//! the hub's spawned task.
 
 mod id_gen;
 mod recipe_store;
