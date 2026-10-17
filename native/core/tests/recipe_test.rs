@@ -111,6 +111,18 @@ fn step_duration_mmss_zero_pads_both_parts() {
 }
 
 #[test]
+fn step_duration_saturating_sub_stops_at_zero() {
+    assert_eq!(StepDuration::clamped(5).saturating_sub(1).seconds(), 4);
+    assert_eq!(
+        StepDuration::clamped(1).saturating_sub(1),
+        StepDuration::ZERO
+    );
+    assert_eq!(StepDuration::ZERO.saturating_sub(1), StepDuration::ZERO);
+    assert!(StepDuration::ZERO.is_zero());
+    assert!(!StepDuration::clamped(1).is_zero());
+}
+
+#[test]
 fn step_duration_seconds_label_is_plain_seconds() {
     assert_eq!(StepDuration::clamped(0).seconds_label(), "0s");
     assert_eq!(StepDuration::clamped(95).seconds_label(), "95s");

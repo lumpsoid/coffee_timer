@@ -37,7 +37,7 @@ native/core/src/
 |---|---|---|
 | `RecipeCatalog` (store) | `load()`, `upsert(recipe)`, `remove(id)` | `Result<CatalogChange, StoreError>` |
 | `SettingsController` (store) | `load()`, `set_theme`, `set_accent` | `Result<(), StoreError>` |
-| `BrewController` | `open(id, &catalog)`, `start(from, &catalog)`, `tick(&catalog)`, `reset`, `leave`, `on_catalog_change(&change)` | `Vec<Effect>` |
+| `BrewController` | `open(&id, &catalog)`, `start(from)`, `tick()`, `reset`, `leave`, `on_catalog_change(&change, &catalog)` | `Vec<Effect>` |
 | `EditorController` (ids) | `new_draft`, `edit(id, &catalog)`, `set_name`, `set_step_duration(row, raw)`, `add_step(preset)`, `remove_step(row)`, `save(&mut catalog)`, `delete(&mut catalog)` | `Result<CatalogChange, SaveError>` |
 
 ```rust
@@ -54,7 +54,7 @@ assert_eq!(change, CatalogChange::Upserted(RecipeId::try_parse("r1")?));
 passes it on with no conditions:
 
 1. send `RecipeListUpdate::from(&change)` — GUI diff
-2. `brew.on_catalog_change(&change)` — brew decides whether its recipe moved
+2. `brew.on_catalog_change(&change, &catalog)` — brew decides whether its recipe moved
 
 Effects are one-shot instructions: `Vibrate { ms }`, `PlayStepSound`,
 `KeepScreenOn(bool)`. Controllers never read the clock; time arrives as
@@ -84,6 +84,17 @@ Fixed / changed:
   (`MissedTickBehavior::Delay`) and drops it on end.
 - The brew view follows catalog changes. An edit to the open recipe during a
   running brew resets it; deleting it shows "Empty recipe".
+- A catalog change to a recipe other than the open one leaves the brew view
+  unchanged. In legacy, any create or update replaced the open page
+  (`recipe_actor.dart:32-34,49-51`).
+- Deleting the open recipe stops a running brew silently (screen-on off) and
+  shows "Empty recipe". In legacy the timer kept running, vibrating and
+  sounding behind "Empty recipe" (`recipe_actor.dart:53-58`).
+- Opening a recipe stops any running brew silently. Legacy did not stop it
+  (`recipe_actor.dart:60-62`); the UI couldn't reach this.
+- `reset`/`leave` emit `KeepScreenOn(false)` only when a brew was running;
+  the screen is kept on exactly while running (legacy always disabled the
+  wakelock — not observable).
 - Dropped: unused total-remaining counter, unreachable `99:60` cap,
   per-page audio preload/unload (Dart loads the sound once at startup).
 

@@ -20,6 +20,9 @@ impl RecipeCatalog {
     }
 
     /// Replaces the state with everything stored, in stored order.
+    ///
+    /// Boot-only: it returns no [`CatalogChange`], so a later reload would
+    /// leave the brew's copy of the open recipe stale.
     pub fn load(&mut self) -> Result<(), StoreError> {
         self.state = self.store.load_all()?;
         Ok(())

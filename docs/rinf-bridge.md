@@ -55,8 +55,8 @@ impl EditorController {
     pub fn save(&mut self, catalog: &mut RecipeCatalog) -> Result<CatalogChange, SaveError>;
 }
 impl BrewController {
-    pub fn start(&mut self, from: usize, catalog: &RecipeCatalog) -> Result<Vec<Effect>, BrewError>;
-    pub fn tick(&mut self, catalog: &RecipeCatalog) -> Vec<Effect>;
+    pub fn start(&mut self, from: usize) -> Result<Vec<Effect>, BrewError>;
+    pub fn tick(&mut self) -> Vec<Effect>;
     pub fn state(&self) -> &BrewState;
 }
 ```
@@ -124,11 +124,11 @@ owns the feature. Signals sent before the loop starts are queued, not lost.
 loop {
     tokio::select! {
         Some(pack) = start_brew.recv() => {
-            let effects = brew.start(pack.message.from, &catalog)?;
+            let effects = brew.start(pack.message.from)?;
             BrewUpdate::from(brew.state()).send_signal_to_dart();
             perform(effects);
         }
-        Some(_) = next_tick(&mut interval) => { /* brew.tick(&catalog) … */ }
+        Some(_) = next_tick(&mut interval) => { /* brew.tick() … */ }
         // … one arm per Dart signal
     }
 }

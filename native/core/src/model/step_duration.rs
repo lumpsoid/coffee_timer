@@ -32,6 +32,15 @@ impl StepDuration {
         self.0
     }
 
+    /// `seconds` less, stopping at zero. Stays in range: it only shrinks.
+    pub fn saturating_sub(self, seconds: u32) -> Self {
+        Self(self.0.saturating_sub(seconds))
+    }
+
+    pub fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+
     /// `MM:SS`, each part zero-padded to two digits.
     pub fn mmss(self) -> String {
         format!("{:02}:{:02}", self.0 / 60, self.0 % 60)
