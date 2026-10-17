@@ -8,6 +8,14 @@ RecipeSummary summary(String id, {String name = 'V60'}) => RecipeSummary(
   coffeeLabel: '20 g',
   waterLabel: '100 g',
   timeLabel: '1:35',
+  label: label(),
+);
+
+RecipeLabel label({LabelTone tone = LabelTone.roast}) => RecipeLabel(
+  tone: tone,
+  texture: LabelTexture.linen,
+  shade: LabelShade.base,
+  stain: StainCorner.bottomRight,
 );
 
 EditorDraft draft({

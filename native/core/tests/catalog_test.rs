@@ -3,7 +3,8 @@
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
-    BrewMetrics, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    BrewMetrics, LabelStyle, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration,
+    StepId,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -181,6 +182,7 @@ fn summary_carries_the_legacy_tile_values() -> TestResult {
             coffee_label: "20 g".to_owned(),
             water_label: "100 g".to_owned(),
             time_label: "1:35".to_owned(),
+            style: LabelStyle::of(&recipe, &BrewMetrics::default()),
         }
     );
     Ok(())

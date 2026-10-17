@@ -27,7 +27,7 @@ pub enum RecipeListUpdate {
 }
 
 /// One row of the recipe list. Labels are values only (`20 g`, `100 g`,
-/// `1:35`); the captions (`Coffee: `, …) are UI text.
+/// `1:35`); the captions (`Coffee`, …) are UI text.
 #[derive(Serialize, SignalPiece)]
 pub struct RecipeSummary {
     pub id: String,
@@ -36,4 +36,48 @@ pub struct RecipeSummary {
     pub coffee_label: String,
     pub water_label: String,
     pub time_label: String,
+    pub label: RecipeLabel,
+}
+
+/// How a row's card looks, as a printed coffee-bag label. Picked in Rust;
+/// Dart maps each choice to colours and paint.
+#[derive(Serialize, SignalPiece)]
+pub struct RecipeLabel {
+    pub tone: LabelTone,
+    pub texture: LabelTexture,
+    pub shade: LabelShade,
+    pub stain: StainCorner,
+}
+
+/// Colour family, from total brew time.
+#[derive(Serialize, SignalPiece)]
+pub enum LabelTone {
+    Roast,
+    Caramel,
+    Crema,
+}
+
+#[derive(Serialize, SignalPiece)]
+pub enum LabelTexture {
+    Kraft,
+    Linen,
+    Halftone,
+    Pinstripe,
+    Contour,
+    Burlap,
+}
+
+/// A variation within the tone.
+#[derive(Serialize, SignalPiece)]
+pub enum LabelShade {
+    Base,
+    Darker,
+    Lighter,
+}
+
+/// Where the coffee-ring stain sits.
+#[derive(Serialize, SignalPiece)]
+pub enum StainCorner {
+    BottomRight,
+    TopLeft,
 }

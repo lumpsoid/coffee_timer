@@ -37,13 +37,19 @@ again.
   operations. A blank step name is saved as `Step N`.
 - **`BrewMetrics`** is the one home for coffee grams, water grams, and the
   capped total duration with its `M:SS` label.
+- **`LabelStyle`** is how a recipe looks in the list, as a coffee-bag label.
+  `LabelTone` (roast, caramel or crema) follows total brew time, with the
+  thresholds as named constants. `LabelTexture`, `LabelShade` and
+  `StainCorner` come from an FNV-1a hash of the recipe id, so a recipe keeps
+  its look across renames, reorders and builds.
 - **Settings:** `ThemeSelection` (light, dark or system), `AccentColor` (ARGB,
   with `#AARRGGBB` and `#RRGGBB` parsing), `AccentOption` (the ten named
   accents), and `Settings`. `Settings` has a per-field `from_storage`
   fallback.
 - **`ModelError`** carries user-facing texts that match the legacy app's.
 
-Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs) and
+Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
+[`label_style_test.rs`](../native/core/tests/label_style_test.rs) and
 [`settings_test.rs`](../native/core/tests/settings_test.rs).
 
 ### `ports/`: infrastructure traits
@@ -85,7 +91,7 @@ dev-dependency, and the CLI and hub enable it for their tests. Test:
 - `CatalogChange` (`Upserted` / `Removed`) is returned only after the write
   has persisted.
 - `RecipeSummary` is a recipe-list row with its labels (`20 g`, `100 g`,
-  `1:35`).
+  `1:35`) and its `LabelStyle`.
 
 Test: [`catalog_test.rs`](../native/core/tests/catalog_test.rs).
 
@@ -266,7 +272,10 @@ The GUI renders, sends intents, and performs effects. It holds no business
 - **[`widgets/`](../lib/widgets)** has the display widgets: `CircularTimer`
   (built on `DurationalCircularProgressIndicator`; the ring sweeps per step
   and restarts on `restartKey`), `StepListTile`, `RecipeSummaryTile` and
-  `FixedDigit`.
+  `FixedDigit`. `RecipeSummaryTile` draws the row as a printed label:
+  `LabelColors` maps the `RecipeLabel` to colours (dimmed in dark theme),
+  `LabelPaperPainter` paints the paper, texture, stain and frame, and
+  `RoastMeter` draws the beans.
 - `src/bindings/` holds the generated, gitignored signal classes. Run
   `rinf gen` to create them.
 

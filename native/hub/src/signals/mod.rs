@@ -20,5 +20,8 @@ pub use editor::{
     EditorStep, EditorUpdate, NewDraft, RemoveStep, SaveRecipe, SetRecipeDescription,
     SetRecipeName, SetStepDuration, SetStepName, StepPresetChoice,
 };
-pub use recipe_list::{RecipeListReady, RecipeListUpdate, RecipeSummary, RemoveRecipe};
+pub use recipe_list::{
+    LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListReady, RecipeListUpdate,
+    RecipeSummary, RemoveRecipe, StainCorner,
+};
 pub use settings::{AccentChoice, SetAccent, SetTheme, SettingsReady, SettingsUpdate, ThemeChoice};

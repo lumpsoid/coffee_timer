@@ -6,6 +6,8 @@ import 'package:coffee_timer/widgets/step_list_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../fixtures.dart';
+
 Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
 
 void main() {
@@ -67,7 +69,7 @@ void main() {
   });
 
   group('RecipeSummaryTile', () {
-    testWidgets('puts UI captions before the labels', (tester) async {
+    testWidgets('lays the labels under UI captions', (tester) async {
       var taps = 0;
       var longPresses = 0;
       await tester.pumpWidget(
@@ -78,20 +80,61 @@ void main() {
             coffeeLabel: '20 g',
             waterLabel: '100 g',
             timeLabel: '1:35',
+            label: label(),
             onTap: () => taps++,
             onLongPress: () => longPresses++,
           ),
         ),
       );
 
-      expect(find.text('Coffee: 20 g'), findsOneWidget);
-      expect(find.text('Water: 100 g'), findsOneWidget);
-      expect(find.text('Time: 1:35'), findsOneWidget);
-      expect(find.textContaining('V60 — clean', findRichText: true), findsOne);
+      for (final text in ['COFFEE', '20 g', 'WATER', '100 g', 'TIME', '1:35']) {
+        expect(find.text(text), findsOneWidget);
+      }
+      expect(find.text('V60'.toUpperCase()), findsOneWidget);
+      expect(find.text('— clean —'), findsOneWidget);
 
-      await tester.tap(find.text('Time: 1:35'));
-      await tester.longPress(find.text('Time: 1:35'));
+      await tester.tap(find.text('1:35'));
+      await tester.longPress(find.text('1:35'));
       expect((taps, longPresses), (1, 1));
+    });
+
+    testWidgets('leaves out an empty description', (tester) async {
+      await tester.pumpWidget(
+        _host(
+          RecipeSummaryTile(
+            name: 'V60',
+            description: '',
+            coffeeLabel: '20 g',
+            waterLabel: '100 g',
+            timeLabel: '1:35',
+            label: label(tone: LabelTone.crema),
+          ),
+        ),
+      );
+      expect(find.textContaining('—'), findsNothing);
+    });
+
+    testWidgets('paints every tone in light and dark', (tester) async {
+      for (final brightness in Brightness.values) {
+        for (final tone in LabelTone.values) {
+          await tester.pumpWidget(
+            MaterialApp(
+              theme: ThemeData(brightness: brightness),
+              home: Scaffold(
+                body: RecipeSummaryTile(
+                  name: 'A very long recipe name that cannot fit',
+                  description: 'clean',
+                  coffeeLabel: '20 g',
+                  waterLabel: '100 g',
+                  timeLabel: '1:35',
+                  label: label(tone: tone),
+                ),
+              ),
+            ),
+          );
+          expect(tester.takeException(), isNull);
+        }
+      }
     });
   });
 

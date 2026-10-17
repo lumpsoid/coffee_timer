@@ -66,6 +66,8 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
      - assets/sounds/step-change.mp3
+     - assets/fonts/Oswald-OFL.txt
+     - assets/fonts/Fraunces-OFL.txt
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
@@ -73,6 +75,18 @@ flutter:
 
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
+
+  # Variable fonts (SIL OFL 1.1, licences registered in main.dart): pick a
+  # weight with FontVariation.weight as well as fontWeight.
+  fonts:
+    - family: Oswald
+      fonts:
+        - asset: assets/fonts/Oswald.ttf
+    - family: Fraunces
+      fonts:
+        - asset: assets/fonts/Fraunces.ttf
+        - asset: assets/fonts/Fraunces-Italic.ttf
+          style: italic
 
   # To add custom fonts to your application, add a fonts section here,
   # in this "flutter" section. Each entry in this list should have a

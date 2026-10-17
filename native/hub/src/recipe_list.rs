@@ -2,9 +2,11 @@
 
 use coffee_timer_core::catalog::{self, CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::DeleteError;
-use coffee_timer_core::model::{BrewMetrics, Recipe};
+use coffee_timer_core::model::{self, BrewMetrics, LabelStyle, Recipe};
 
-use crate::signals::{RecipeListUpdate, RecipeSummary};
+use crate::signals::{
+    LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListUpdate, RecipeSummary, StainCorner,
+};
 
 impl RecipeListUpdate {
     /// Every recipe the catalog holds, in order.
@@ -53,6 +55,36 @@ impl From<catalog::RecipeSummary> for RecipeSummary {
             coffee_label: s.coffee_label,
             water_label: s.water_label,
             time_label: s.time_label,
+            label: s.style.into(),
+        }
+    }
+}
+
+impl From<LabelStyle> for RecipeLabel {
+    fn from(style: LabelStyle) -> Self {
+        Self {
+            tone: match style.tone() {
+                model::LabelTone::Roast => LabelTone::Roast,
+                model::LabelTone::Caramel => LabelTone::Caramel,
+                model::LabelTone::Crema => LabelTone::Crema,
+            },
+            texture: match style.texture() {
+                model::LabelTexture::Kraft => LabelTexture::Kraft,
+                model::LabelTexture::Linen => LabelTexture::Linen,
+                model::LabelTexture::Halftone => LabelTexture::Halftone,
+                model::LabelTexture::Pinstripe => LabelTexture::Pinstripe,
+                model::LabelTexture::Contour => LabelTexture::Contour,
+                model::LabelTexture::Burlap => LabelTexture::Burlap,
+            },
+            shade: match style.shade() {
+                model::LabelShade::Base => LabelShade::Base,
+                model::LabelShade::Darker => LabelShade::Darker,
+                model::LabelShade::Lighter => LabelShade::Lighter,
+            },
+            stain: match style.stain() {
+                model::StainCorner::BottomRight => StainCorner::BottomRight,
+                model::StainCorner::TopLeft => StainCorner::TopLeft,
+            },
         }
     }
 }
@@ -92,6 +124,7 @@ mod tests {
         assert_eq!(row.time_label, "1:35");
         assert!(row.coffee_label.ends_with(" g"));
         assert!(row.water_label.ends_with(" g"));
+        assert!(matches!(row.label.tone, LabelTone::Roast));
     }
 
     #[test]

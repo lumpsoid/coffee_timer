@@ -108,6 +108,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
                 coffeeLabel: r.coffeeLabel,
                 waterLabel: r.waterLabel,
                 timeLabel: r.timeLabel,
+                label: r.label,
                 onTap: () => _openBrew(context, r),
                 onLongPress: () => _showRecipeOptionsSheet(context, r),
               );

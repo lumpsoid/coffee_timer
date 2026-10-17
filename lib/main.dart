@@ -9,7 +9,9 @@ import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:rinf/rinf.dart';
 
 /// Starts Rust, subscribes every holder (each then sends its ready signal,
@@ -18,6 +20,7 @@ import 'package:rinf/rinf.dart';
 /// snapshot and the settings arrive.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LicenseRegistry.addLicense(_fontLicenses);
   await initializeRust(assignRustSignal);
 
   PlatformEffectPerformer(PluginEffects()).listen(
@@ -39,4 +42,14 @@ Future<void> main() async {
       settings: settings,
     ),
   );
+}
+
+/// The bundled fonts' OFL texts, for the platform licence page.
+Stream<LicenseEntry> _fontLicenses() async* {
+  for (final family in ['Oswald', 'Fraunces']) {
+    yield LicenseEntryWithLineBreaks(
+      [family],
+      await rootBundle.loadString('assets/fonts/$family-OFL.txt'),
+    );
+  }
 }
