@@ -19,6 +19,13 @@ impl RecipeName {
         Self("Untitled".to_owned())
     }
 
+    /// Reads a stored name leniently: trimmed, and a blank one is
+    /// [`RecipeName::untitled`]. Never fails — bad storage never blocks the
+    /// app.
+    pub fn from_storage(raw: &str) -> Self {
+        Self::try_parse(raw).unwrap_or_else(|_| Self::untitled())
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }

@@ -115,9 +115,14 @@ Fixed / changed:
   state unchanged and returns `Err` (legacy `settings_controller.dart`
   `_apply` updated state before an unawaited save and ignored failures).
 - Recipes load in insertion order explicitly (legacy `SELECT * FROM recipe`
-  had no `ORDER BY` and relied on rowid order implicitly). Phase 5:
-  `ORDER BY rowid` (or a position column) on load, and an upsert keeps the
-  existing position (`ON CONFLICT DO UPDATE`, not `INSERT OR REPLACE`).
+  had no `ORDER BY` and relied on rowid order implicitly). Phase 5: an
+  explicit `recipe.position INTEGER PRIMARY KEY` (stable across `VACUUM`,
+  unlike the implicit rowid) with `ORDER BY position` on load, and an upsert
+  keeps the existing position (`ON CONFLICT DO UPDATE`, not
+  `INSERT OR REPLACE`).
+- Steps also load in order explicitly: `step.position` with
+  `ORDER BY position` (legacy `sqlite_recipe_repository.dart:30,61` had no
+  `ORDER BY`).
 
 ## Editor fixes
 

@@ -60,6 +60,13 @@ fn recipe_name_untitled_fallback_is_a_valid_name() {
 }
 
 #[test]
+fn recipe_name_from_storage_trims_and_falls_back_to_untitled() {
+    assert_eq!(RecipeName::from_storage("  V60  ").as_str(), "V60");
+    assert_eq!(RecipeName::from_storage("   "), RecipeName::untitled());
+    assert_eq!(RecipeName::from_storage(""), RecipeName::untitled());
+}
+
+#[test]
 fn recipe_name_error_text_matches_legacy_validator() {
     assert_eq!(
         ModelError::BlankRecipeName.to_string(),
