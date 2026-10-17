@@ -72,8 +72,11 @@ pub enum BrewStepStatus {
 /// The step being counted down.
 #[derive(Serialize, SignalPiece)]
 pub struct BrewTimer {
-    /// 0-based; changes exactly when the step changes, so the ring
-    /// animation is keyed on it.
+    /// Start number of this brew: grows with every accepted `StartBrew`,
+    /// kept by ticks and step changes. Saturates at `u32::MAX`.
+    pub run: u32,
+    /// 0-based; changes exactly when the step changes. The ring animation
+    /// restarts whenever `(run, step_index)` changes.
     pub step_index: u32,
     pub step_name: String,
     /// `MM:SS` left.

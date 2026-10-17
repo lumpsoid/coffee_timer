@@ -3,16 +3,19 @@ use crate::model::{RecipeStep, StepDuration};
 /// The step a running brew is on, and how long it has left.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunningStep {
+    run: u64,
     index: usize,
     step: RecipeStep,
     remaining: StepDuration,
 }
 
 impl RunningStep {
-    /// Starts `step` (at `index` in its recipe) with its full duration left.
-    pub(crate) fn begin(index: usize, step: RecipeStep) -> Self {
+    /// Starts `step` (at `index` in its recipe) with its full duration left,
+    /// as part of start number `run`.
+    pub(crate) fn begin(run: u64, index: usize, step: RecipeStep) -> Self {
         let remaining = step.duration();
         Self {
+            run,
             index,
             step,
             remaining,
@@ -25,6 +28,13 @@ impl RunningStep {
             remaining: self.remaining.saturating_sub(1),
             ..self
         }
+    }
+
+    /// Which start of the brew this step belongs to: every accepted
+    /// `BrewController::start` counts one more, ticks and step changes keep
+    /// it. A restart of the same step therefore differs from a tick.
+    pub fn run(&self) -> u64 {
+        self.run
     }
 
     pub fn index(&self) -> usize {

@@ -1,6 +1,7 @@
 //! Catalog ↔ recipe list signals.
 
 use coffee_timer_core::catalog::{self, CatalogChange, RecipeCatalog};
+use coffee_timer_core::editor::DeleteError;
 use coffee_timer_core::model::{BrewMetrics, Recipe};
 
 use crate::signals::{RecipeListUpdate, RecipeSummary};
@@ -27,6 +28,14 @@ impl RecipeListUpdate {
             None => Self::Removed {
                 id: id.as_str().to_owned(),
             },
+        }
+    }
+}
+
+impl From<DeleteError> for RecipeListUpdate {
+    fn from(error: DeleteError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
         }
     }
 }
@@ -126,6 +135,21 @@ mod tests {
             return Err("not removed".into());
         };
         assert_eq!(id, "r9");
+        Ok(())
+    }
+
+    #[test]
+    fn a_store_failure_is_cores_delete_message() -> TestResult {
+        let update = RecipeListUpdate::from(DeleteError::Store(
+            coffee_timer_core::ports::StoreError::new("disk full"),
+        ));
+        let RecipeListUpdate::Failed { message } = update else {
+            return Err("not a failure".into());
+        };
+        assert_eq!(
+            message,
+            "Failed to delete recipe: Storage failed: disk full"
+        );
         Ok(())
     }
 }

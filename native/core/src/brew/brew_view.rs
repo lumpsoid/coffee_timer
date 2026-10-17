@@ -23,11 +23,11 @@ impl BrewView {
         }
     }
 
-    /// The step at `index`, about to run with its full duration; none past
-    /// the end.
-    pub(crate) fn step(&self, index: usize) -> Option<RunningStep> {
+    /// The step at `index`, about to run with its full duration in start
+    /// number `run`; none past the end.
+    pub(crate) fn step(&self, run: u64, index: usize) -> Option<RunningStep> {
         let step = self.recipe.steps().get(index)?;
-        Some(RunningStep::begin(index, step.clone()))
+        Some(RunningStep::begin(run, index, step.clone()))
     }
 
     pub(crate) fn step_count(&self) -> usize {

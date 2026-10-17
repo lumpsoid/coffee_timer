@@ -152,8 +152,13 @@ pub enum RecipeListUpdate {
     Snapshot { recipes: Vec<RecipeSummary> },
     Upserted { recipe: RecipeSummary },
     Removed { id: String },
+    Failed { message: String },
 }
 ```
+
+`Failed` is a one-shot notice, not state: a list delete (`RemoveRecipe`)
+failed, the list is unchanged, and Dart shows `message` (core's
+`DeleteError` text) as a snackbar each time one arrives.
 
 One type means one Dart stream, so a snapshot and the diffs after it
 arrive in order. Splitting them across signal types gives up that ordering.

@@ -1,7 +1,9 @@
 //! The hub task: owns every controller, turns each Dart signal into one
 //! controller action, and sends the feature's state after it. One task, so
 //! actions run one at a time. It decides nothing: errors are logged and the
-//! state re-sent, and every `CatalogChange` is passed on unconditionally.
+//! state re-sent, except a failed list delete, which goes to Dart as the
+//! one-shot `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
+//! unconditionally.
 
 use std::error::Error;
 use std::fmt::Display;
@@ -19,8 +21,8 @@ use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::signals::{
     AddStep, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, EditRecipe, EditorReady,
-    EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PlatformEffect, RecipeListReady,
-    RecipeListUpdate, RemoveStep, ResetBrew, SaveRecipe, SetAccent, SetRecipeDescription,
+    EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PlatformEffect, RecipeListReady, RecipeListUpdate,
+    RemoveRecipe, RemoveStep, ResetBrew, SaveRecipe, SetAccent, SetRecipeDescription,
     SetRecipeName, SetStepDuration, SetStepName, SetTheme, SettingsReady, SettingsUpdate,
     StartBrew,
 };
@@ -56,6 +58,7 @@ impl Controllers {
 /// signal but `Boot`; signals sent before it starts are queued, not lost.
 pub async fn run(mut c: Controllers) {
     let recipe_list_ready = RecipeListReady::get_dart_signal_receiver();
+    let remove_recipe = RemoveRecipe::get_dart_signal_receiver();
     let brew_ready = BrewReady::get_dart_signal_receiver();
     let open_brew = OpenBrew::get_dart_signal_receiver();
     let start_brew = StartBrew::get_dart_signal_receiver();
@@ -85,6 +88,9 @@ pub async fn run(mut c: Controllers) {
             // Recipe list
             Some(_) = recipe_list_ready.recv() => {
                 RecipeListUpdate::snapshot(&c.catalog).send_signal_to_dart();
+            }
+            Some(pack) = remove_recipe.recv() => {
+                report(remove(&mut c, &pack.message.recipe_id));
             }
 
             // Brew
@@ -202,6 +208,16 @@ fn delete(c: &mut Controllers) -> Result<(), DeleteError> {
     Ok(())
 }
 
+/// Deletes a listed recipe. A store failure goes to the list as core's
+/// delete error, for a snackbar.
+fn remove(c: &mut Controllers, recipe_id: &str) -> Result<(), ModelError> {
+    match c.catalog.remove(RecipeId::try_parse(recipe_id)?) {
+        Ok(change) => pass_on(&change, &mut c.brew, &c.catalog),
+        Err(error) => RecipeListUpdate::from(DeleteError::Store(error)).send_signal_to_dart(),
+    }
+    Ok(())
+}
+
 fn open(
     brew: &mut BrewController,
     catalog: &RecipeCatalog,
@@ -245,7 +261,8 @@ fn show_settings(settings: &SettingsController) {
 }
 
 /// The value, or none after logging the error. Anything the GUI must show
-/// is already in the feature's state (the editor's notice).
+/// is already in the feature's state (the editor's notice), or, for a
+/// failed list delete, sent as the one-shot `RecipeListUpdate::Failed`.
 fn report<T>(result: Result<T, impl Display>) -> Option<T> {
     result.map_err(|error| debug_print!("{error}")).ok()
 }

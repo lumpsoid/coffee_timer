@@ -142,6 +142,22 @@ Fixed / changed:
 - Phase 8: the delete dialog shows the saved recipe's name, not the
   untrimmed typed text.
 
+## GUI fixes (phase 8)
+
+- A failed delete from the list shows a snackbar `Failed to delete
+  recipe: …` (core's `DeleteError` text, sent as
+  `RecipeListUpdate::Failed`); the list stays. Legacy replaced the whole
+  list with the error text.
+- The brew page's edit button is hidden on "Empty recipe". Legacy opened
+  the stale editor there.
+- The timer ring restarts on every step change and on a restart of the
+  same step, keyed on `BrewTimer`'s `(run, step_index)`. Legacy's
+  `ValueNotifier<Duration?>` only reset when the duration value changed.
+- The database file is `coffee_timer.db`. Legacy used `recipes.db`; there
+  are no installs to migrate.
+- A new `RemoveRecipe` intent deletes from the list without opening a
+  draft.
+
 ## Phases
 
 | # | Phase | Gate |

@@ -5,6 +5,12 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, DartSignal)]
 pub struct RecipeListReady;
 
+/// Delete the listed recipe with this id (the list's long-press delete).
+#[derive(Deserialize, DartSignal)]
+pub struct RemoveRecipe {
+    pub recipe_id: String,
+}
+
 /// The recipe list: a snapshot, then one diff per persisted catalog change.
 /// One type, so the snapshot and the diffs after it arrive in order.
 #[derive(Serialize, RustSignal)]
@@ -15,6 +21,9 @@ pub enum RecipeListUpdate {
     Upserted { recipe: RecipeSummary },
     /// Drop the row with this id.
     Removed { id: String },
+    /// A `RemoveRecipe` failed; the list is unchanged. A one-shot notice for
+    /// a snackbar (`Failed to delete recipe: …`), not list state.
+    Failed { message: String },
 }
 
 /// One row of the recipe list. Labels are values only (`20 g`, `100 g`,

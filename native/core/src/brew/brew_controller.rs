@@ -16,6 +16,8 @@ const VIBRATE_MS: u32 = 100;
 pub struct BrewController {
     state: BrewState,
     metrics: BrewMetrics,
+    /// Accepted starts so far; the running step carries the latest.
+    runs: u64,
 }
 
 impl BrewController {
@@ -36,14 +38,18 @@ impl BrewController {
     }
 
     /// Runs the open recipe from step `from` (0 for the whole recipe),
-    /// restarting a brew already running. On `Err` nothing changes.
+    /// restarting a brew already running, as a new run
+    /// ([`RunningStep::run`](crate::brew::RunningStep::run)). On `Err`
+    /// nothing changes.
     pub fn start(&mut self, from: usize) -> Result<Vec<Effect>, BrewError> {
         let view = self.state.view().ok_or(BrewError::NoRecipe)?;
-        let step = view.step(from).ok_or(BrewError::StepOutOfRange {
+        let run = self.runs.saturating_add(1);
+        let step = view.step(run, from).ok_or(BrewError::StepOutOfRange {
             index: from,
             len: view.step_count(),
         })?;
         self.state = BrewState::Running(view.clone(), step);
+        self.runs = run;
         Ok(vec![Effect::KeepScreenOn(true)])
     }
 
@@ -63,7 +69,7 @@ impl BrewController {
             self.state = BrewState::Running(view, step);
             return Vec::new();
         }
-        match view.step(step.index() + 1) {
+        match view.step(step.run(), step.index() + 1) {
             Some(next) => {
                 self.state = BrewState::Running(view, next);
                 vec![Effect::Vibrate { ms: VIBRATE_MS }, Effect::PlayStepSound]

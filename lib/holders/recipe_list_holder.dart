@@ -1,0 +1,73 @@
+import 'dart:async';
+
+import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:flutter/foundation.dart';
+import 'package:rinf/rinf.dart';
+
+/// The recipe list as Rust last sent it: a snapshot folded with the diffs
+/// after it. Lives for the app's lifetime.
+class RecipeListHolder extends ChangeNotifier {
+  StreamSubscription<RustSignalPack<RecipeListUpdate>>? _subscription;
+  final _failures = StreamController<String>.broadcast(sync: true);
+
+  /// One message per failed delete, for a snackbar each; repeats included.
+  /// Not list state: the list is unchanged.
+  Stream<String> get failures => _failures.stream;
+
+  /// Null until the first snapshot arrives.
+  List<RecipeSummary>? get recipes => _recipes;
+  List<RecipeSummary>? _recipes;
+
+  /// The listed recipe with [id], if the list holds it.
+  RecipeSummary? byId(String id) {
+    for (final recipe in _recipes ?? const <RecipeSummary>[]) {
+      if (recipe.id == id) return recipe;
+    }
+    return null;
+  }
+
+  /// Subscribes to Rust's updates, then asks for the current snapshot.
+  void connect() {
+    _subscription = RecipeListUpdate.rustSignalStream.listen(
+      (pack) => apply(pack.message),
+    );
+    const RecipeListReady().sendSignalToRust();
+  }
+
+  /// Folds one update in: a snapshot replaces the list, an upsert replaces
+  /// the row with its id or appends it, a removal drops the row. A failure
+  /// leaves the list alone and goes out on [failures].
+  void apply(RecipeListUpdate update) {
+    if (update is RecipeListUpdateFailed) {
+      _failures.add(update.message);
+      return;
+    }
+    final current = _recipes ?? const <RecipeSummary>[];
+    _recipes = switch (update) {
+      RecipeListUpdateSnapshot(:final recipes) => List.of(recipes),
+      RecipeListUpdateUpserted(:final recipe) => _upserted(current, recipe),
+      RecipeListUpdateRemoved(:final id) => [
+        for (final r in current)
+          if (r.id != id) r,
+      ],
+      _ => current,
+    };
+    notifyListeners();
+  }
+
+  static List<RecipeSummary> _upserted(
+    List<RecipeSummary> current,
+    RecipeSummary recipe,
+  ) {
+    final at = current.indexWhere((r) => r.id == recipe.id);
+    if (at == -1) return [...current, recipe];
+    return List.of(current)..[at] = recipe;
+  }
+
+  @override
+  void dispose() {
+    unawaited(_subscription?.cancel());
+    unawaited(_failures.close());
+    super.dispose();
+  }
+}

@@ -1,0 +1,166 @@
+import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/circular_timer.dart';
+import 'package:coffee_timer/widgets/fixed_digit.dart';
+import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
+import 'package:coffee_timer/widgets/step_list_tile.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+void main() {
+  group('StepListTile', () {
+    Future<void> pumpTile(WidgetTester tester, BrewStepStatus status) =>
+        tester.pumpWidget(
+          _host(
+            StepListTile(
+              step: BrewStep(
+                numberLabel: '2',
+                name: 'Pour',
+                durationLabel: '30s',
+                status: status,
+              ),
+              onLongPress: () {},
+            ),
+          ),
+        );
+
+    testWidgets('a pending step shows its number', (tester) async {
+      await pumpTile(tester, BrewStepStatus.pending);
+      expect(find.text('2'), findsOneWidget);
+      expect(find.text('Pour'), findsOneWidget);
+      expect(find.text('30s'), findsOneWidget);
+      expect(find.byIcon(Icons.play_arrow), findsNothing);
+      expect(find.byIcon(Icons.check_circle), findsNothing);
+    });
+
+    testWidgets('the current step shows a play arrow', (tester) async {
+      await pumpTile(tester, BrewStepStatus.current);
+      expect(find.byIcon(Icons.play_arrow), findsOneWidget);
+      expect(find.text('2'), findsNothing);
+    });
+
+    testWidgets('a done step shows a check', (tester) async {
+      await pumpTile(tester, BrewStepStatus.done);
+      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+      expect(find.text('2'), findsNothing);
+    });
+
+    testWidgets('long press calls back', (tester) async {
+      var pressed = 0;
+      await tester.pumpWidget(
+        _host(
+          StepListTile(
+            step: const BrewStep(
+              numberLabel: '1',
+              name: 'Bloom',
+              durationLabel: '30s',
+              status: BrewStepStatus.pending,
+            ),
+            onLongPress: () => pressed++,
+          ),
+        ),
+      );
+      await tester.longPress(find.text('Bloom'));
+      expect(pressed, 1);
+    });
+  });
+
+  group('RecipeSummaryTile', () {
+    testWidgets('puts UI captions before the labels', (tester) async {
+      var taps = 0;
+      var longPresses = 0;
+      await tester.pumpWidget(
+        _host(
+          RecipeSummaryTile(
+            name: 'V60',
+            description: 'clean',
+            coffeeLabel: '20 g',
+            waterLabel: '100 g',
+            timeLabel: '1:35',
+            onTap: () => taps++,
+            onLongPress: () => longPresses++,
+          ),
+        ),
+      );
+
+      expect(find.text('Coffee: 20 g'), findsOneWidget);
+      expect(find.text('Water: 100 g'), findsOneWidget);
+      expect(find.text('Time: 1:35'), findsOneWidget);
+      expect(find.textContaining('V60 — clean', findRichText: true), findsOne);
+
+      await tester.tap(find.text('Time: 1:35'));
+      await tester.longPress(find.text('Time: 1:35'));
+      expect((taps, longPresses), (1, 1));
+    });
+  });
+
+  group('FixedDigit', () {
+    testWidgets('gives each character its own cell', (tester) async {
+      await tester.pumpWidget(_host(const FixedDigit(time: '07', style: null)));
+      expect(find.text('0'), findsOneWidget);
+      expect(find.text('7'), findsOneWidget);
+      expect(find.byType(Container), findsNWidgets(2));
+    });
+  });
+
+  group('CircularTimer', () {
+    double ring(WidgetTester tester) => tester
+        .widget<CircularProgressIndicator>(
+          find.byType(CircularProgressIndicator),
+        )
+        .value!;
+
+    Widget timer({required Duration? sweep, required Object restartKey}) =>
+        _host(
+          CircularTimer(
+            sweep: sweep,
+            restartKey: restartKey,
+            child: const Text('inside'),
+          ),
+        );
+
+    testWidgets('sweeps over the duration and repeats', (tester) async {
+      await tester.pumpWidget(
+        timer(sweep: const Duration(seconds: 10), restartKey: 0),
+      );
+      expect(find.text('inside'), findsOneWidget);
+      expect(ring(tester), 0);
+
+      await tester.pump(const Duration(seconds: 5));
+      expect(ring(tester), closeTo(0.5, 0.01));
+
+      await tester.pump(const Duration(seconds: 6));
+      expect(ring(tester), closeTo(0.1, 0.01));
+    });
+
+    testWidgets('holds still without a sweep', (tester) async {
+      await tester.pumpWidget(timer(sweep: null, restartKey: 0));
+      await tester.pump(const Duration(seconds: 5));
+      expect(ring(tester), 0);
+    });
+
+    testWidgets('a new restart key starts the sweep over, even for the same '
+        'duration', (tester) async {
+      const tenSeconds = Duration(seconds: 10);
+      await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (0, 0)));
+      await tester.pump(const Duration(seconds: 5));
+      expect(ring(tester), closeTo(0.5, 0.01));
+
+      await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (0, 1)));
+      expect(ring(tester), 0);
+      await tester.pump(const Duration(seconds: 2));
+      expect(ring(tester), closeTo(0.2, 0.01));
+    });
+
+    testWidgets('the same restart key keeps the sweep going', (tester) async {
+      const tenSeconds = Duration(seconds: 10);
+      await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (0, 0)));
+      await tester.pump(const Duration(seconds: 5));
+
+      await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (0, 0)));
+      await tester.pump(const Duration(seconds: 1));
+      expect(ring(tester), closeTo(0.6, 0.01));
+    });
+  });
+}

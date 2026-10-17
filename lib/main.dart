@@ -1,13 +1,42 @@
-import 'package:coffee_timer/app/app.dart';
-import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
+import 'dart:async';
 
+import 'package:coffee_timer/app.dart';
+import 'package:coffee_timer/effects/effect_plugins.dart';
+import 'package:coffee_timer/effects/platform_effect_performer.dart';
+import 'package:coffee_timer/holders/boot_holder.dart';
+import 'package:coffee_timer/holders/brew_holder.dart';
+import 'package:coffee_timer/holders/editor_holder.dart';
+import 'package:coffee_timer/holders/recipe_list_holder.dart';
+import 'package:coffee_timer/holders/settings_holder.dart';
+import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:flutter/material.dart';
+import 'package:rinf/rinf.dart';
+
+/// Starts Rust, subscribes every holder (each then sends its ready signal,
+/// which Rust queues until it has booted), then boots Rust at the app's
+/// documents directory. The GUI shows a spinner until the first recipe-list
+/// snapshot and the settings arrive.
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeRust(assignRustSignal);
 
-  final dir = await getApplicationDocumentsDirectory();
-  final dbPath = p.join(dir.path, 'recipes.db');
+  PlatformEffectPerformer(PluginEffects()).listen(
+    PlatformEffect.rustSignalStream.map((pack) => pack.message),
+  );
+  final recipes = RecipeListHolder()..connect();
+  final brew = BrewHolder()..connect();
+  final editor = EditorHolder()..connect();
+  final settings = SettingsHolder()..connect();
+  final boot = BootHolder();
+  unawaited(boot.connect());
 
-  runApp(AppRoot(dbPath: dbPath));
+  runApp(
+    CoffeeTimerApp(
+      boot: boot,
+      recipes: recipes,
+      brew: brew,
+      editor: editor,
+      settings: settings,
+    ),
+  );
 }

@@ -20,5 +20,5 @@ pub use editor::{
     EditorStep, EditorUpdate, NewDraft, RemoveStep, SaveRecipe, SetRecipeDescription,
     SetRecipeName, SetStepDuration, SetStepName, StepPresetChoice,
 };
-pub use recipe_list::{RecipeListReady, RecipeListUpdate, RecipeSummary};
+pub use recipe_list::{RecipeListReady, RecipeListUpdate, RecipeSummary, RemoveRecipe};
 pub use settings::{AccentChoice, SetAccent, SetTheme, SettingsReady, SettingsUpdate, ThemeChoice};

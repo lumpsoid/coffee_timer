@@ -1,0 +1,78 @@
+import 'dart:async';
+
+import 'package:coffee_timer/effects/effect_plugins.dart';
+import 'package:coffee_timer/effects/platform_effect_performer.dart';
+import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// Records each plugin call. The sound takes a moment, so a later effect
+/// that overtook it would show up out of order.
+class _FakePlugins implements EffectPlugins {
+  final calls = <String>[];
+  bool failSound = false;
+
+  @override
+  Future<void> playStepSound() async {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+    if (failSound) throw StateError('no audio');
+    calls.add('sound');
+  }
+
+  @override
+  Future<void> vibrate(int ms) async => calls.add('vibrate $ms');
+
+  @override
+  Future<void> keepScreenOn({required bool on}) async =>
+      calls.add('screen $on');
+}
+
+void main() {
+  late _FakePlugins plugins;
+  late PlatformEffectPerformer performer;
+
+  setUp(() {
+    plugins = _FakePlugins();
+    performer = PlatformEffectPerformer(plugins);
+  });
+
+  test('each variant is one plugin call', () async {
+    await performer.perform(const PlatformEffectPlayStepSound());
+    await performer.perform(const PlatformEffectVibrate(ms: 100));
+    await performer.perform(const PlatformEffectKeepScreenOn(on: true));
+    await performer.perform(const PlatformEffectKeepScreenOn(on: false));
+
+    expect(plugins.calls, [
+      'sound',
+      'vibrate 100',
+      'screen true',
+      'screen false',
+    ]);
+  });
+
+  test('effects from the stream run in arrival order', () async {
+    final effects = StreamController<PlatformEffect>();
+    performer.listen(effects.stream);
+
+    effects
+      ..add(const PlatformEffectVibrate(ms: 100))
+      ..add(const PlatformEffectPlayStepSound())
+      ..add(const PlatformEffectKeepScreenOn(on: false));
+    await effects.close();
+    await performer.perform(const PlatformEffectVibrate(ms: 1));
+
+    expect(plugins.calls, [
+      'vibrate 100',
+      'sound',
+      'screen false',
+      'vibrate 1',
+    ]);
+  });
+
+  test('a failed call does not hold up the next', () async {
+    plugins.failSound = true;
+    unawaited(performer.perform(const PlatformEffectPlayStepSound()));
+    await performer.perform(const PlatformEffectVibrate(ms: 100));
+
+    expect(plugins.calls, ['vibrate 100']);
+  });
+}

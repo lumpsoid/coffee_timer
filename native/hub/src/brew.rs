@@ -59,6 +59,7 @@ impl From<StepStatus> for BrewStepStatus {
 impl From<&RunningStep> for BrewTimer {
     fn from(step: &RunningStep) -> Self {
         Self {
+            run: u32::try_from(step.run()).unwrap_or(u32::MAX),
             // A step index beyond `u32` cannot occur (steps are typed in by
             // hand); saturate rather than panic.
             step_index: u32::try_from(step.index()).unwrap_or(u32::MAX),
@@ -160,6 +161,7 @@ mod tests {
             return Err("not running".into());
         };
         assert_eq!(statuses(&recipe), ["current", "pending"]);
+        assert_eq!(timer.run, 1);
         assert_eq!(timer.step_index, 0);
         assert_eq!(timer.step_name, "Bloom");
         assert_eq!(timer.remaining_label, "00:29");

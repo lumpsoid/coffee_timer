@@ -504,3 +504,45 @@ fn catalog_changes_with_no_recipe_open_do_nothing() -> TestResult {
     assert_eq!(brew.state(), &BrewState::Empty);
     Ok(())
 }
+
+/// The running step's start number.
+fn run(brew: &BrewController) -> Option<u64> {
+    brew.state().running().map(|step| step.run())
+}
+
+#[test]
+fn a_restart_of_the_same_step_is_a_new_run() -> TestResult {
+    let (mut brew, _catalog) = opened(&[10, 10])?;
+    let _effects = brew.start(0)?;
+    let first = run(&brew);
+    let _effects = brew.start(0)?;
+    assert_eq!(timer(&brew), running(0, "00:10"));
+    assert_ne!(run(&brew), first);
+    assert_eq!(run(&brew), first.map(|r| r + 1));
+    Ok(())
+}
+
+#[test]
+fn ticks_and_step_changes_keep_the_run() -> TestResult {
+    let (mut brew, _catalog) = opened(&[1, 10])?;
+    let _effects = brew.start(0)?;
+    let first = run(&brew);
+    let _effects = brew.tick();
+    assert_eq!(timer(&brew), running(1, "00:10"));
+    assert_eq!(run(&brew), first);
+    let _effects = brew.tick();
+    assert_eq!(run(&brew), first);
+    Ok(())
+}
+
+#[test]
+fn a_rejected_start_does_not_count_a_run() -> TestResult {
+    let (mut brew, _catalog) = opened(&[10])?;
+    let _effects = brew.start(0)?;
+    let first = run(&brew);
+    assert!(brew.start(5).is_err());
+    assert_eq!(run(&brew), first);
+    let _effects = brew.start(0)?;
+    assert_eq!(run(&brew), first.map(|r| r + 1));
+    Ok(())
+}
