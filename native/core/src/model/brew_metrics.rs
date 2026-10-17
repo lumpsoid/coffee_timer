@@ -1,7 +1,7 @@
 use crate::model::{Recipe, RecipeStep, StepDuration};
 
 /// The one home for the brew figures shown on a recipe: coffee grams, water
-/// grams, and total duration. Every threshold and formula lives here.
+/// grams, their ratio, and total duration. Every threshold and formula lives here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BrewMetrics {
     coffee_per_step_g: u32,
@@ -27,6 +27,21 @@ impl BrewMetrics {
 
     pub fn water_grams(&self, recipe: &Recipe) -> u32 {
         step_count(recipe).saturating_mul(self.water_per_step_g)
+    }
+
+    /// Coffee-to-water ratio, `1:5`, to one decimal when it is not whole
+    /// (`1:2.5`). A recipe without coffee reads `—`.
+    pub fn ratio_label(&self, recipe: &Recipe) -> String {
+        let coffee = u64::from(self.coffee_grams(recipe));
+        if coffee == 0 {
+            return "—".to_owned();
+        }
+        // Tenths of a gram of water per gram of coffee, rounded half up.
+        let tenths = (u64::from(self.water_grams(recipe)) * 20 + coffee) / (coffee * 2);
+        match tenths % 10 {
+            0 => format!("1:{}", tenths / 10),
+            fraction => format!("1:{}.{fraction}", tenths / 10),
+        }
     }
 
     /// Sum of every step's duration, clamped to the cap.

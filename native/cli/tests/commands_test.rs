@@ -62,7 +62,7 @@ fn show_renders_the_brew_page() -> TestResult {
         "\
 pourover-uuid  Pour Over
 Light and clean
-Coffee: 30g  Water: 150g  Time: 3:10
+Coffee: 30g  Water: 150g  Ratio: 1:5  Time: 3:10
   1. Grind  40s  pending
   2. Bloom  30s  pending
   3. Pour  120s  pending
@@ -103,7 +103,7 @@ fn new_saves_a_recipe_and_it_persists() -> TestResult {
         "\
 r1  V60
 clean
-Coffee: 20g  Water: 100g  Time: 0:35
+Coffee: 20g  Water: 100g  Ratio: 1:5  Time: 0:35
   1. Bloom  30s  pending
   2. Step 2  5s  pending
 "

@@ -3,14 +3,19 @@ import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/pages/editor_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
-import 'package:coffee_timer/widgets/circular_timer.dart';
-import 'package:coffee_timer/widgets/fixed_digit.dart';
+import 'package:coffee_timer/widgets/brew_dial.dart';
+import 'package:coffee_timer/widgets/label_colors.dart';
+import 'package:coffee_timer/widgets/label_paper_painter.dart';
+import 'package:coffee_timer/widgets/label_parts.dart';
+import 'package:coffee_timer/widgets/roast_meter.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
-/// The brew page: the open recipe, its timer ring and its steps. Once
+/// The brew page: the open recipe printed on its own label, its timer dial
+/// and its method. Once
 /// subscribed it opens [recipeId] ([OpenBrew]) and shows the brew states
-/// that follow. Tapping the ring starts or resets the brew; long-pressing a
+/// that follow. Tapping the dial starts or resets the brew; long-pressing a
 /// step starts from it. Leaving the page tells Rust ([LeaveBrew]).
 class BrewPage extends StatefulWidget {
   const BrewPage({
@@ -101,154 +106,260 @@ class _BrewPageState extends State<BrewPage> {
     );
   }
 
-  /// The open recipe; [timer] is null while idle.
+  /// The open recipe, printed on its own label paper; [timer] is null
+  /// while idle.
   Widget _page(BrewRecipe recipe, BrewTimer? timer) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(recipe.name),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () => _edit(recipe.id),
+    final colors = LabelColors.of(recipe.label, Theme.of(context).brightness);
+    final paperBrightness = ThemeData.estimateBrightnessForColor(colors.paper);
+    final sweep = timer?.sweepSeconds;
+    return CustomPaint(
+      painter: LabelPaperPainter(
+        colors: colors,
+        texture: recipe.label.texture,
+        stain: recipe.label.stain,
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          surfaceTintColor: Colors.transparent,
+          foregroundColor: colors.ink,
+          systemOverlayStyle: paperBrightness == Brightness.dark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark,
+          centerTitle: true,
+          title: RoastMeter.of(recipe.label.tone, colors),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: () => _edit(recipe.id),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
+        body: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 0, 22, 22),
+            child: Column(
+              children: [
+                LabelBadge(name: recipe.name, colors: colors, fontSize: 26),
+                if (recipe.description.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: LabelTagline(
+                      text: recipe.description,
+                      colors: colors,
+                    ),
+                  ),
+                const SizedBox(height: 12),
+                _Rule(colors: colors),
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: LabelSpecs(
+                    colors: colors,
+                    specs: [
+                      (
+                        caption: 'COFFEE',
+                        value: recipe.coffeeLabel,
+                        highlight: false,
+                      ),
+                      (
+                        caption: 'WATER',
+                        value: recipe.waterLabel,
+                        highlight: false,
+                      ),
+                      (
+                        caption: 'RATIO',
+                        value: recipe.ratioLabel,
+                        highlight: false,
+                      ),
+                    ],
+                  ),
+                ),
+                _Rule(colors: colors),
+                const SizedBox(height: 14),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 300),
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: timer == null
+                        ? () => _start(0)
+                        : () => const ResetBrew().sendSignalToRust(),
+                    child: BrewDial(
+                      sweep: sweep == null ? null : Duration(seconds: sweep),
+                      restartKey: (timer?.run, timer?.stepIndex),
+                      steps: recipe.steps,
+                      colors: colors,
+                      child: timer == null
+                          ? _IdleFace(recipe: recipe, colors: colors)
+                          : _RunningFace(timer: timer, colors: colors),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                _MethodHeading(colors: colors),
+                const SizedBox(height: 6),
+                for (final (i, step) in recipe.steps.indexed)
+                  StepListTile(
+                    step: step,
+                    colors: colors,
+                    onLongPress: () => _start(i),
+                  ),
+                const SizedBox(height: 14),
+                Text(
+                  'Hold a step to start from there',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontFamily: 'Fraunces',
+                    fontStyle: FontStyle.italic,
+                    fontSize: 13,
+                    color: colors.ink.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+TextStyle _caption(LabelColors colors, {double size = 10}) => TextStyle(
+  fontFamily: 'Oswald',
+  fontSize: size,
+  height: 1,
+  letterSpacing: size * 0.24,
+  fontWeight: FontWeight.w500,
+  fontVariations: const [FontVariation.weight(500)],
+  color: colors.ink.withValues(alpha: 0.7),
+);
+
+TextStyle _bigFigure(LabelColors colors) => TextStyle(
+  fontFamily: 'Fraunces',
+  fontSize: 56,
+  height: 1.05,
+  fontWeight: FontWeight.w500,
+  fontVariations: const [
+    FontVariation.weight(500),
+    FontVariation.opticalSize(144),
+  ],
+  // Fixed-width digits, so the countdown does not jitter.
+  fontFeatures: const [FontFeature.tabularFigures()],
+  color: colors.ink,
+);
+
+/// The dial's centre while idle: the total time and how to start.
+class _IdleFace extends StatelessWidget {
+  const _IdleFace({required this.recipe, required this.colors});
+
+  final BrewRecipe recipe;
+  final LabelColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('TOTAL', style: _caption(colors)),
+        const SizedBox(height: 4),
+        Text(recipe.durationLabel, style: _bigFigure(colors)),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.play_arrow, size: 14, color: colors.accent),
+            const SizedBox(width: 4),
+            Text(
+              'TAP TO BREW',
+              style: _caption(colors, size: 11).copyWith(color: colors.accent),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The dial's centre while running: which step, its name, and its
+/// `MM:SS` countdown.
+class _RunningFace extends StatelessWidget {
+  const _RunningFace({required this.timer, required this.colors});
+
+  final BrewTimer timer;
+  final LabelColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 56),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(timer.positionLabel.toUpperCase(), style: _caption(colors)),
+          const SizedBox(height: 6),
+          Text(
+            timer.stepName.toUpperCase(),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontFamily: 'Oswald',
+              fontSize: 20,
+              height: 1.1,
+              letterSpacing: 3.6,
+              fontWeight: FontWeight.w600,
+              fontVariations: const [FontVariation.weight(600)],
+              color: colors.ink,
+            ),
+          ),
+          Text(timer.remainingLabel, style: _bigFigure(colors)),
+          const SizedBox(height: 4),
+          Text(
+            'TAP TO RESET',
+            style: _caption(colors, size: 11).copyWith(
+              color: colors.ink.withValues(alpha: 0.55),
+            ),
           ),
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              recipe.description,
-              style: const TextStyle(fontSize: 18),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 16),
-            GestureDetector(
-              onTap: timer == null
-                  ? () => _start(0)
-                  : () => const ResetBrew().sendSignalToRust(),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final sweep = timer?.sweepSeconds;
-                  return CircularTimer(
-                    sweep: sweep == null ? null : Duration(seconds: sweep),
-                    restartKey: (timer?.run, timer?.stepIndex),
-                    progressColor: ColorScheme.of(context).primary,
-                    constraints: BoxConstraints(
-                      minWidth: constraints.maxWidth,
-                      minHeight: constraints.maxWidth,
-                    ),
-                    child: timer == null
-                        ? _RecipeInfo(recipe: recipe)
-                        : _Countdown(timer: timer),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 20),
-            const Text(
-              'Steps:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                itemCount: recipe.steps.length,
-                itemBuilder: (_, i) => StepListTile(
-                  step: recipe.steps[i],
-                  onLongPress: () => _start(i),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
 
-/// The running step's name over its `MM : SS` countdown.
-class _Countdown extends StatelessWidget {
-  const _Countdown({required this.timer});
+/// "METHOD" between two hairlines, over the step list.
+class _MethodHeading extends StatelessWidget {
+  const _MethodHeading({required this.colors});
 
-  final BrewTimer timer;
-
-  @override
-  Widget build(BuildContext context) {
-    final textStyle = TextTheme.of(context).titleLarge;
-    // `remainingLabel` is `MM:SS`; each half gets its own fixed cells.
-    final parts = timer.remainingLabel.split(':');
-    return Column(
-      children: [
-        Text(timer.stepName),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            FixedDigit(time: parts.first, style: textStyle),
-            const SizedBox(width: 4),
-            Text(':', style: textStyle),
-            const SizedBox(width: 4),
-            FixedDigit(time: parts.last, style: textStyle),
-          ],
-        ),
-      ],
-    );
-  }
-}
-
-/// Coffee, water and total time while idle.
-class _RecipeInfo extends StatelessWidget {
-  const _RecipeInfo({required this.recipe});
-
-  final BrewRecipe recipe;
+  final LabelColors colors;
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
       children: [
-        _RecipeInfoText(
-          icon: const Icon(Icons.grain),
-          text: recipe.coffeeLabel,
+        Expanded(child: _Rule(colors: colors, alpha: 0.35)),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text('METHOD', style: _caption(colors, size: 11)),
         ),
-        const SizedBox(height: 4),
-        _RecipeInfoText(
-          icon: const Icon(Icons.water_drop_outlined),
-          text: recipe.waterLabel,
-        ),
-        const SizedBox(height: 4),
-        _RecipeInfoText(
-          icon: const Icon(Icons.timer_outlined),
-          text: recipe.durationLabel,
-        ),
+        Expanded(child: _Rule(colors: colors, alpha: 0.35)),
       ],
     );
   }
 }
 
-class _RecipeInfoText extends StatelessWidget {
-  const _RecipeInfoText({
-    required this.icon,
-    required this.text,
-  });
+class _Rule extends StatelessWidget {
+  const _Rule({required this.colors, this.alpha = 0.3});
 
-  final Icon icon;
-  final String text;
+  final LabelColors colors;
+  final double alpha;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-      children: [
-        icon,
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-      ],
+    return Divider(
+      height: 1,
+      thickness: 1,
+      color: colors.ink.withValues(alpha: alpha),
     );
   }
 }

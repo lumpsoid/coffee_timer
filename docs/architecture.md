@@ -136,7 +136,7 @@ clock. Time arrives as `tick()`, one call per second while
 - Every accepted start increments a run number, held in
   [`RunningStep`](../native/core/src/brew/running_step.rs). Each tick and
   step change keeps it, so a restart of the same step is distinguishable from
-  a tick. The GUI restarts the ring animation whenever `(run, step_index)`
+  a tick. The GUI restarts the dial's sweep whenever `(run, step_index)`
   changes.
 
 **The hub's per-brew interval.** The hub holds an `Option<Interval>`. An

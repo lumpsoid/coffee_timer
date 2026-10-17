@@ -6,7 +6,8 @@ use coffee_timer_core::brew::{BrewController, BrewError, BrewState, Effect, Step
 use coffee_timer_core::catalog::RecipeCatalog;
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
-    ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    BrewMetrics, LabelStyle, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration,
+    StepId,
 };
 
 use StepStatus::{Current, Done, Pending};
@@ -118,6 +119,54 @@ fn open_shows_the_recipe_idle_with_its_labels() -> TestResult {
         ]
     );
     assert_eq!(statuses(&brew), [Pending, Pending, Pending]);
+    Ok(())
+}
+
+#[test]
+fn open_carries_the_ratio_and_the_list_label_style() -> TestResult {
+    let (brew, catalog) = opened(&[30, 60, 5])?;
+    let view = brew.state().view().ok_or("no view")?;
+    let recipe = catalog.get(&id("a")?).ok_or("no recipe")?;
+    assert_eq!(view.ratio_label(), "1:5");
+    assert_eq!(
+        view.style(),
+        LabelStyle::of(recipe, &BrewMetrics::default())
+    );
+    Ok(())
+}
+
+#[test]
+fn steps_lie_end_to_end_on_the_track_by_duration() -> TestResult {
+    let (brew, _catalog) = opened(&[30, 60, 10])?;
+    let track: Vec<_> = brew
+        .state()
+        .step_rows()
+        .iter()
+        .map(|r| (r.track_start, r.track_end))
+        .collect();
+    assert_eq!(track, [(0.0, 0.3), (0.3, 0.9), (0.9, 1.0)]);
+    Ok(())
+}
+
+#[test]
+fn zero_second_steps_share_the_track_equally() -> TestResult {
+    let (brew, _catalog) = opened(&[0, 0])?;
+    let track: Vec<_> = brew
+        .state()
+        .step_rows()
+        .iter()
+        .map(|r| (r.track_start, r.track_end))
+        .collect();
+    assert_eq!(track, [(0.0, 0.5), (0.5, 1.0)]);
+    Ok(())
+}
+
+#[test]
+fn position_label_counts_from_one() -> TestResult {
+    let (brew, _catalog) = opened(&[30, 60, 5])?;
+    let view = brew.state().view().ok_or("no view")?;
+    assert_eq!(view.position_label(0), "Step 1 of 3");
+    assert_eq!(view.position_label(2), "Step 3 of 3");
     Ok(())
 }
 

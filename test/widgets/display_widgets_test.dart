@@ -1,6 +1,6 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
-import 'package:coffee_timer/widgets/circular_timer.dart';
-import 'package:coffee_timer/widgets/fixed_digit.dart';
+import 'package:coffee_timer/widgets/brew_dial.dart';
+import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
 import 'package:flutter/material.dart';
@@ -9,6 +9,8 @@ import 'package:flutter_test/flutter_test.dart';
 import '../fixtures.dart';
 
 Widget _host(Widget child) => MaterialApp(home: Scaffold(body: child));
+
+final _colors = LabelColors.of(label(), Brightness.light);
 
 void main() {
   group('StepListTile', () {
@@ -21,7 +23,10 @@ void main() {
                 name: 'Pour',
                 durationLabel: '30s',
                 status: status,
+                trackStart: 0,
+                trackEnd: 1,
               ),
+              colors: _colors,
               onLongPress: () {},
             ),
           ),
@@ -33,7 +38,7 @@ void main() {
       expect(find.text('Pour'), findsOneWidget);
       expect(find.text('30s'), findsOneWidget);
       expect(find.byIcon(Icons.play_arrow), findsNothing);
-      expect(find.byIcon(Icons.check_circle), findsNothing);
+      expect(find.byIcon(Icons.check), findsNothing);
     });
 
     testWidgets('the current step shows a play arrow', (tester) async {
@@ -44,7 +49,7 @@ void main() {
 
     testWidgets('a done step shows a check', (tester) async {
       await pumpTile(tester, BrewStepStatus.done);
-      expect(find.byIcon(Icons.check_circle), findsOneWidget);
+      expect(find.byIcon(Icons.check), findsOneWidget);
       expect(find.text('2'), findsNothing);
     });
 
@@ -58,7 +63,10 @@ void main() {
               name: 'Bloom',
               durationLabel: '30s',
               status: BrewStepStatus.pending,
+              trackStart: 0,
+              trackEnd: 1,
             ),
+            colors: _colors,
             onLongPress: () => pressed++,
           ),
         ),
@@ -138,27 +146,28 @@ void main() {
     });
   });
 
-  group('FixedDigit', () {
-    testWidgets('gives each character its own cell', (tester) async {
-      await tester.pumpWidget(_host(const FixedDigit(time: '07', style: null)));
-      expect(find.text('0'), findsOneWidget);
-      expect(find.text('7'), findsOneWidget);
-      expect(find.byType(Container), findsNWidgets(2));
-    });
-  });
-
-  group('CircularTimer', () {
-    double ring(WidgetTester tester) => tester
-        .widget<CircularProgressIndicator>(
-          find.byType(CircularProgressIndicator),
-        )
-        .value!;
+  group('BrewDial', () {
+    double ring(WidgetTester tester) =>
+        (tester
+                    .widget<CustomPaint>(
+                      find.descendant(
+                        of: find.byType(BrewDial),
+                        matching: find.byType(CustomPaint),
+                      ),
+                    )
+                    .painter!
+                as BrewDialPainter)
+            .progress;
 
     Widget timer({required Duration? sweep, required Object restartKey}) =>
         _host(
-          CircularTimer(
+          BrewDial(
             sweep: sweep,
             restartKey: restartKey,
+            steps: brewRecipe(
+              statuses: [BrewStepStatus.current, BrewStepStatus.pending],
+            ).steps,
+            colors: _colors,
             child: const Text('inside'),
           ),
         );

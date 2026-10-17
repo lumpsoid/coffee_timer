@@ -35,8 +35,8 @@ again.
   live labels. It also produces the `MM:SS` and `Ns` labels.
 - **`RecipeStep` and `Recipe`** are immutable and change only through named
   operations. A blank step name is saved as `Step N`.
-- **`BrewMetrics`** is the one home for coffee grams, water grams, and the
-  capped total duration with its `M:SS` label.
+- **`BrewMetrics`** is the one home for coffee grams, water grams, their
+  ratio (`1:5`), and the capped total duration with its `M:SS` label.
 - **`LabelStyle`** is how a recipe looks in the list, as a coffee-bag label.
   `LabelTone` (roast, caramel or crema) follows total brew time, with the
   thresholds as named constants. `LabelTexture`, `LabelShade` and
@@ -114,11 +114,13 @@ Test:
   `on_catalog_change`.
 - `BrewState` is `Empty`, `Idle(BrewView)` or `Running(BrewView,
   RunningStep)`.
-- `BrewView` is the open recipe with its labels.
+- `BrewView` is the open recipe with its labels, its `LabelStyle` (the
+  brew page wears the list card's label) and `Step N of M` positions.
 - `RunningStep` is the current step, the time left, the run number, and the
-  ring's sweep.
+  dial's sweep.
 - `StepRow` and `StepStatus` (`Done` / `Current` / `Pending`) describe the
-  step list.
+  step list. Each row also carries its arc on the dial's step track, as
+  fractions of the whole brew.
 - `Effect` is a platform command.
 - `BrewError` is a rejected start.
 
@@ -269,13 +271,15 @@ The GUI renders, sends intents, and performs effects. It holds no business
 - **[`pages/`](../lib/pages)** has `RecipeListPage`, `BrewPage`,
   `EditorPage` and `SettingsPage`. Each page reads holders and sends
   signals; none of them computes a label.
-- **[`widgets/`](../lib/widgets)** has the display widgets: `CircularTimer`
-  (built on `DurationalCircularProgressIndicator`; the ring sweeps per step
-  and restarts on `restartKey`), `StepListTile`, `RecipeSummaryTile` and
-  `FixedDigit`. `RecipeSummaryTile` draws the row as a printed label:
-  `LabelColors` maps the `RecipeLabel` to colours (dimmed in dark theme),
-  `LabelPaperPainter` paints the paper, texture, stain and frame, and
-  `RoastMeter` draws the beans.
+- **[`widgets/`](../lib/widgets)** has the display widgets. Recipes are
+  drawn as printed labels: `LabelColors` maps the `RecipeLabel` to colours
+  (dimmed in dark theme), `LabelPaperPainter` paints the paper, texture,
+  stain and frame, `label_parts.dart` has the name badge, tagline and spec
+  row, and `RoastMeter` draws the beans. `RecipeSummaryTile` is a list row
+  on its own label; the brew page lays the whole page on one. `BrewDial` is
+  the brew timer: bezel ticks, an inner arc that sweeps per step and
+  restarts on `restartKey`, and an outer track with each step's arc.
+  `StepListTile` is one step of the brew page's method.
 - `src/bindings/` holds the generated, gitignored signal classes. Run
   `rinf gen` to create them.
 

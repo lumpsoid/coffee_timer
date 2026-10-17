@@ -314,3 +314,11 @@ fn duration_label_reads_99_99_at_the_cap() -> TestResult {
     assert_eq!(BrewMetrics::default().duration_label(&r), "99:99");
     Ok(())
 }
+
+#[test]
+fn ratio_label_is_water_per_gram_of_coffee() -> TestResult {
+    let metrics = BrewMetrics::default();
+    assert_eq!(metrics.ratio_label(&recipe(&[30, 30])?), "1:5");
+    assert_eq!(metrics.ratio_label(&recipe(&[])?), "—");
+    Ok(())
+}

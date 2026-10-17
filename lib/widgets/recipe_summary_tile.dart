@@ -1,8 +1,7 @@
-import 'dart:math' as math;
-
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:coffee_timer/widgets/label_paper_painter.dart';
+import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/roast_meter.dart';
 import 'package:flutter/material.dart';
 
@@ -66,16 +65,7 @@ class RecipeSummaryTile extends StatelessWidget {
                 Positioned(
                   top: 14,
                   right: 16,
-                  child: RoastMeter(
-                    filled: switch (label.tone) {
-                      LabelTone.roast => 3,
-                      LabelTone.caramel => 2,
-                      LabelTone.crema => 1,
-                    },
-                    accent: colors.accent,
-                    ink: colors.ink,
-                    paper: colors.paper,
-                  ),
+                  child: RoastMeter.of(label.tone, colors),
                 ),
               ],
             ),
@@ -105,75 +95,18 @@ class _LabelText extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final diamond = Transform.rotate(
-      angle: math.pi / 4,
-      child: SizedBox.square(
-        dimension: 5,
-        child: ColoredBox(color: colors.accent),
-      ),
-    );
     return Column(
       children: [
         // Clear of the roast meter on the right, centred by the same inset
         // on the left.
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 34),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.symmetric(
-                horizontal: BorderSide(color: colors.accent, width: 2),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 5, 4, 4),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  diamond,
-                  const SizedBox(width: 10),
-                  Flexible(
-                    child: Text(
-                      name.toUpperCase(),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontFamily: 'Oswald',
-                        fontSize: 22,
-                        height: 1.1,
-                        fontWeight: FontWeight.w600,
-                        fontVariations: const [FontVariation.weight(600)],
-                        letterSpacing: 4.4,
-                        color: colors.ink,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  diamond,
-                ],
-              ),
-            ),
-          ),
+          child: LabelBadge(name: name, colors: colors),
         ),
         if (description.isNotEmpty)
           Padding(
             padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              '— $description —',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Fraunces',
-                fontStyle: FontStyle.italic,
-                fontSize: 15,
-                height: 1.2,
-                fontVariations: const [
-                  FontVariation.weight(400),
-                  FontVariation.opticalSize(15),
-                ],
-                color: colors.ink.withValues(alpha: 0.85),
-              ),
-            ),
+            child: LabelTagline(text: description, colors: colors),
           ),
         const SizedBox(height: 12),
         Divider(
@@ -182,89 +115,15 @@ class _LabelText extends StatelessWidget {
           color: colors.ink.withValues(alpha: 0.3),
         ),
         const SizedBox(height: 10),
-        IntrinsicHeight(
-          child: Row(
-            children: [
-              _Spec(colors: colors, caption: 'COFFEE', value: coffeeLabel),
-              _Rule(colors: colors),
-              _Spec(colors: colors, caption: 'WATER', value: waterLabel),
-              _Rule(colors: colors),
-              _Spec(
-                colors: colors,
-                caption: 'TIME',
-                value: timeLabel,
-                highlight: true,
-              ),
-            ],
-          ),
+        LabelSpecs(
+          colors: colors,
+          specs: [
+            (caption: 'COFFEE', value: coffeeLabel, highlight: false),
+            (caption: 'WATER', value: waterLabel, highlight: false),
+            (caption: 'TIME', value: timeLabel, highlight: true),
+          ],
         ),
       ],
-    );
-  }
-}
-
-class _Spec extends StatelessWidget {
-  const _Spec({
-    required this.colors,
-    required this.caption,
-    required this.value,
-    this.highlight = false,
-  });
-
-  final LabelColors colors;
-  final String caption;
-  final String value;
-  final bool highlight;
-
-  @override
-  Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          Text(
-            caption,
-            style: TextStyle(
-              fontFamily: 'Oswald',
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
-              fontVariations: const [FontVariation.weight(500)],
-              letterSpacing: 2.2,
-              color: colors.ink.withValues(alpha: 0.7),
-            ),
-          ),
-          const SizedBox(height: 5),
-          Text(
-            value,
-            style: TextStyle(
-              fontFamily: 'Fraunces',
-              fontSize: 18,
-              height: 1,
-              fontWeight: FontWeight.w600,
-              fontVariations: const [
-                FontVariation.weight(600),
-                FontVariation.opticalSize(18),
-              ],
-              fontFeatures: const [FontFeature.tabularFigures()],
-              color: highlight ? colors.accent : colors.ink,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Rule extends StatelessWidget {
-  const _Rule({required this.colors});
-
-  final LabelColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return VerticalDivider(
-      width: 1,
-      thickness: 1,
-      color: colors.ink.withValues(alpha: 0.25),
     );
   }
 }

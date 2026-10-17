@@ -17,9 +17,11 @@ to.
   ones a light crema label, and each recipe has its own paper texture.
   Tap a recipe to brew it. Long-press it to edit or delete it. The `+` button
   creates a recipe.
-- **Brew page.** Shows the recipe and a timer ring. Tap the ring to start the
-  brew from step 1, or tap it again to reset. Long-press a step to start from
-  that step. The step list marks each step done, current or pending.
+- **Brew page.** Shows the recipe printed on its own coffee-bag label (the
+  same look as its list card), a timer dial and the steps. Tap the dial to
+  start the brew from step 1, or tap it again to reset. Long-press a step to
+  start from that step. The dial sweeps through the current step, and its
+  outer track and the step list mark each step done, current or pending.
 - **Editor.** Edits a recipe's name, description and timed steps. The total
   and each step's `MM:SS` update live. Preset buttons add "Add coffee", "Add
   water", "Wait" or blank steps. Field errors appear from the first save

@@ -17,7 +17,7 @@ impl From<&BrewState> for BrewUpdate {
             },
             BrewState::Running(view, step) => Self::Running {
                 recipe: recipe(view, steps()),
-                timer: step.into(),
+                timer: timer(view, step),
             },
         }
     }
@@ -30,7 +30,9 @@ fn recipe(view: &BrewView, steps: Vec<BrewStep>) -> BrewRecipe {
         description: view.description().to_owned(),
         coffee_label: view.coffee_label().to_owned(),
         water_label: view.water_label().to_owned(),
+        ratio_label: view.ratio_label().to_owned(),
         duration_label: view.duration_label().to_owned(),
+        label: view.style().into(),
         steps,
     }
 }
@@ -42,6 +44,8 @@ impl From<StepRow> for BrewStep {
             name: row.name,
             duration_label: row.duration_label,
             status: row.status.into(),
+            track_start: row.track_start,
+            track_end: row.track_end,
         }
     }
 }
@@ -56,17 +60,16 @@ impl From<StepStatus> for BrewStepStatus {
     }
 }
 
-impl From<&RunningStep> for BrewTimer {
-    fn from(step: &RunningStep) -> Self {
-        Self {
-            run: u32::try_from(step.run()).unwrap_or(u32::MAX),
-            // A step index beyond `u32` cannot occur (steps are typed in by
-            // hand); saturate rather than panic.
-            step_index: u32::try_from(step.index()).unwrap_or(u32::MAX),
-            step_name: step.name().to_owned(),
-            remaining_label: step.remaining_label(),
-            sweep_seconds: step.sweep().map(StepDuration::seconds),
-        }
+fn timer(view: &BrewView, step: &RunningStep) -> BrewTimer {
+    BrewTimer {
+        run: u32::try_from(step.run()).unwrap_or(u32::MAX),
+        // A step index beyond `u32` cannot occur (steps are typed in by
+        // hand); saturate rather than panic.
+        step_index: u32::try_from(step.index()).unwrap_or(u32::MAX),
+        step_name: step.name().to_owned(),
+        position_label: view.position_label(step.index()),
+        remaining_label: step.remaining_label(),
+        sweep_seconds: step.sweep().map(StepDuration::seconds),
     }
 }
 
@@ -145,6 +148,13 @@ mod tests {
         assert_eq!(recipe.name, "V60");
         assert_eq!(recipe.description, "clean");
         assert_eq!(recipe.duration_label, "0:30");
+        assert_eq!(recipe.ratio_label, "1:5");
+        let track: Vec<_> = recipe
+            .steps
+            .iter()
+            .map(|s| (s.track_start, s.track_end))
+            .collect();
+        assert_eq!(track, [(0.0, 1.0), (1.0, 1.0)]);
         assert_eq!(statuses(&recipe), ["pending", "pending"]);
         assert_eq!(recipe.steps[0].number_label, "1");
         assert_eq!(recipe.steps[0].name, "Bloom");
@@ -164,6 +174,7 @@ mod tests {
         assert_eq!(timer.run, 1);
         assert_eq!(timer.step_index, 0);
         assert_eq!(timer.step_name, "Bloom");
+        assert_eq!(timer.position_label, "Step 1 of 2");
         assert_eq!(timer.remaining_label, "00:29");
         assert_eq!(timer.sweep_seconds, Some(30));
         Ok(())

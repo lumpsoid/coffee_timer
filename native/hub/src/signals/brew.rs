@@ -1,6 +1,8 @@
 use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
+use crate::signals::RecipeLabel;
+
 /// The brew holder is subscribed: answer with the current `BrewUpdate`.
 #[derive(Deserialize, DartSignal)]
 pub struct BrewReady;
@@ -33,7 +35,10 @@ pub enum BrewUpdate {
     /// A recipe is open and its timer is stopped.
     Idle { recipe: BrewRecipe },
     /// The timer is counting down `timer.step_index`.
-    Running { recipe: BrewRecipe, timer: BrewTimer },
+    Running {
+        recipe: BrewRecipe,
+        timer: BrewTimer,
+    },
 }
 
 /// The open recipe with each step's status.
@@ -46,8 +51,12 @@ pub struct BrewRecipe {
     pub coffee_label: String,
     /// `100g`.
     pub water_label: String,
+    /// Water per gram of coffee, `1:5`.
+    pub ratio_label: String,
     /// Total, `M:SS`.
     pub duration_label: String,
+    /// The page wears the recipe's label, the same one the list shows.
+    pub label: RecipeLabel,
     pub steps: Vec<BrewStep>,
 }
 
@@ -60,6 +69,10 @@ pub struct BrewStep {
     /// `Ns`.
     pub duration_label: String,
     pub status: BrewStepStatus,
+    /// The step's arc on the dial's step track, as fractions of the whole
+    /// brew: steps lie end to end from 0.0 to 1.0.
+    pub track_start: f64,
+    pub track_end: f64,
 }
 
 #[derive(Serialize, SignalPiece)]
@@ -79,6 +92,8 @@ pub struct BrewTimer {
     /// restarts whenever `(run, step_index)` changes.
     pub step_index: u32,
     pub step_name: String,
+    /// `Step 1 of 3`.
+    pub position_label: String,
     /// `MM:SS` left.
     pub remaining_label: String,
     /// Period of the ring's repeating sweep, in seconds: the step's full

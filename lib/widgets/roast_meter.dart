@@ -1,3 +1,5 @@
+import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:flutter/material.dart';
 
 /// Three coffee beans, the first [filled] of them inked in [accent]; the
@@ -10,6 +12,21 @@ class RoastMeter extends StatelessWidget {
     required this.paper,
     super.key,
   });
+
+  /// The meter for a label of [tone]: three beans for roast, two for
+  /// caramel, one for crema.
+  RoastMeter.of(LabelTone tone, LabelColors colors, {Key? key})
+    : this(
+        filled: switch (tone) {
+          LabelTone.roast => 3,
+          LabelTone.caramel => 2,
+          LabelTone.crema => 1,
+        },
+        accent: colors.accent,
+        ink: colors.ink,
+        paper: colors.paper,
+        key: key,
+      );
 
   final int filled;
   final Color accent;

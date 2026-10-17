@@ -30,9 +30,10 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
     writeln!(out, "{}", view.description())?;
     writeln!(
         out,
-        "Coffee: {}  Water: {}  Time: {}",
+        "Coffee: {}  Water: {}  Ratio: {}  Time: {}",
         view.coffee_label(),
         view.water_label(),
+        view.ratio_label(),
         view.duration_label()
     )?;
     for row in state.step_rows() {

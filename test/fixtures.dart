@@ -54,7 +54,9 @@ BrewRecipe brewRecipe({List<BrewStepStatus>? statuses}) => BrewRecipe(
   description: 'clean',
   coffeeLabel: '20g',
   waterLabel: '100g',
+  ratioLabel: '1:5',
   durationLabel: '0:30',
+  label: label(),
   steps: [
     for (final (i, status)
         in (statuses ?? [BrewStepStatus.pending, BrewStepStatus.pending])
@@ -64,6 +66,8 @@ BrewRecipe brewRecipe({List<BrewStepStatus>? statuses}) => BrewRecipe(
         name: 'Step ${i + 1}',
         durationLabel: '15s',
         status: status,
+        trackStart: i / 2,
+        trackEnd: (i + 1) / 2,
       ),
   ],
 );

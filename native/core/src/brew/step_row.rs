@@ -1,7 +1,7 @@
 use crate::brew::StepStatus;
 
 /// One line of the brew page's step list, ready to show.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct StepRow {
     /// 1-based position, shown while the step is pending (`1`, `2`, …).
     pub number_label: String,
@@ -9,4 +9,9 @@ pub struct StepRow {
     /// `Ns`.
     pub duration_label: String,
     pub status: StepStatus,
+    /// Where the step starts on the dial's step track, as a fraction of the
+    /// whole brew (`0.0..=1.0`).
+    pub track_start: f64,
+    /// Where it ends; the next step starts here, the last ends at `1.0`.
+    pub track_end: f64,
 }
