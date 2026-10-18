@@ -1,11 +1,11 @@
-//! `SqliteStore`: schema v3 and seed, recipe doses, step pours, recipe order, step replacement,
+//! `SqliteStore`: schema v4 and seed, recipe doses, step pours, recipe pins, recipe order, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, CoffeeDose, PreAlertLead, Recipe, RecipeId, RecipeName, RecipeStep, Settings,
+    AccentColor, CoffeeDose, Pin, PreAlertLead, Recipe, RecipeId, RecipeName, RecipeStep, Settings,
     StepDuration, StepId, StoredSettings, ThemeSelection, Toggle, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
@@ -225,13 +225,13 @@ fn stored_doses_out_of_range_are_clamped() -> TestResult {
 }
 
 #[test]
-fn opened_file_is_at_schema_v3() -> TestResult {
+fn opened_file_is_at_schema_v4() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
     SqliteStore::open(&path)?;
     let version: u32 =
         Connection::open(&path)?.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 3);
+    assert_eq!(version, 4);
     Ok(())
 }
 
@@ -350,7 +350,7 @@ fn insert_at_puts_a_recipe_back_in_its_place_with_its_steps() -> TestResult {
         .ok_or("no pour over")?;
     store.remove(removed.id())?;
 
-    store.insert_at(&removed, 1)?;
+    store.insert_at(&removed, 1, Pin::Unpinned)?;
 
     let loaded = store.load_all()?;
     assert_eq!(ids(&loaded), ["espresso-uuid", "pourover-uuid", "r1"]);
@@ -367,12 +367,85 @@ fn insert_at_puts_a_recipe_back_in_its_place_with_its_steps() -> TestResult {
 #[test]
 fn insert_at_the_front_or_past_the_end() -> TestResult {
     let mut store = SqliteStore::open_in_memory()?;
-    store.insert_at(&recipe("first", "V60", Vec::new())?, 0)?;
-    store.insert_at(&recipe("last", "Aeropress", Vec::new())?, 99)?;
+    store.insert_at(&recipe("first", "V60", Vec::new())?, 0, Pin::Unpinned)?;
+    store.insert_at(&recipe("last", "Aeropress", Vec::new())?, 99, Pin::Unpinned)?;
     assert_eq!(
         ids(&store.load_all()?),
         ["first", "espresso-uuid", "pourover-uuid", "last"]
     );
+    Ok(())
+}
+
+fn rid(id: &str) -> Outcome<RecipeId> {
+    Ok(RecipeId::try_parse(id)?)
+}
+
+fn pinned_ids(store: &SqliteStore) -> Outcome<Vec<String>> {
+    Ok(store
+        .load_pinned()?
+        .iter()
+        .map(|id| id.as_str().to_owned())
+        .collect())
+}
+
+#[test]
+fn fresh_database_pins_nothing() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    assert!(store.load_pinned()?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn set_pin_round_trips_in_stored_order_and_keeps_positions() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.upsert(&recipe("r1", "V60", Vec::new())?)?;
+    store.set_pin(&rid("r1")?, Pin::Pinned)?;
+    store.set_pin(&rid("espresso-uuid")?, Pin::Pinned)?;
+    assert_eq!(pinned_ids(&store)?, ["espresso-uuid", "r1"]);
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["espresso-uuid", "pourover-uuid", "r1"],
+        "a pin moves no row"
+    );
+
+    store.set_pin(&rid("espresso-uuid")?, Pin::Unpinned)?;
+    assert_eq!(pinned_ids(&store)?, ["r1"]);
+    store.set_pin(&rid("missing")?, Pin::Pinned)?;
+    assert_eq!(pinned_ids(&store)?, ["r1"], "an unknown id changes nothing");
+    Ok(())
+}
+
+#[test]
+fn upsert_keeps_a_pin_and_a_new_recipe_is_unpinned() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.set_pin(&rid("pourover-uuid")?, Pin::Pinned)?;
+    store.upsert(&recipe("pourover-uuid", "Renamed", Vec::new())?)?;
+    store.upsert(&recipe("r1", "V60", Vec::new())?)?;
+    assert_eq!(pinned_ids(&store)?, ["pourover-uuid"]);
+    Ok(())
+}
+
+#[test]
+fn insert_at_stores_the_pin_it_is_given() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.insert_at(&recipe("r1", "V60", Vec::new())?, 1, Pin::Pinned)?;
+    assert_eq!(pinned_ids(&store)?, ["r1"]);
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["espresso-uuid", "r1", "pourover-uuid"]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_removed_and_reinserted_recipe_takes_only_the_pin_it_is_given() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.set_pin(&rid("espresso-uuid")?, Pin::Pinned)?;
+    let espresso = store.load_all()?.into_iter().next().ok_or("no espresso")?;
+    store.remove(espresso.id())?;
+    assert!(store.load_pinned()?.is_empty());
+    store.insert_at(&espresso, 0, Pin::Unpinned)?;
+    assert!(store.load_pinned()?.is_empty());
     Ok(())
 }
 
@@ -576,5 +649,35 @@ fn catalog_and_settings_controllers_persist_through_one_store() -> TestResult {
     assert_eq!(ids(catalog.state()), ["pourover-uuid", "r1"]);
     assert_eq!(shape(catalog.state()), expected_recipes);
     assert_eq!(*settings.state(), expected_settings);
+    Ok(())
+}
+
+#[test]
+fn the_catalog_lists_pins_first_after_a_reopen() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    let mut catalog = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    catalog.load()?;
+    catalog.upsert(recipe("r1", "V60", Vec::new())?)?;
+    catalog.set_pin(&rid("r1")?, Pin::Pinned)?;
+    catalog.set_pin(&rid("pourover-uuid")?, Pin::Pinned)?;
+    drop(catalog);
+
+    let mut catalog = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    catalog.load()?;
+    let listed: Vec<&str> = catalog.listed().iter().map(|r| r.id().as_str()).collect();
+    assert_eq!(listed, ["pourover-uuid", "r1", "espresso-uuid"]);
+    assert_eq!(
+        ids(catalog.state()),
+        ["espresso-uuid", "pourover-uuid", "r1"]
+    );
+
+    catalog.remove(rid("pourover-uuid")?)?;
+    catalog.restore(&rid("pourover-uuid")?)?;
+    drop(catalog);
+    let mut catalog = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    catalog.load()?;
+    assert_eq!(catalog.pin_of(&rid("pourover-uuid")?), Pin::Pinned);
+    assert_eq!(catalog.index_of(&rid("pourover-uuid")?), Some(0));
     Ok(())
 }

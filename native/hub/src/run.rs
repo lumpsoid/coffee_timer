@@ -1,7 +1,7 @@
 //! The hub task: owns every controller, turns each Dart signal into one
 //! controller action, and sends the feature's state after it. One task, so
 //! actions run one at a time. It decides nothing: errors are logged and the
-//! state re-sent, except a failed list delete, undo or ratio save, which goes
+//! state re-sent, except a failed list delete, undo, pin or ratio save, which goes
 //! to Dart as the one-shot `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
 //! unconditionally.
 
@@ -12,7 +12,7 @@ use std::time::Duration;
 use coffee_timer_core::brew::{BrewController, Effect};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::{DeleteError, EditorController, SaveError};
-use coffee_timer_core::model::{AccentColor, ModelError, PreAlertLead, RecipeId, StepId};
+use coffee_timer_core::model::{self, AccentColor, ModelError, PreAlertLead, RecipeId, StepId};
 use coffee_timer_core::ports::StoreError;
 use coffee_timer_core::settings::SettingsController;
 use coffee_timer_store::{SqliteStore, UuidIds};
@@ -22,11 +22,11 @@ use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, DuplicateRecipe,
     EditRecipe, EditorReady, EditorUpdate, LeaveBrew, MoveStep, NewDraft, OpenBrew, PauseBrew,
-    PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew,
-    ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetPreAlert, SetRecipeCoffee,
+    PinRecipe, PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep,
+    ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetPreAlert, SetRecipeCoffee,
     SetRecipeDescription, SetRecipeName, SetRecipeWater, SetSound, SetStepDuration, SetStepName,
     SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
-    UndoRemoveRecipe,
+    UndoRemoveRecipe, UnpinRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -62,6 +62,8 @@ pub async fn run(mut c: Controllers) {
     let recipe_list_ready = RecipeListReady::get_dart_signal_receiver();
     let remove_recipe = RemoveRecipe::get_dart_signal_receiver();
     let undo_remove_recipe = UndoRemoveRecipe::get_dart_signal_receiver();
+    let pin_recipe = PinRecipe::get_dart_signal_receiver();
+    let unpin_recipe = UnpinRecipe::get_dart_signal_receiver();
     let brew_ready = BrewReady::get_dart_signal_receiver();
     let open_brew = OpenBrew::get_dart_signal_receiver();
     let start_brew = StartBrew::get_dart_signal_receiver();
@@ -109,6 +111,13 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = undo_remove_recipe.recv() => {
                 report(restore(&mut c, &pack.message.recipe_id));
+            }
+            // `model::Pin`: `select!` brings `std::pin::Pin` into scope.
+            Some(pack) = pin_recipe.recv() => {
+                report(set_pin(&mut c, &pack.message.recipe_id, model::Pin::Pinned));
+            }
+            Some(pack) = unpin_recipe.recv() => {
+                report(set_pin(&mut c, &pack.message.recipe_id, model::Pin::Unpinned));
             }
 
             // Brew
@@ -310,6 +319,16 @@ fn restore(c: &mut Controllers, recipe_id: &str) -> Result<(), ModelError> {
     Ok(())
 }
 
+/// Pins or unpins a listed recipe. A refusal or a store failure goes to
+/// the list as core's pin error, for a snackbar.
+fn set_pin(c: &mut Controllers, recipe_id: &str, pin: model::Pin) -> Result<(), ModelError> {
+    match c.catalog.set_pin(&RecipeId::try_parse(recipe_id)?, pin) {
+        Ok(change) => pass_on(&change, &mut c.brew, &c.catalog),
+        Err(error) => RecipeListUpdate::from(error).send_signal_to_dart(),
+    }
+    Ok(())
+}
+
 fn open(
     brew: &mut BrewController,
     catalog: &RecipeCatalog,
@@ -371,7 +390,7 @@ fn show_settings(settings: &SettingsController) {
 
 /// The value, or none after logging the error. Anything the GUI must show
 /// is already in the feature's state (the editor's notice), or, for a
-/// failed list delete, undo or ratio save, sent as the one-shot `RecipeListUpdate::Failed`.
+/// failed list delete, undo, pin or ratio save, sent as the one-shot `RecipeListUpdate::Failed`.
 fn report<T>(result: Result<T, impl Display>) -> Option<T> {
     result.map_err(|error| debug_print!("{error}")).ok()
 }

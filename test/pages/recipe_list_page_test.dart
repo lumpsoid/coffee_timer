@@ -4,6 +4,7 @@ import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/pages/recipe_list_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -40,7 +41,7 @@ void main() {
     expect(find.byType(RecipeSummaryTile), findsNWidgets(2));
   });
 
-  testWidgets('a long press offers edit, duplicate and delete', (
+  testWidgets('a long press offers edit, duplicate, pin and delete', (
     tester,
   ) async {
     await pumpList(tester);
@@ -48,8 +49,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(ListTile, 'Edit'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Duplicate'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Pin'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Unpin'), findsNothing);
     expect(find.widgetWithText(ListTile, 'Delete'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Cancel'), findsOneWidget);
+  });
+
+  testWidgets('a pinned recipe shows the pin marker and offers Unpin', (
+    tester,
+  ) async {
+    recipes.apply(
+      RecipeListUpdateSnapshot(
+        recipes: [summary('a', pinned: true), summary('b')],
+      ),
+    );
+    await pumpList(tester);
+    expect(find.byType(LabelPinMark), findsOneWidget);
+
+    await tester.longPress(find.byType(RecipeSummaryTile).first);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Unpin'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Pin'), findsNothing);
+  });
+
+  testWidgets('a pin moves the row and shows its marker', (tester) async {
+    recipes.apply(
+      RecipeListUpdateSnapshot(recipes: [summary('a'), summary('b')]),
+    );
+    await pumpList(tester);
+    expect(find.byType(LabelPinMark), findsNothing);
+
+    recipes.apply(
+      RecipeListUpdateUpserted(
+        recipe: summary('b', name: 'Aero', pinned: true),
+        index: 0,
+      ),
+    );
+    await tester.pump();
+    final tiles = tester
+        .widgetList<RecipeSummaryTile>(find.byType(RecipeSummaryTile))
+        .map((t) => (t.name, t.pinned));
+    expect(tiles, [('Aero', true), ('V60', false)]);
+    expect(find.byType(LabelPinMark), findsOneWidget);
   });
 
   testWidgets('offers an undo for a removal, then lets it go', (

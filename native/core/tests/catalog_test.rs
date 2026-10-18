@@ -1,10 +1,12 @@
-//! `RecipeCatalog`: load, upsert, remove and restore write through the store
-//! first.
+//! `RecipeCatalog`: load, upsert, remove, restore and pin write through the
+//! store first; the list is in `PinnedFirst` order.
 
-use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary, RestoreError};
+use coffee_timer_core::catalog::{
+    CatalogChange, PinError, PinnedFirst, RecipeCatalog, RecipeSummary, RestoreError,
+};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
-    BrewMetrics, CoffeeDose, LabelStyle, ModelError, Recipe, RecipeId, RecipeName, RecipeStep,
+    BrewMetrics, CoffeeDose, LabelStyle, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep,
     StepDuration, StepId, WaterAmount,
 };
 
@@ -325,7 +327,7 @@ fn summary_carries_the_stored_dose_and_the_total_time() -> TestResult {
         vec![step("s1", 30)?, step("s2", 65)?],
     );
     assert_eq!(
-        RecipeSummary::of(&recipe, &BrewMetrics::default()),
+        RecipeSummary::of(&recipe, Pin::Pinned, &BrewMetrics::default()),
         RecipeSummary {
             id: RecipeId::try_parse("a")?,
             name: "Espresso".to_owned(),
@@ -334,7 +336,167 @@ fn summary_carries_the_stored_dose_and_the_total_time() -> TestResult {
             water_label: "36 g".to_owned(),
             time_label: "1:35".to_owned(),
             style: LabelStyle::of(&recipe, &BrewMetrics::default()),
+            pin: Pin::Pinned,
         }
     );
+    Ok(())
+}
+
+// pin
+
+fn listed(catalog: &RecipeCatalog) -> Vec<&str> {
+    catalog.listed().iter().map(|r| r.id().as_str()).collect()
+}
+
+#[test]
+fn pinned_first_keeps_each_group_in_catalog_order() -> TestResult {
+    let recipes = [
+        recipe("a", "A")?,
+        recipe("b", "B")?,
+        recipe("c", "C")?,
+        recipe("d", "D")?,
+    ];
+    let pinned = |r: &Recipe| Pin::from(matches!(r.id().as_str(), "b" | "d"));
+    let order: Vec<_> = PinnedFirst::order(&recipes, pinned)
+        .iter()
+        .map(|r| r.id().as_str())
+        .collect();
+    assert_eq!(order, ["b", "d", "a", "c"]);
+    let none: Vec<_> = PinnedFirst::order(&recipes, |_| Pin::Unpinned)
+        .iter()
+        .map(|r| r.id().as_str())
+        .collect();
+    assert_eq!(none, ["a", "b", "c", "d"]);
+    Ok(())
+}
+
+#[test]
+fn load_reads_the_stored_pins() -> TestResult {
+    let catalog = loaded(stored_abc()?.pinning(&rid("c")?))?;
+    assert_eq!(catalog.pin_of(&rid("c")?), Pin::Pinned);
+    assert_eq!(catalog.pin_of(&rid("a")?), Pin::Unpinned);
+    assert_eq!(listed(&catalog), ["c", "a", "b"]);
+    assert_eq!(ids(&catalog), ["a", "b", "c"], "stored order is kept");
+    Ok(())
+}
+
+#[test]
+fn pin_moves_the_recipe_to_the_top_and_persists() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    let change = catalog.set_pin(&rid("c")?, Pin::Pinned)?;
+    assert_eq!(change, CatalogChange::Upserted(rid("c")?));
+    assert_eq!(listed(&catalog), ["c", "a", "b"]);
+    assert_eq!(catalog.index_of(&rid("c")?), Some(0));
+    assert_eq!(catalog.index_of(&rid("a")?), Some(1));
+
+    catalog.load()?;
+    assert_eq!(listed(&catalog), ["c", "a", "b"], "store has the pin");
+    Ok(())
+}
+
+#[test]
+fn pinned_recipes_keep_their_relative_order() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    catalog.set_pin(&rid("c")?, Pin::Pinned)?;
+    catalog.set_pin(&rid("b")?, Pin::Pinned)?;
+    assert_eq!(listed(&catalog), ["b", "c", "a"]);
+    Ok(())
+}
+
+#[test]
+fn unpin_puts_the_recipe_back_in_its_place_among_the_unpinned() -> TestResult {
+    let mut catalog = loaded(stored_abc()?.pinning(&rid("b")?).pinning(&rid("c")?))?;
+    assert_eq!(listed(&catalog), ["b", "c", "a"]);
+    let change = catalog.set_pin(&rid("c")?, Pin::Unpinned)?;
+    assert_eq!(change, CatalogChange::Upserted(rid("c")?));
+    assert_eq!(listed(&catalog), ["b", "a", "c"]);
+    assert_eq!(catalog.index_of(&rid("c")?), Some(2));
+    catalog.load()?;
+    assert_eq!(listed(&catalog), ["b", "a", "c"], "store has it unpinned");
+    Ok(())
+}
+
+#[test]
+fn setting_the_pin_a_recipe_has_changes_nothing_but_still_reports_it() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    let change = catalog.set_pin(&rid("a")?, Pin::Unpinned)?;
+    assert_eq!(change, CatalogChange::Upserted(rid("a")?));
+    assert_eq!(listed(&catalog), ["a", "b", "c"]);
+    Ok(())
+}
+
+#[test]
+fn pinning_an_unknown_id_is_an_error() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    assert_eq!(
+        catalog.set_pin(&rid("missing")?, Pin::Pinned),
+        Err(PinError::UnknownRecipe(rid("missing")?))
+    );
+    assert_eq!(catalog.pin_of(&rid("missing")?), Pin::Unpinned);
+    Ok(())
+}
+
+#[test]
+fn a_failed_pin_leaves_the_catalog_unchanged() -> TestResult {
+    let mut catalog = loaded(stored_abc()?.failing_writes())?;
+    assert!(matches!(
+        catalog.set_pin(&rid("c")?, Pin::Pinned),
+        Err(PinError::Store(_))
+    ));
+    assert_eq!(catalog.pin_of(&rid("c")?), Pin::Unpinned);
+    assert_eq!(listed(&catalog), ["a", "b", "c"]);
+    Ok(())
+}
+
+#[test]
+fn a_new_recipe_is_unpinned_at_the_end_of_the_list() -> TestResult {
+    let mut catalog = loaded(stored_abc()?.pinning(&rid("c")?))?;
+    catalog.upsert(recipe("d", "V60")?)?;
+    assert_eq!(catalog.pin_of(&rid("d")?), Pin::Unpinned);
+    assert_eq!(listed(&catalog), ["c", "a", "b", "d"]);
+    assert_eq!(catalog.index_of(&rid("d")?), Some(3));
+    Ok(())
+}
+
+#[test]
+fn an_upsert_of_a_pinned_recipe_keeps_it_pinned_in_place() -> TestResult {
+    let mut catalog = loaded(stored_abc()?.pinning(&rid("c")?))?;
+    catalog.upsert(recipe("c", "Renamed")?)?;
+    assert_eq!(catalog.pin_of(&rid("c")?), Pin::Pinned);
+    assert_eq!(listed(&catalog), ["c", "a", "b"]);
+    Ok(())
+}
+
+#[test]
+fn undo_restores_a_pinned_recipe_pinned_at_its_place() -> TestResult {
+    let mut catalog = loaded(stored_abc()?.pinning(&rid("a")?).pinning(&rid("c")?))?;
+    assert_eq!(listed(&catalog), ["a", "c", "b"]);
+    catalog.remove(rid("c")?)?;
+    assert_eq!(
+        catalog.pin_of(&rid("c")?),
+        Pin::Unpinned,
+        "gone, so not pinned"
+    );
+    assert_eq!(listed(&catalog), ["a", "b"]);
+    let removed = catalog.restorable(&rid("c")?).ok_or("no undo")?;
+    assert_eq!(removed.pin(), Pin::Pinned);
+
+    catalog.restore(&rid("c")?)?;
+
+    assert_eq!(catalog.pin_of(&rid("c")?), Pin::Pinned);
+    assert_eq!(listed(&catalog), ["a", "c", "b"]);
+    assert_eq!(catalog.index_of(&rid("c")?), Some(1));
+    catalog.load()?;
+    assert_eq!(listed(&catalog), ["a", "c", "b"], "store has it pinned");
+    Ok(())
+}
+
+#[test]
+fn undo_restores_an_unpinned_recipe_unpinned() -> TestResult {
+    let mut catalog = loaded(stored_abc()?.pinning(&rid("c")?))?;
+    catalog.remove(rid("a")?)?;
+    catalog.restore(&rid("a")?)?;
+    assert_eq!(catalog.pin_of(&rid("a")?), Pin::Unpinned);
+    assert_eq!(listed(&catalog), ["c", "a", "b"]);
     Ok(())
 }

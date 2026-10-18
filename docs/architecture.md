@@ -34,7 +34,7 @@ and not on each other. Dart sees only the generated signal classes.
 
 | Controller | State object | Owns |
 |---|---|---|
-| [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>`, plus the last `RemovedRecipe` | the recipe list and its persistence, and the one removal that can be undone (shared) |
+| [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>` and the pinned ids, plus the last `RemovedRecipe` | the recipe list, its pins and persistence, and the one removal that can be undone (shared) |
 | [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme, accent and brew cues (sound, vibration, pre-alert), and their persistence |
 | [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` / `Finished(view, finished)` | the open recipe and its timer |
 | [`EditorController`](../native/core/src/editor/editor_controller.rs) | [`EditorState`](../native/core/src/editor/editor_state.rs): `Closed` / `Open(Draft)` | one draft, new or of an existing recipe |
@@ -99,7 +99,8 @@ function:
 
 - **Hub** ([`run.rs`](../native/hub/src/run.rs)):
   1. Sends `RecipeListUpdate::of(&change, &catalog)` as the list diff. It
-     reads the row from the catalog, so it is `Upserted { recipe }`, or
+     reads the row from the catalog, so it is `Upserted { recipe, index }`
+     (its place in list order), or
      `Removed { id }` when the catalog no longer holds that id.
   2. Calls `brew.on_catalog_change(&change, &catalog)`.
   3. Sends the brew view and its effects.
@@ -113,9 +114,9 @@ the catalog. An edit shows the new version, idle, and stops a running or
 paused brew.
 A delete shows "Empty recipe".
 
-Five intents produce a change: the editor's save, the editor's delete, the
-list's `RemoveRecipe`, `UndoRemoveRecipe`, and the brew page's
-`SaveBrewRatio`. `RemoveRecipe` calls `RecipeCatalog::remove` directly,
+Seven intents produce a change: the editor's save, the editor's delete, the
+list's `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe` and `UnpinRecipe`,
+and the brew page's `SaveBrewRatio`. `RemoveRecipe` calls `RecipeCatalog::remove` directly,
 without opening a draft.
 
 **Saving the brew's ratio.** The flow belongs to the brew page, which
@@ -154,6 +155,24 @@ through `pass_on` like any change. The list diff `Upserted` carries the
 row's index, so Dart inserts a restored row at its old place. An id that is
 not the last removal, or one already back, is `RestoreError::NothingToUndo`
 and changes nothing.
+
+**Pinning.** Which recipes are pinned is catalog metadata (a set of ids
+beside `Vec<Recipe>`, stored as `recipe.pinned`), not a `Recipe` field: it
+says where the user keeps a recipe, not how it brews. So the editor's save
+keeps it without carrying it through the draft, a duplicate (a new id)
+starts unpinned, and pinning the open recipe leaves a running brew alone,
+since `on_catalog_change` finds the recipe unchanged. The list's order is
+[`PinnedFirst`](../native/core/src/catalog/pinned_first.rs): pinned
+recipes, then the rest, each in stored order. A pin moves no stored row,
+so unpinning puts a recipe back where it stood among the unpinned, and the
+undo of a delete restores the stored index and the pin, and so the place.
+`RecipeCatalog::listed` is that order (the snapshot and the CLI's `list`),
+and `index_of` a place in it. `set_pin` returns `Upserted(id)`, which goes
+through `pass_on` like any change. The diff expresses the move with no new
+variant: `Upserted { recipe, index }` means "the row with this id now reads
+so and stands at `index`", and Dart drops the row with that id, if any,
+then inserts it at `index`. The same rule serves an edit (same index), a
+new recipe (the end) and a restore (its old place).
 
 ## Effects
 
@@ -359,9 +378,11 @@ feature's state as usual. The user sees an error only in these cases:
   are already on the draft.
 - **`RecipeListUpdate::Failed { message }`.** This is a one-shot notice when
   a list `RemoveRecipe` fails in the store, an `UndoRemoveRecipe` fails,
-  or a `SaveBrewRatio` is refused or fails. The message is core's
+  a `PinRecipe` / `UnpinRecipe` fails, or a `SaveBrewRatio` is refused or
+  fails. The message is core's
   `DeleteError::Store` text, `Failed to delete recipe: …`, its
   `RestoreError` text, `Nothing to undo` or `Failed to restore recipe: …`,
+  its `PinError` text, `No recipe with id …` or `Failed to save the pin: …`,
   or its `SaveRatioError` text, `Can't save this ratio: 2050 g of water is
   outside 1–2000 g` or `Failed to save recipe: …`. The list is
   unchanged. `RecipeListHolder` forwards the message on its `failures`

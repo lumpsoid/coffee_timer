@@ -16,14 +16,19 @@ to.
   (the coffee and water are the recipe's own stored grams),
   each drawn as a coffee-bag label. Short brews get a dark roast label, long
   ones a light crema label, and each recipe has its own paper texture.
-  Tap a recipe to brew it. Long-press it to edit, duplicate or delete it.
+  Tap a recipe to brew it. Long-press it to edit, duplicate, pin (or
+  unpin) or delete it. Pinned recipes are listed first, in the order they
+  had among themselves, then the rest; a small pin in the label's top-left
+  corner marks them. Unpinning puts a recipe back where it stood among the
+  unpinned. Editing a pinned recipe keeps it pinned; a duplicate or a new
+  recipe starts unpinned, at the end of the list.
   Duplicate opens the editor on a new recipe copied from it (description,
   coffee, water, and every step with its time and pour), named `V60 copy`;
   nothing is saved until **Save**, which adds it at the end of the list,
   and backing out leaves the list as it was. The `+` button
   creates a recipe. After a delete, from the list or the editor, a
   `Deleted V60` snackbar offers **Undo** for a few seconds; it puts the
-  whole recipe back where it was. Only the last delete can be undone, and
+  whole recipe back where it was, pinned if it was. Only the last delete can be undone, and
   a restart forgets it.
 - **Brew page.** Shows the recipe printed on its own coffee-bag label (the
   same look as its list card), a timer dial and the steps. Tap the dial to
@@ -144,6 +149,8 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew espresso-uuid --pause-at 10 --pause-for 5
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db duplicate pourover-uuid --name "Iced"
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db pin pourover-uuid
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db unpin pourover-uuid
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings theme dark
@@ -187,7 +194,10 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
   `Step N`.
 - `duplicate <id> [--name NAME]` saves a copy at once, at the end of the
   list, and prints `upserted <new id>`. Without `--name` it is named
-  `<name> copy`.
+  `<name> copy`. The copy is unpinned.
+- `pin <id>` / `unpin <id>` pin or unpin a recipe, as the list's long-press
+  does, and print `upserted <id>`. `list` prints in the app's order,
+  pinned recipes first, each marked `[pinned]` after its name.
 - Use `--help` on any command for its options.
 - There is no undo command. The removed recipe is held in memory only, and
   each CLI run is one command, so nothing is left to undo by the next run;

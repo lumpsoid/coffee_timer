@@ -1,7 +1,11 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 
 /// Hand-built signal values, shaped like the ones Rust sends.
-RecipeSummary summary(String id, {String name = 'V60'}) => RecipeSummary(
+RecipeSummary summary(
+  String id, {
+  String name = 'V60',
+  bool pinned = false,
+}) => RecipeSummary(
   id: id,
   name: name,
   description: 'clean',
@@ -9,6 +13,7 @@ RecipeSummary summary(String id, {String name = 'V60'}) => RecipeSummary(
   waterLabel: '100 g',
   timeLabel: '1:35',
   label: label(),
+  pinned: pinned,
 );
 
 RecipeLabel label({LabelTone tone = LabelTone.roast}) => RecipeLabel(

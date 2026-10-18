@@ -87,9 +87,11 @@ Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
 
 This is the border with what cannot run in a test.
 
-- `RecipeStore`: `load_all`, `upsert`, `insert_at` and `remove`. Recipe
-  order is part of the contract; `insert_at` puts a recipe back at a
-  given place.
+- `RecipeStore`: `load_all`, `load_pinned`, `upsert`, `insert_at`,
+  `set_pin` and `remove`. Recipe order is part of the contract; `insert_at`
+  puts a recipe back at a given place, with its `Pin`. A pin is stored
+  beside the recipe and never moves it: `upsert` keeps a known id's pin
+  and stores a new id unpinned.
 - `SettingsStore`: `load` and `save`.
 - `IdGen`: `recipe_id` and `step_id`.
 - `StoreError`: a backend's reason, carried as text.
@@ -101,7 +103,8 @@ The store crate implements all three.
 
 [`native/core/src/fakes`](../native/core/src/fakes)
 
-- `FakeRecipeStore` is `Vec`-backed and keeps the order contract.
+- `FakeRecipeStore` is `Vec`-backed and keeps the order contract;
+  `pinning(id)` stores a recipe pinned.
 - `FakeSettingsStore` holds settings in memory.
 - Both can be told to fail loads or writes; `FakeRecipeStore` can also
   fail only `insert_at` (`failing_inserts`).
@@ -116,19 +119,30 @@ dev-dependency, and the CLI and hub enable it for their tests. Test:
 
 [`native/core/src/catalog`](../native/core/src/catalog)
 
-- `RecipeCatalog` owns `Vec<Recipe>` and writes through its `RecipeStore`
-  before it changes its state. It provides `load`, `upsert`, `remove`, `get`,
-  `index_of` and `state`. It also keeps the recipe it removed last as a
-  `RemovedRecipe` (the whole recipe and its index, with the undo text
+- `RecipeCatalog` owns `Vec<Recipe>` (in stored order) and the set of
+  pinned ids, and writes through its `RecipeStore` before it changes its
+  state. It provides `load`, `upsert`, `remove`, `set_pin`, `get`,
+  `pin_of`, `listed`, `index_of` and `state`. `listed` is the list's
+  order and `index_of` a place in it; `state` is stored order. The pin is
+  catalog metadata, not a `Recipe` field: the editor, the brew page and a
+  duplicate never see it, so an edit keeps it, a copy (a new id) starts
+  unpinned, and pinning the open recipe is no change to the brew
+  (`on_catalog_change` finds the recipe unchanged). `set_pin(id, pin)`
+  returns `Upserted`; an unknown id is `PinError::UnknownRecipe`, a failed
+  write `PinError::Store`. It also keeps the recipe it removed last as a
+  `RemovedRecipe` (the whole recipe, its index and its pin, with the undo text
   `Deleted V60`): `restorable(id)` offers it, and `restore(id)` puts it back
   at its index through `RecipeStore::insert_at` and returns `Upserted`. The
   next removal replaces it, a restore uses it up, and it is never stored.
   Any other id is `RestoreError::NothingToUndo`; a failed write is
   `RestoreError::Store` and keeps the offer.
+- `PinnedFirst` is the list-order policy: the pinned recipes, then the
+  rest, each group in stored order (a stable partition, so a pin or unpin
+  moves only that recipe, and an unpinned one goes back to its place).
 - `CatalogChange` (`Upserted` / `Removed`) is returned only after the write
   has persisted.
 - `RecipeSummary` is a recipe-list row with its labels (`20 g`, `100 g`,
-  `1:35`) and its `LabelStyle`.
+  `1:35`), its `LabelStyle` and its `Pin`.
 
 Test: [`catalog_test.rs`](../native/core/tests/catalog_test.rs).
 
@@ -241,10 +255,13 @@ The store implements the core's ports. It makes no decisions.
   can carry such `fresh` SQL, run only on a database created in that
   migration. v3 adds the nullable `step.water_grams` (NULL is no pour, so
   every upgraded step pours nothing); a database created at v3 gives the
-  Pour Over seed's Bloom 50 g and Pour 200 g.
+  Pour Over seed's Bloom 50 g and Pour 200 g. v4 adds
+  `recipe.pinned` (0 or 1, default 0): every upgraded recipe is unpinned
+  and keeps its position.
 - **Row mapping:** [`recipe_rows.rs`](../native/store/src/recipe_rows.rs)
   loads `ORDER BY position`. An upsert keeps the recipe's position and
-  replaces its steps. `insert_at` moves the rows from that place on one
+  replaces its steps, and leaves `pinned` alone. `set_pin` updates only
+  `pinned`; `load_pinned` reads the pinned ids. `insert_at` moves the rows from that place on one
   position down and gives the recipe the freed one. Rows are read through core's lenient constructors
   (grams are clamped into bounds).
   [`settings_rows.rs`](../native/store/src/settings_rows.rs) stores key/value
@@ -270,7 +287,7 @@ A second head on core and store. It proves that core needs no rinf. It
 decides nothing: core produces every label, status and error text.
 
 - [`args.rs`](../native/cli/src/args.rs) defines the clap arguments: `list`,
-  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `delete`, `brew` and `settings`
+  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `pin`, `unpin`, `delete`, `brew` and `settings`
   (`theme`, `accent`, `sound`, `vibration`, `pre-alert`), plus the global `--db`.
   `brew` ticks with the stored settings.
 - [`lib.rs`](../native/cli/src/lib.rs) provides `Controllers::boot` (build
@@ -278,7 +295,9 @@ decides nothing: core produces every label, status and error text.
 - [`commands.rs`](../native/cli/src/commands.rs) has one function per
   command, plus `pass_on` for catalog changes. `new` fills a draft as the
   editor page would. `duplicate` opens the editor's copy, sets `--name`
-  if given, and saves. `delete` goes through the editor.
+  if given, and saves. `delete` goes through the editor. `pin` / `unpin`
+  call `RecipeCatalog::set_pin`; `list` prints `listed()` order and marks
+  a pinned row `[pinned]`.
 - [`render.rs`](../native/cli/src/render.rs) lays out state, effects and
   field errors as text.
 - [`cli_error.rs`](../native/cli/src/cli_error.rs) wraps core's errors, and
@@ -318,7 +337,7 @@ makes no business decisions.
 | Feature | Dart → Rust | Rust → Dart |
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
-| recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
+| recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
@@ -358,8 +377,9 @@ The GUI renders, sends intents, and performs effects. It holds no business
 - **[`widgets/`](../lib/widgets)** has the display widgets. Recipes are
   drawn as printed labels: `LabelColors` maps the `RecipeLabel` to colours
   (dimmed in dark theme), `LabelPaperPainter` paints the paper, texture,
-  stain and frame, `label_parts.dart` has the name badge, tagline and spec
-  row, and `RoastMeter` draws the beans. `RecipeSummaryTile` is a list row
+  stain and frame, `label_parts.dart` has the name badge, tagline, spec
+  row and `LabelPinMark` (the small accent push pin a pinned card shows in
+  its top-left corner, opposite the meter), and `RoastMeter` draws the beans. `RecipeSummaryTile` is a list row
   on its own label; the brew page lays the whole page on one. `BrewDial` is
   the brew timer: bezel ticks, an inner arc that sweeps per step and
   restarts on `restartKey` (it stops and fades while a step is `paused`,
@@ -380,7 +400,8 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
   notification on identical updates.
 - [`effects/`](../test/effects) tests one plugin call per effect, order, and
   that a failure does not block later effects.
-- [`pages/`](../test/pages) tests the list page's long-press menu and
+- [`pages/`](../test/pages) tests the list page's long-press menu (Pin or
+  Unpin by the row's `pinned`), the pin marker, and
   snackbars (failures and the undo offer), the settings page's cue
   controls following Rust's state, and the editor
   page: open, field errors, pop on `Closed`, notices, and the delete dialog.

@@ -8,7 +8,7 @@ use coffee_timer_core::brew::{BrewController, RatioChange};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::editor::{EditError, EditorController, StepPreset};
 use coffee_timer_core::model::{
-    AccentColor, AccentOption, BrewMetrics, PreAlertLead, RecipeId, Settings, StepId,
+    AccentColor, AccentOption, BrewMetrics, Pin, PreAlertLead, RecipeId, Settings, StepId,
     ThemeSelection, Toggle,
 };
 use coffee_timer_core::settings::SettingsController;
@@ -17,12 +17,27 @@ use crate::args::{NewRecipe, SettingsAction, StepArg};
 use crate::cli_error::CliError;
 use crate::render;
 
+/// Every recipe in list order, pinned ones first.
 pub fn list(catalog: &RecipeCatalog, out: &mut impl Write) -> Result<(), CliError> {
     let metrics = BrewMetrics::default();
-    for recipe in catalog.state() {
-        render::summary(out, &RecipeSummary::of(recipe, &metrics))?;
+    for recipe in catalog.listed() {
+        let pin = catalog.pin_of(recipe.id());
+        render::summary(out, &RecipeSummary::of(recipe, pin, &metrics))?;
     }
     Ok(())
+}
+
+/// Pins or unpins the recipe, as the list's long-press Pin / Unpin does,
+/// and passes the change on.
+pub fn set_pin(
+    id: &str,
+    pin: Pin,
+    catalog: &mut RecipeCatalog,
+    brew: &mut BrewController,
+    out: &mut impl Write,
+) -> Result<(), CliError> {
+    let change = catalog.set_pin(&RecipeId::try_parse(id)?, pin)?;
+    pass_on(&change, brew, catalog, out)
 }
 
 /// Opens the recipe, then presses the brew page's more-water (positive) or

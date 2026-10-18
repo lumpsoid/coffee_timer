@@ -12,8 +12,9 @@ import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:flutter/material.dart';
 
-/// The home page: every recipe, opening its brew page on tap and offering
-/// edit / duplicate / delete on long press. A delete, here or in the editor, shows a
+/// The home page: every recipe, in the order Rust lists them (pinned
+/// first), opening its brew page on tap and offering edit / duplicate /
+/// pin or unpin / delete on long press. A delete, here or in the editor, shows a
 /// snackbar with an Undo when Rust offers one; a failed delete or undo shows
 /// as a snackbar too.
 class RecipeListPage extends StatefulWidget {
@@ -144,6 +145,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
                 waterLabel: r.waterLabel,
                 timeLabel: r.timeLabel,
                 label: r.label,
+                pinned: r.pinned,
                 onTap: () => _openBrew(context, r),
                 onLongPress: () => _showRecipeOptionsSheet(context, r),
               );
@@ -177,6 +179,20 @@ class _RecipeListPageState extends State<RecipeListPage> {
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _openDuplicate(context, recipe);
+                  },
+                ),
+                ListTile(
+                  leading: Icon(
+                    recipe.pinned ? Icons.push_pin_outlined : Icons.push_pin,
+                  ),
+                  title: Text(recipe.pinned ? 'Unpin' : 'Pin'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    if (recipe.pinned) {
+                      UnpinRecipe(recipeId: recipe.id).sendSignalToRust();
+                    } else {
+                      PinRecipe(recipeId: recipe.id).sendSignalToRust();
+                    }
                   },
                 ),
                 ListTile(

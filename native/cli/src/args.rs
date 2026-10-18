@@ -18,7 +18,8 @@ pub struct Args {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
-    /// List recipes in catalog order with their coffee, water and time.
+    /// List recipes as the app lists them, pinned ones first (marked
+    /// `[pinned]`), with their coffee, water and time.
     List,
     /// Show a recipe and its steps as the brew page does.
     Show {
@@ -55,6 +56,17 @@ pub enum Command {
         /// Name the copy this instead of "<name> copy".
         #[arg(long, value_name = "NAME")]
         name: Option<String>,
+    },
+    /// Pin a recipe to the top of the list, as the list's long-press Pin
+    /// does.
+    Pin {
+        /// Recipe id, as printed by `list`.
+        id: String,
+    },
+    /// Unpin a recipe: it goes back to its place among the unpinned ones.
+    Unpin {
+        /// Recipe id, as printed by `list`.
+        id: String,
     },
     /// Brew a recipe: one tick per second until the last step ends, printing
     /// the countdown, step statuses and effects.

@@ -163,10 +163,15 @@ pub enum RecipeListUpdate {
 }
 ```
 
+`Upserted` places the row: Dart drops any row with its id, then inserts it
+at `index` (list order). An edit keeps the index, and a pin or unpin moves
+it.
+
 `Failed` is a one-shot notice, not state: a list delete (`RemoveRecipe`),
-an undo (`UndoRemoveRecipe`) or a ratio save (`SaveBrewRatio`) failed, the
-list is unchanged, and Dart shows `message` (core's `DeleteError`,
-`RestoreError` or `SaveRatioError` text) as a snackbar
+an undo (`UndoRemoveRecipe`), a pin (`PinRecipe` / `UnpinRecipe`) or a
+ratio save (`SaveBrewRatio`) failed, the list is unchanged, and Dart shows
+`message` (core's `DeleteError`, `RestoreError`, `PinError` or
+`SaveRatioError` text) as a snackbar
 each time one arrives. `Removed`'s `undo_notice` is one-shot the same way:
 present when core offers to undo that removal, shown once as a snackbar
 with an Undo.

@@ -23,8 +23,8 @@ pub use editor::{
     SetStepName, SetStepWater, StepPresetChoice,
 };
 pub use recipe_list::{
-    LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListReady, RecipeListUpdate,
-    RecipeSummary, RemoveRecipe, StainCorner, UndoRemoveRecipe,
+    LabelShade, LabelTexture, LabelTone, PinRecipe, RecipeLabel, RecipeListReady, RecipeListUpdate,
+    RecipeSummary, RemoveRecipe, StainCorner, UndoRemoveRecipe, UnpinRecipe,
 };
 pub use settings::{
     AccentChoice, PreAlertChoice, SetAccent, SetPreAlert, SetSound, SetTheme, SetVibration,

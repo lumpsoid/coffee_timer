@@ -15,6 +15,7 @@ use std::time::Duration;
 use coffee_timer_core::brew::BrewController;
 use coffee_timer_core::catalog::RecipeCatalog;
 use coffee_timer_core::editor::EditorController;
+use coffee_timer_core::model::Pin;
 use coffee_timer_core::ports::{IdGen, StoreError};
 use coffee_timer_core::settings::SettingsController;
 use coffee_timer_store::SqliteStore;
@@ -72,6 +73,10 @@ pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Resu
             &mut c.brew,
             out,
         ),
+        Command::Pin { id } => commands::set_pin(id, Pin::Pinned, &mut c.catalog, &mut c.brew, out),
+        Command::Unpin { id } => {
+            commands::set_pin(id, Pin::Unpinned, &mut c.catalog, &mut c.brew, out)
+        }
         Command::Brew {
             id,
             from,

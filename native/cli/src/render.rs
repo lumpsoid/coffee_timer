@@ -10,9 +10,15 @@ use coffee_timer_core::catalog::{CatalogChange, RecipeSummary};
 use coffee_timer_core::editor::EditorState;
 use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, ThemeSelection};
 
+/// One list row; a pinned recipe's name is followed by `[pinned]`.
 pub fn summary(out: &mut impl Write, summary: &RecipeSummary) -> io::Result<()> {
+    let pinned = if summary.pin.is_pinned() {
+        " [pinned]"
+    } else {
+        ""
+    };
     let line = format!(
-        "{}  {}  Coffee: {}  Water: {}  Time: {}  {}",
+        "{}  {}{pinned}  Coffee: {}  Water: {}  Time: {}  {}",
         summary.id.as_str(),
         summary.name,
         summary.coffee_label,

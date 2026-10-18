@@ -67,6 +67,24 @@ void main() {
     expect(ids(), ['a', 'b', 'c']);
   });
 
+  test('an upsert at another index moves the row there', () {
+    holder
+      ..apply(
+        RecipeListUpdateSnapshot(
+          recipes: [summary('a'), summary('b'), summary('c')],
+        ),
+      )
+      ..apply(
+        RecipeListUpdateUpserted(recipe: summary('c', pinned: true), index: 0),
+      );
+    expect(ids(), ['c', 'a', 'b']);
+    expect(holder.byId('c')?.pinned, isTrue);
+
+    holder.apply(RecipeListUpdateUpserted(recipe: summary('c'), index: 2));
+    expect(ids(), ['a', 'b', 'c']);
+    expect(holder.byId('c')?.pinned, isFalse);
+  });
+
   test('a removal with an undo notice drops the row and offers the undo', () {
     final offers = <UndoOffer>[];
     holder

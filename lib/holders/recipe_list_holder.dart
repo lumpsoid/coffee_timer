@@ -41,8 +41,9 @@ class RecipeListHolder extends ChangeNotifier {
     const RecipeListReady().sendSignalToRust();
   }
 
-  /// Folds one update in: a snapshot replaces the list, an upsert replaces
-  /// the row with its id or inserts it at its index, a removal drops the
+  /// Folds one update in: a snapshot replaces the list, an upsert drops the
+  /// row with its id, if any, and inserts it at its index (in place for an
+  /// edit, moved for a pin or unpin), a removal drops the
   /// row and passes on its undo offer, if any, on [undoOffers]. A failure
   /// leaves the list alone and goes out on [failures].
   void apply(RecipeListUpdate update) {
@@ -78,9 +79,11 @@ class RecipeListHolder extends ChangeNotifier {
     RecipeSummary recipe,
     int index,
   ) {
-    final at = current.indexWhere((r) => r.id == recipe.id);
-    if (at != -1) return List.of(current)..[at] = recipe;
-    return List.of(current)..insert(index.clamp(0, current.length), recipe);
+    final rest = [
+      for (final r in current)
+        if (r.id != recipe.id) r,
+    ];
+    return rest..insert(index.clamp(0, rest.length), recipe);
   }
 
   @override

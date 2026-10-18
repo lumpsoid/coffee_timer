@@ -1,7 +1,9 @@
 //! Catalog ↔ recipe list signals.
 
 use coffee_timer_core::brew::SaveRatioError;
-use coffee_timer_core::catalog::{self, CatalogChange, RecipeCatalog, RemovedRecipe, RestoreError};
+use coffee_timer_core::catalog::{
+    self, CatalogChange, PinError, RecipeCatalog, RemovedRecipe, RestoreError,
+};
 use coffee_timer_core::editor::DeleteError;
 use coffee_timer_core::model::{self, BrewMetrics, LabelStyle, Recipe};
 
@@ -10,10 +12,14 @@ use crate::signals::{
 };
 
 impl RecipeListUpdate {
-    /// Every recipe the catalog holds, in order.
+    /// Every recipe the catalog holds, in list order.
     pub fn snapshot(catalog: &RecipeCatalog) -> Self {
         Self::Snapshot {
-            recipes: catalog.state().iter().map(summary).collect(),
+            recipes: catalog
+                .listed()
+                .into_iter()
+                .map(|recipe| summary(recipe, catalog))
+                .collect(),
         }
     }
 
@@ -27,7 +33,7 @@ impl RecipeListUpdate {
         let (CatalogChange::Upserted(id) | CatalogChange::Removed(id)) = change;
         match catalog.get(id).zip(catalog.index_of(id)) {
             Some((recipe, index)) => Self::Upserted {
-                recipe: summary(recipe),
+                recipe: summary(recipe, catalog),
                 index: u32::try_from(index).unwrap_or(u32::MAX),
             },
             None => Self::Removed {
@@ -40,6 +46,14 @@ impl RecipeListUpdate {
 
 impl From<RestoreError> for RecipeListUpdate {
     fn from(error: RestoreError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<PinError> for RecipeListUpdate {
+    fn from(error: PinError) -> Self {
         Self::Failed {
             message: error.to_string(),
         }
@@ -62,8 +76,8 @@ impl From<DeleteError> for RecipeListUpdate {
     }
 }
 
-fn summary(recipe: &Recipe) -> RecipeSummary {
-    catalog::RecipeSummary::of(recipe, &BrewMetrics::default()).into()
+fn summary(recipe: &Recipe, catalog: &RecipeCatalog) -> RecipeSummary {
+    catalog::RecipeSummary::of(recipe, catalog.pin_of(recipe.id()), &BrewMetrics::default()).into()
 }
 
 impl From<catalog::RecipeSummary> for RecipeSummary {
@@ -76,6 +90,7 @@ impl From<catalog::RecipeSummary> for RecipeSummary {
             water_label: s.water_label,
             time_label: s.time_label,
             label: s.style.into(),
+            pinned: s.pin.is_pinned(),
         }
     }
 }
@@ -206,6 +221,39 @@ mod tests {
         };
         assert_v60_row(&recipe);
         assert_eq!(index, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn a_pin_sends_the_row_pinned_at_the_top() -> TestResult {
+        let other = Recipe::blank(
+            RecipeId::try_parse("r2")?,
+            model::RecipeName::try_parse("Aero")?,
+            CoffeeDose::try_parse(15)?,
+            WaterAmount::try_parse(250)?,
+        );
+        let mut catalog = catalog_with(vec![v60()?, other])?;
+        let change = catalog.set_pin(&RecipeId::try_parse("r2")?, model::Pin::Pinned)?;
+        let RecipeListUpdate::Upserted { recipe, index } = RecipeListUpdate::of(&change, &catalog)
+        else {
+            return Err("not upserted".into());
+        };
+        assert_eq!(recipe.id, "r2");
+        assert!(recipe.pinned);
+        assert_eq!(index, 0);
+        let RecipeListUpdate::Snapshot { recipes } = RecipeListUpdate::snapshot(&catalog) else {
+            return Err("not a snapshot".into());
+        };
+        let rows: Vec<_> = recipes.iter().map(|r| (r.id.as_str(), r.pinned)).collect();
+        assert_eq!(rows, [("r2", true), ("r1", false)]);
+
+        let change = catalog.set_pin(&RecipeId::try_parse("r2")?, model::Pin::Unpinned)?;
+        let RecipeListUpdate::Upserted { recipe, index } = RecipeListUpdate::of(&change, &catalog)
+        else {
+            return Err("not upserted".into());
+        };
+        assert!(!recipe.pinned);
+        assert_eq!(index, 1, "back to its place");
         Ok(())
     }
 

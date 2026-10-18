@@ -10,7 +10,7 @@ use coffee_timer_core::editor::{
 };
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
-    CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    CoffeeDose, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
     WaterAmount,
 };
 
@@ -1313,6 +1313,39 @@ fn saving_a_duplicate_appends_it_and_leaves_the_source() -> TestResult {
         .map(|s| s.water().map(WaterAmount::grams))
         .collect();
     assert_eq!(pours, [Some(50), Some(200)]);
+    Ok(())
+}
+
+#[test]
+fn a_duplicate_of_a_pinned_recipe_is_saved_unpinned_at_the_end() -> TestResult {
+    let mut catalog = catalog_of(
+        FakeRecipeStore::with_recipes(vec![espresso()?, pour_over()?]).pinning(&rid("pour-over")?),
+    )?;
+    let mut editor = duplicating("pour-over", &catalog)?;
+    editor.save(&mut catalog)?;
+    assert_eq!(catalog.pin_of(&rid("r1")?), Pin::Unpinned);
+    assert_eq!(catalog.pin_of(&rid("pour-over")?), Pin::Pinned);
+    let listed: Vec<_> = catalog.listed().iter().map(|r| r.id().as_str()).collect();
+    assert_eq!(listed, ["pour-over", "espresso", "r1"]);
+    Ok(())
+}
+
+#[test]
+fn editing_a_pinned_recipe_keeps_it_pinned() -> TestResult {
+    let mut catalog = catalog_of(
+        FakeRecipeStore::with_recipes(vec![espresso()?, pour_over()?]).pinning(&rid("pour-over")?),
+    )?;
+    let mut editor = editing("pour-over", &catalog)?;
+    editor.set_name("Pour Over 2")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(catalog.pin_of(&rid("pour-over")?), Pin::Pinned);
+    assert_eq!(catalog.index_of(&rid("pour-over")?), Some(0));
+    catalog.load()?;
+    assert_eq!(
+        catalog.pin_of(&rid("pour-over")?),
+        Pin::Pinned,
+        "stored too"
+    );
     Ok(())
 }
 

@@ -37,6 +37,11 @@ const MIGRATIONS: &[Migration] = &[
         sql: V3_STEP_WATER,
         fresh: Some(V3_FRESH_SEED_POURS),
     },
+    Migration {
+        version: 4,
+        sql: V4_RECIPE_PIN,
+        fresh: None,
+    },
 ];
 
 /// v1: tables, plus the two example recipes. Seeding is part of creating the
@@ -110,6 +115,12 @@ UPDATE step SET water_grams = 50 WHERE id = 'step4';
 UPDATE step SET water_grams = 200 WHERE id = 'step5';
 ";
 
+/// v4: a recipe may be pinned to the top of the list. Every recipe before
+/// v4 is unpinned, so the list shows what it showed; positions are kept.
+const V4_RECIPE_PIN: &str = "
+ALTER TABLE recipe ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -161,10 +172,10 @@ mod tests {
     }
 
     #[test]
-    fn fresh_database_ends_at_v3() -> TestResult {
+    fn fresh_database_ends_at_v4() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         Ok(())
     }
 
@@ -198,7 +209,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 1)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         assert_eq!(
             doses(&conn)?,
             [
@@ -240,8 +251,37 @@ mod tests {
         conn.execute_batch(V2_RECIPE_DOSE)?;
         conn.pragma_update(None, "user_version", 2)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         assert!(pours(&conn)?.iter().all(|(_, water)| water.is_none()));
+        Ok(())
+    }
+
+    fn pins(conn: &Connection) -> rusqlite::Result<Vec<(i64, String, i64)>> {
+        conn.prepare("SELECT position, id, pinned FROM recipe ORDER BY position")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect()
+    }
+
+    #[test]
+    fn v3_recipes_are_unpinned_and_keep_their_positions() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA_AND_SEED)?;
+        conn.execute_batch(V2_RECIPE_DOSE)?;
+        conn.execute_batch(V3_STEP_WATER)?;
+        conn.execute_batch(
+            "INSERT INTO recipe (position, id, name, description) VALUES (7, 'mine', 'Mine', '');",
+        )?;
+        conn.pragma_update(None, "user_version", 3)?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(
+            pins(&conn)?,
+            [
+                (1, "espresso-uuid".to_owned(), 0),
+                (2, "pourover-uuid".to_owned(), 0),
+                (7, "mine".to_owned(), 0),
+            ]
+        );
         Ok(())
     }
 
@@ -252,14 +292,14 @@ mod tests {
         migrate(&mut conn)?;
         let recipes: i64 = conn.query_row("SELECT COUNT(*) FROM recipe", [], |r| r.get(0))?;
         assert_eq!(recipes, 2);
-        assert_eq!(user_version(&conn)?, 3);
+        assert_eq!(user_version(&conn)?, 4);
         Ok(())
     }
 
     #[test]
     fn newer_database_is_refused() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 4)?;
+        conn.pragma_update(None, "user_version", 5)?;
         assert!(migrate(&mut conn).is_err());
         Ok(())
     }

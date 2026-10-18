@@ -1,6 +1,7 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/brew_dial.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
+import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
 import 'package:flutter/material.dart';
@@ -135,6 +136,25 @@ void main() {
       await tester.tap(find.text('1:35'));
       await tester.longPress(find.text('1:35'));
       expect((taps, longPresses), (1, 1));
+    });
+
+    testWidgets('shows the pin marker only when pinned', (tester) async {
+      Widget tile({required bool pinned}) => _host(
+        RecipeSummaryTile(
+          name: 'V60',
+          description: 'clean',
+          coffeeLabel: '20 g',
+          waterLabel: '100 g',
+          timeLabel: '1:35',
+          label: label(),
+          pinned: pinned,
+        ),
+      );
+      await tester.pumpWidget(tile(pinned: false));
+      expect(find.byType(LabelPinMark), findsNothing);
+      await tester.pumpWidget(tile(pinned: true));
+      expect(find.byType(LabelPinMark), findsOneWidget);
+      expect(find.bySemanticsLabel('Pinned'), findsOneWidget);
     });
 
     testWidgets('leaves out an empty description', (tester) async {

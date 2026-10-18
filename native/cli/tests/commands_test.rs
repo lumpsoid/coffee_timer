@@ -347,6 +347,59 @@ fn duplicate_of_an_unknown_id_is_the_editor_error() -> TestResult {
     Ok(())
 }
 
+const PINNED_POUR_OVER_LIST: &str = "\
+pourover-uuid  Pour Over [pinned]  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean
+espresso-uuid  Espresso  Coffee: 18 g  Water: 36 g  Time: 0:55  Strong coffee
+";
+
+#[test]
+fn pin_lists_the_recipe_first_with_a_marker_and_it_persists() -> TestResult {
+    let mut session = Session::new()?;
+    assert_eq!(
+        session.run(&["pin", "pourover-uuid"])?,
+        "upserted pourover-uuid\n"
+    );
+    assert_eq!(session.run(&["list"])?, PINNED_POUR_OVER_LIST);
+    assert_eq!(session.reopened()?.run(&["list"])?, PINNED_POUR_OVER_LIST);
+    Ok(())
+}
+
+#[test]
+fn unpin_puts_the_recipe_back_in_its_place() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["pin", "pourover-uuid"])?;
+    assert_eq!(
+        session.run(&["unpin", "pourover-uuid"])?,
+        "upserted pourover-uuid\n"
+    );
+    assert_eq!(session.reopened()?.run(&["list"])?, SEED_LIST);
+    Ok(())
+}
+
+#[test]
+fn pin_of_an_unknown_id_is_the_core_error() -> TestResult {
+    let error = Session::new()?
+        .run(&["pin", "nope"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(error, "No recipe with id nope");
+    Ok(())
+}
+
+#[test]
+fn a_duplicate_of_a_pinned_recipe_is_listed_unpinned_at_the_end() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["pin", "pourover-uuid"])?;
+    session.run(&["duplicate", "pourover-uuid"])?;
+    assert_eq!(
+        session.reopened()?.run(&["list"])?,
+        format!(
+            "{PINNED_POUR_OVER_LIST}r1  Pour Over copy  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean\n"
+        )
+    );
+    Ok(())
+}
+
 #[test]
 fn fast_brew_prints_every_tick_and_effect() -> TestResult {
     let mut session = Session::new()?;

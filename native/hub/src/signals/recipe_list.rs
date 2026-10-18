@@ -18,15 +18,30 @@ pub struct UndoRemoveRecipe {
     pub recipe_id: String,
 }
 
+/// Pin the listed recipe with this id to the top of the list (the list's
+/// long-press Pin).
+#[derive(Deserialize, DartSignal)]
+pub struct PinRecipe {
+    pub recipe_id: String,
+}
+
+/// Unpin the listed recipe with this id (the list's long-press Unpin).
+#[derive(Deserialize, DartSignal)]
+pub struct UnpinRecipe {
+    pub recipe_id: String,
+}
+
 /// The recipe list: a snapshot, then one diff per persisted catalog change.
 /// One type, so the snapshot and the diffs after it arrive in order.
 #[derive(Serialize, RustSignal)]
 pub enum RecipeListUpdate {
-    /// Every recipe, in catalog order. Replaces the list.
+    /// Every recipe, in list order (pinned first). Replaces the list.
     Snapshot { recipes: Vec<RecipeSummary> },
-    /// Replace the row with this id, or insert it at `index` (its 0-based
-    /// place in catalog order: the end for a new recipe, its old place for
-    /// a restored one).
+    /// The row with this id now reads `recipe` and stands at `index`, its
+    /// 0-based place in list order: drop the row with this id if there is
+    /// one, then insert `recipe` at `index`. That one rule covers an edit
+    /// (same place), a new recipe (the end), a restored one (its old place)
+    /// and a pin or unpin (a move).
     Upserted { recipe: RecipeSummary, index: u32 },
     /// Drop the row with this id. `undo_notice`, when present, offers to
     /// undo the removal: the snackbar text (`Deleted V60`), shown once with
@@ -35,15 +50,16 @@ pub enum RecipeListUpdate {
         id: String,
         undo_notice: Option<String>,
     },
-    /// A `RemoveRecipe`, `UndoRemoveRecipe` or `SaveBrewRatio` failed; the
-    /// list is unchanged. A one-shot notice for a snackbar (`Failed to
-    /// delete recipe: …`, `Nothing to undo`, `Can't save this ratio: …`),
-    /// not list state.
+    /// A `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe` or
+    /// `SaveBrewRatio` failed; the list is unchanged. A one-shot notice for
+    /// a snackbar (`Failed to delete recipe: …`, `Nothing to undo`, `Failed
+    /// to save the pin: …`, `Can't save this ratio: …`), not list state.
     Failed { message: String },
 }
 
 /// One row of the recipe list. Labels are values only (`20 g`, `100 g`,
-/// `1:35`); the captions (`Coffee`, …) are UI text.
+/// `1:35`); the captions (`Coffee`, …) are UI text. `pinned` shows the pin
+/// marker and picks the long-press sheet's Pin or Unpin.
 #[derive(Serialize, SignalPiece)]
 pub struct RecipeSummary {
     pub id: String,
@@ -53,6 +69,7 @@ pub struct RecipeSummary {
     pub water_label: String,
     pub time_label: String,
     pub label: RecipeLabel,
+    pub pinned: bool,
 }
 
 /// How a row's card looks, as a printed coffee-bag label. Picked in Rust;

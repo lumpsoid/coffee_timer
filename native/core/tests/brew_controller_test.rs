@@ -9,8 +9,8 @@ use coffee_timer_core::brew::{
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
-    BrewMetrics, CoffeeDose, LabelStyle, ModelError, PreAlertLead, Recipe, RecipeId, RecipeName,
-    RecipeStep, Settings, StepDuration, StepId, Toggle, WaterAmount, WaterScaleError,
+    BrewMetrics, CoffeeDose, LabelStyle, ModelError, Pin, PreAlertLead, Recipe, RecipeId,
+    RecipeName, RecipeStep, Settings, StepDuration, StepId, Toggle, WaterAmount, WaterScaleError,
 };
 
 use StepStatus::{Current, Done, Pending};
@@ -1065,6 +1065,20 @@ fn pour_over() -> Result<(BrewController, RecipeCatalog), Box<dyn std::error::Er
     Ok((brew, catalog))
 }
 
+#[test]
+fn pinning_the_open_recipe_leaves_a_running_brew_alone() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    let _effects = brew.start(0)?;
+    let _effects = brew.tick(&SETTINGS);
+    let before = brew.state().clone();
+
+    let change = catalog.set_pin(&id("p")?, Pin::Pinned)?;
+
+    assert_eq!(brew.on_catalog_change(&change, &catalog), []);
+    assert_eq!(brew.state(), &before, "the recipe it brews is unchanged");
+    Ok(())
+}
+
 fn pour_labels(brew: &BrewController) -> Vec<Option<String>> {
     brew.state()
         .step_rows()
@@ -1676,6 +1690,7 @@ fn saving_the_ratio_updates_the_recipe_list_row() -> TestResult {
     };
     let row = RecipeSummary::of(
         catalog.get(saved).ok_or("no recipe")?,
+        Pin::Unpinned,
         &BrewMetrics::default(),
     );
     // 1:16.7 -> 1:16.5: 247.5 g rounds to 248 g.
