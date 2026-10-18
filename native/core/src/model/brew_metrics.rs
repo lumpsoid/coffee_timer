@@ -1,11 +1,10 @@
 use crate::model::{BrewRatio, Recipe, RecipeStep, StepDuration};
 
-/// The one home for the brew figures shown on a recipe: coffee grams, water
-/// grams, their ratio, and total duration. Every threshold and formula lives here.
+/// The one home for the brew figures derived from a recipe: the ratio of
+/// its stored coffee and water, and its total duration. Every threshold and
+/// formula lives here.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BrewMetrics {
-    coffee_per_step_g: u32,
-    water_per_step_g: u32,
     /// Total brew duration is capped here.
     total_cap_seconds: u32,
 }
@@ -13,32 +12,21 @@ pub struct BrewMetrics {
 impl Default for BrewMetrics {
     fn default() -> Self {
         Self {
-            coffee_per_step_g: 10,
-            water_per_step_g: 50,
             total_cap_seconds: 6000,
         }
     }
 }
 
 impl BrewMetrics {
-    pub fn coffee_grams(&self, recipe: &Recipe) -> u32 {
-        step_count(recipe).saturating_mul(self.coffee_per_step_g)
-    }
-
-    pub fn water_grams(&self, recipe: &Recipe) -> u32 {
-        step_count(recipe).saturating_mul(self.water_per_step_g)
-    }
-
-    /// Water per gram of coffee; none for a recipe without coffee.
-    pub fn ratio(&self, recipe: &Recipe) -> Option<BrewRatio> {
-        BrewRatio::of(self.coffee_grams(recipe), self.water_grams(recipe))
+    /// The recipe's water per gram of its coffee.
+    pub fn ratio(&self, recipe: &Recipe) -> BrewRatio {
+        BrewRatio::of(recipe.coffee(), recipe.water())
     }
 
     /// Coffee-to-water ratio, `1:5`, to one decimal when it is not whole
-    /// (`1:2.5`). A recipe without coffee reads `—`.
+    /// (`1:2.5`).
     pub fn ratio_label(&self, recipe: &Recipe) -> String {
-        self.ratio(recipe)
-            .map_or_else(|| BrewRatio::NONE_LABEL.to_owned(), BrewRatio::label)
+        self.ratio(recipe).label()
     }
 
     /// Sum of every step's duration, clamped to the cap.
@@ -74,10 +62,6 @@ impl BrewMetrics {
         }
         format!("{minutes}:{:02}", total % 60)
     }
-}
-
-fn step_count(recipe: &Recipe) -> u32 {
-    u32::try_from(recipe.steps().len()).unwrap_or(u32::MAX)
 }
 
 fn durations(recipe: &Recipe) -> impl Iterator<Item = StepDuration> + '_ {

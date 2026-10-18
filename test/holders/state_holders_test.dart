@@ -27,11 +27,24 @@ void main() {
           stepName: 'Step 1',
           positionLabel: 'Step 1 of 2',
           remainingLabel: '00:15',
+          nextLabel: 'Next: Step 2 · 0:15',
           sweepSeconds: 15,
         ),
       );
       holder.apply(running);
       expect(holder.state, running);
+
+      final finished = BrewUpdateFinished(
+        recipe: brewRecipe(
+          statuses: [BrewStepStatus.done, BrewStepStatus.done],
+        ),
+        finished: const BrewFinished(
+          totalLabel: '0:30',
+          pouredLabel: 'Poured to 250g',
+        ),
+      );
+      holder.apply(finished);
+      expect(holder.state, finished);
 
       const empty = BrewUpdateEmpty(label: 'Empty recipe');
       holder.apply(empty);

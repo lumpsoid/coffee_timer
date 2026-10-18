@@ -1,8 +1,10 @@
-//! `SettingsController`: load, set_theme and set_accent write through the
-//! store first.
+//! `SettingsController`: load, and every setter writes through the store
+//! first.
 
 use coffee_timer_core::fakes::FakeSettingsStore;
-use coffee_timer_core::model::{AccentColor, AccentOption, Settings, ThemeSelection};
+use coffee_timer_core::model::{
+    AccentColor, AccentOption, PreAlertLead, Settings, ThemeSelection, Toggle,
+};
 use coffee_timer_core::settings::SettingsController;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -83,6 +85,26 @@ fn failed_write_leaves_state_unchanged() -> TestResult {
 
     assert!(controller.set_theme(ThemeSelection::Light).is_err());
     assert!(controller.set_accent(AccentColor::FALLBACK).is_err());
+    assert!(controller.set_sound(Toggle::Off).is_err());
+    assert!(controller.set_vibration(Toggle::Off).is_err());
+    assert!(controller.set_pre_alert(PreAlertLead::Off).is_err());
     assert_eq!(*controller.state(), dark_red());
+    Ok(())
+}
+
+#[test]
+fn cue_setters_change_state_and_persist() -> TestResult {
+    let mut controller = SettingsController::new(Box::new(FakeSettingsStore::default()));
+    controller.set_sound(Toggle::Off)?;
+    controller.set_vibration(Toggle::Off)?;
+    controller.set_pre_alert(PreAlertLead::Seconds10)?;
+    let expected = Settings::FALLBACK
+        .with_sound(Toggle::Off)
+        .with_vibration(Toggle::Off)
+        .with_pre_alert(PreAlertLead::Seconds10);
+    assert_eq!(*controller.state(), expected);
+
+    controller.load()?;
+    assert_eq!(*controller.state(), expected, "stored");
     Ok(())
 }

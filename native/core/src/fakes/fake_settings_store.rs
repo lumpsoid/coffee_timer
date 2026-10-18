@@ -1,8 +1,8 @@
-use crate::model::Settings;
+use crate::model::{Settings, StoredSettings};
 use crate::ports::{SettingsStore, StoreError};
 
 /// In-memory [`SettingsStore`]. Empty, it loads what an empty real store
-/// loads (`Settings::from_storage(None, None)`). Can be told to fail loads or
+/// loads (`Settings::from_storage` of nothing). Can be told to fail loads or
 /// writes.
 #[derive(Debug, Clone, Default)]
 pub struct FakeSettingsStore {
@@ -44,7 +44,7 @@ impl SettingsStore for FakeSettingsStore {
         }
         Ok(self
             .stored
-            .unwrap_or_else(|| Settings::from_storage(None, None)))
+            .unwrap_or_else(|| Settings::from_storage(StoredSettings::default())))
     }
 
     fn save(&mut self, settings: Settings) -> Result<(), StoreError> {

@@ -1,8 +1,8 @@
 //! Settings ↔ settings signals.
 
-use coffee_timer_core::model::{AccentOption, Settings, ThemeSelection};
+use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, ThemeSelection};
 
-use crate::signals::{AccentChoice, SettingsUpdate, ThemeChoice};
+use crate::signals::{AccentChoice, PreAlertChoice, SettingsUpdate, ThemeChoice};
 
 impl From<&Settings> for SettingsUpdate {
     fn from(settings: &Settings) -> Self {
@@ -15,6 +15,16 @@ impl From<&Settings> for SettingsUpdate {
                 .map(|option| AccentChoice {
                     name: option.name().to_owned(),
                     argb: option.color().argb(),
+                })
+                .collect(),
+            sound: settings.sound().is_on(),
+            vibration: settings.vibration().is_on(),
+            pre_alert_seconds: settings.pre_alert().seconds(),
+            pre_alerts: PreAlertLead::ALL
+                .into_iter()
+                .map(|lead| PreAlertChoice {
+                    seconds: lead.seconds(),
+                    label: lead.label(),
                 })
                 .collect(),
         }

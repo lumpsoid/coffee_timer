@@ -2,8 +2,10 @@ use std::fmt;
 
 use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
-use crate::editor::{DraftMode, EditError, EditorStepRow, StepPreset};
-use crate::model::{BrewMetrics, ModelError, Recipe, RecipeId, RecipeName, StepId};
+use crate::editor::{DraftMode, DurationNudge, EditError, EditorStepRow, StepPreset};
+use crate::model::{
+    BrewMetrics, CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, StepId, WaterAmount,
+};
 use crate::ports::IdGen;
 
 /// The recipe being edited, as typed: the whole editor view state.
@@ -18,6 +20,8 @@ pub struct Draft {
     mode: DraftMode,
     name: Field<RecipeName>,
     description: String,
+    coffee: Field<CoffeeDose>,
+    water: Field<WaterAmount>,
     steps: Vec<DraftStep>,
     errors_shown: bool,
     notice: Option<String>,
@@ -25,7 +29,12 @@ pub struct Draft {
 }
 
 impl Draft {
-    /// A new recipe: fresh id, no name, one blank step.
+    /// Text a new recipe's coffee field starts with: a single pour-over cup.
+    const NEW_COFFEE_TEXT: &'static str = "15";
+    /// Text a new recipe's water field starts with, `1:16.7` to the coffee.
+    const NEW_WATER_TEXT: &'static str = "250";
+
+    /// A new recipe: fresh id, no name, a one-cup dose, one blank step.
     pub(crate) fn new(ids: &mut dyn IdGen, metrics: &BrewMetrics) -> Self {
         let id = ids.recipe_id();
         Self {
@@ -33,6 +42,8 @@ impl Draft {
             mode: DraftMode::New,
             name: Field::parse("", RecipeName::try_parse),
             description: String::new(),
+            coffee: Field::parse(Self::NEW_COFFEE_TEXT, CoffeeDose::try_parse_text),
+            water: Field::parse(Self::NEW_WATER_TEXT, WaterAmount::try_parse_text),
             steps: vec![DraftStep::new(ids.step_id(), StepPreset::Blank.step_name())],
             errors_shown: false,
             notice: None,
@@ -47,12 +58,35 @@ impl Draft {
             mode: DraftMode::Existing,
             name: Field::parse(recipe.name().as_str(), RecipeName::try_parse),
             description: recipe.description().to_owned(),
+            coffee: Field::parse(
+                &recipe.coffee().grams().to_string(),
+                CoffeeDose::try_parse_text,
+            ),
+            water: Field::parse(
+                &recipe.water().grams().to_string(),
+                WaterAmount::try_parse_text,
+            ),
             steps: recipe.steps().iter().map(DraftStep::of).collect(),
             errors_shown: false,
             notice: None,
             metrics: *metrics,
         };
         draft.keep_a_step(ids);
+        draft
+    }
+
+    /// A new recipe seeded from `recipe`: its description, coffee, water
+    /// and steps (names, durations, pours), named `<name> copy`, with a
+    /// fresh recipe id and a fresh id for every step row. Nothing is in the
+    /// catalog until it is saved, so it reads and saves as a new recipe.
+    pub(crate) fn copy_of(recipe: &Recipe, ids: &mut dyn IdGen, metrics: &BrewMetrics) -> Self {
+        let mut draft = Self::of(recipe, ids, metrics);
+        draft.id = ids.recipe_id();
+        draft.mode = DraftMode::New;
+        draft.set_name(recipe.name().copy_of().as_str());
+        for step in &mut draft.steps {
+            step.renew_id(ids.step_id());
+        }
         draft
     }
 
@@ -74,6 +108,14 @@ impl Draft {
         raw.clone_into(&mut self.description);
     }
 
+    pub(crate) fn set_coffee(&mut self, raw: &str) {
+        self.coffee = Field::parse(raw, CoffeeDose::try_parse_text);
+    }
+
+    pub(crate) fn set_water(&mut self, raw: &str) {
+        self.water = Field::parse(raw, WaterAmount::try_parse_text);
+    }
+
     pub(crate) fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.step_mut(row)?.set_name(raw);
         Ok(())
@@ -81,6 +123,20 @@ impl Draft {
 
     pub(crate) fn set_step_duration(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.step_mut(row)?.set_duration(raw);
+        Ok(())
+    }
+
+    pub(crate) fn nudge_step_duration(
+        &mut self,
+        row: &StepId,
+        nudge: DurationNudge,
+    ) -> Result<(), EditError> {
+        self.step_mut(row)?.nudge_duration(nudge.delta_seconds());
+        Ok(())
+    }
+
+    pub(crate) fn set_step_water(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
+        self.step_mut(row)?.set_water(raw);
         Ok(())
     }
 
@@ -98,13 +154,23 @@ impl Draft {
         row: &StepId,
         ids: &mut dyn IdGen,
     ) -> Result<(), EditError> {
-        let index = self
-            .steps
-            .iter()
-            .position(|step| step.id() == row)
-            .ok_or_else(|| EditError::UnknownStep(row.clone()))?;
+        let index = self.index_of(row)?;
         self.steps.remove(index);
         self.keep_a_step(ids);
+        Ok(())
+    }
+
+    /// Moves the row to position `to` (0-based, counted after the move),
+    /// carrying its typed text and errors; the other rows keep their order.
+    /// Moving to its own position changes nothing.
+    pub(crate) fn move_step(&mut self, row: &StepId, to: usize) -> Result<(), EditError> {
+        let from = self.index_of(row)?;
+        let rows = self.steps.len();
+        if to >= rows {
+            return Err(EditError::StepPositionOutOfRange { to, rows });
+        }
+        let step = self.steps.remove(from);
+        self.steps.insert(to, step);
         Ok(())
     }
 
@@ -114,6 +180,8 @@ impl Draft {
     pub(crate) fn submit(&mut self) -> Option<Recipe> {
         self.errors_shown = true;
         let name = self.name.value()?.clone();
+        let coffee = *self.coffee.value()?;
+        let water = *self.water.value()?;
         let steps = self
             .steps
             .iter()
@@ -124,6 +192,8 @@ impl Draft {
             self.id.clone(),
             name,
             self.description.trim().to_owned(),
+            coffee,
+            water,
             steps,
         ))
     }
@@ -164,11 +234,48 @@ impl Draft {
         &self.description
     }
 
+    /// The coffee grams as typed.
+    pub fn coffee(&self) -> &str {
+        self.coffee.raw()
+    }
+
+    /// `Enter grams` or `1–200 g`, once errors are shown.
+    pub fn coffee_error(&self) -> Option<String> {
+        self.shown(self.coffee.error())
+    }
+
+    /// The water grams as typed.
+    pub fn water(&self) -> &str {
+        self.water.raw()
+    }
+
+    /// `Enter grams` or `1–2000 g`, once errors are shown.
+    pub fn water_error(&self) -> Option<String> {
+        self.shown(self.water.error())
+    }
+
     /// Live `M:SS` total of the typed durations, read leniently and capped
     /// like a saved recipe's total.
     pub fn total_label(&self) -> String {
         self.metrics
             .duration_label_of(self.steps.iter().map(DraftStep::live_duration))
+    }
+
+    /// A gentle note when the typed step pours do not add up to the
+    /// recipe's water, `Step pours add up to 200 g of 250 g`. Not an error:
+    /// a recipe may leave water unpoured (a bypass) or keep the two apart.
+    /// None while no step pours, or the water field is invalid; invalid
+    /// pours are left out of the sum (their own errors cover them).
+    pub fn pour_hint(&self) -> Option<String> {
+        let water = self.water.value()?.grams();
+        let mut pours = self
+            .steps
+            .iter()
+            .filter_map(|step| step.water().value().copied().flatten())
+            .peekable();
+        pours.peek()?;
+        let poured = pours.fold(0_u32, |sum, pour| sum.saturating_add(pour.grams()));
+        (poured != water).then(|| format!("Step pours add up to {poured} g of {water} g"))
     }
 
     /// Why the last save or delete failed in the store, for a snackbar; none
@@ -190,12 +297,22 @@ impl Draft {
                 duration_text: step.duration().raw().to_owned(),
                 duration_label: step.live_duration().mmss(),
                 duration_error: self.shown(step.duration().error()),
+                duration_revision: step.duration_revision(),
+                water_text: step.water().raw().to_owned(),
+                water_error: self.shown(step.water().error()),
             })
             .collect()
     }
 
     fn shown(&self, error: Option<&ModelError>) -> Option<String> {
         error.filter(|_| self.errors_shown).map(ToString::to_string)
+    }
+
+    fn index_of(&self, row: &StepId) -> Result<usize, EditError> {
+        self.steps
+            .iter()
+            .position(|step| step.id() == row)
+            .ok_or_else(|| EditError::UnknownStep(row.clone()))
     }
 
     fn step_mut(&mut self, row: &StepId) -> Result<&mut DraftStep, EditError> {

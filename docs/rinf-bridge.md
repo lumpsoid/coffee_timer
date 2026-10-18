@@ -78,7 +78,8 @@ Two ways in, one rule for choosing:
   depend on rinf.
 - No controller reads the clock: the timer counts the ticks it is given.
 - An `Effect` is a decision already made, for the shell to carry out:
-  `PlayStepSound`, `Vibrate { ms }`, `KeepScreenOn(bool)`,
+  `PlayStepSound`, `Vibrate { ms }`, `VibratePattern { pattern_ms }`,
+  `KeepScreenOn(bool)`,
   `ShowBrewNotification(BrewNotice)`, `HideBrewNotification`.
 - A `CatalogChange` (`Upserted` / `Removed`) is already persisted when it is
   returned. The shell passes it on unconditionally: send it as a list diff,
@@ -156,22 +157,35 @@ as the catalog now holds it, or `Removed` when it holds no such id.
 #[derive(Serialize, RustSignal)]
 pub enum RecipeListUpdate {
     Snapshot { recipes: Vec<RecipeSummary> },
-    Upserted { recipe: RecipeSummary },
-    Removed { id: String },
+    Upserted { recipe: RecipeSummary, index: u32 },
+    Removed { id: String, undo_notice: Option<String> },
     Failed { message: String },
+    Notice { message: String },
 }
 ```
 
-`Failed` is a one-shot notice, not state: a list delete (`RemoveRecipe`)
-failed, the list is unchanged, and Dart shows `message` (core's
-`DeleteError` text) as a snackbar each time one arrives.
+`Upserted` places the row: Dart drops any row with its id, then inserts it
+at `index` (list order). An edit keeps the index, and a pin or unpin moves
+it.
+
+`Failed` is a one-shot notice, not state: a list delete (`RemoveRecipe`),
+an undo (`UndoRemoveRecipe`), a pin (`PinRecipe` / `UnpinRecipe`), a
+ratio save (`SaveBrewRatio`), an export (`ExportRecipes`) or an import
+(`ImportRecipes`) failed, the list is unchanged, and Dart shows
+`message` (core's `DeleteError`, `RestoreError`, `PinError`,
+`SaveRatioError`, `ExportError` or `ImportError` text) as a snackbar
+each time one arrives. `Notice { message }` is the same for an export's
+or import's success (`Copied 2 recipes`). `Removed`'s `undo_notice` is one-shot the same way:
+present when core offers to undo that removal, shown once as a snackbar
+with an Undo.
 
 One type means one Dart stream, so a snapshot and the diffs after it
 arrive in order. Splitting them across signal types gives up that ordering.
 
 Platform effects go on their own signal, `PlatformEffect` (an enum:
-`PlayStepSound`, `Vibrate`, `KeepScreenOn { on }`,
-`ShowBrewNotification { title, next }`, `HideBrewNotification`). They are
+`PlayStepSound`, `Vibrate`, `VibratePattern`, `KeepScreenOn { on }`,
+`ShowBrewNotification { title, next }`, `HideBrewNotification`,
+`CopyToClipboard { text }`). They are
 commands, not state: Dart performs them and keeps nothing.
 
 ### Snapshot handshake

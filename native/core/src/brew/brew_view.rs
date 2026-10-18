@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
-use crate::brew::{RatioSetting, RunningStep, StepRow, StepStatus};
-use crate::model::{BrewMetrics, BrewRatio, LabelStyle, Recipe, RecipeId};
+use crate::brew::{FinishedBrew, RatioSetting, RunningStep, StepRow, StepStatus};
+use crate::model::{BrewMetrics, BrewRatio, LabelStyle, Pour, PourScale, Recipe, RecipeId};
 
 /// The open recipe as the brew page shows it. Built once per recipe version
 /// and ratio; the timer's position is kept beside it in
@@ -15,34 +15,48 @@ pub struct BrewView {
     ratio: RatioSetting,
     duration_label: String,
     style: LabelStyle,
+    /// Each step's pour at the water shown, in step order.
+    pours: Vec<Option<Pour>>,
+    /// What follows each step, in step order (see [`BrewView::next_label`]).
+    next_labels: Vec<String>,
 }
 
 impl BrewView {
+    /// [`BrewView::next_label`] on the last step: nothing follows.
+    pub const LAST_STEP_LABEL: &'static str = "Last step";
+
     /// `recipe` at the ratio `adjusted` on the brew page, or at its own
-    /// ratio. An adjusted ratio equal to the recipe's is no adjustment, and a
-    /// recipe without coffee keeps none.
+    /// ratio. An adjusted ratio equal to the recipe's is no adjustment.
+    /// The step pours follow the water ([`PourScale`]).
     pub(crate) fn of(recipe: Recipe, metrics: &BrewMetrics, adjusted: Option<BrewRatio>) -> Self {
-        let coffee = metrics.coffee_grams(&recipe);
-        let ratio = match (metrics.ratio(&recipe), adjusted) {
-            (None, _) => RatioSetting::NoCoffee,
-            (Some(own), Some(ratio)) if ratio != own => RatioSetting::Adjusted(ratio),
-            (Some(own), _) => RatioSetting::Recipe(own),
+        let coffee = recipe.coffee();
+        let own = metrics.ratio(&recipe);
+        let ratio = match adjusted {
+            Some(ratio) if ratio != own => RatioSetting::Adjusted(ratio),
+            Some(_) | None => RatioSetting::Recipe(own),
         };
         let water = match ratio {
             RatioSetting::Adjusted(ratio) => ratio.water_grams(coffee),
-            RatioSetting::NoCoffee | RatioSetting::Recipe(_) => metrics.water_grams(&recipe),
+            RatioSetting::Recipe(_) => recipe.water().grams(),
         };
+        let pours = PourScale::new(recipe.water(), water).pours(recipe.steps());
+        let next_labels = next_labels(&recipe, &pours, metrics);
         Self {
-            coffee_label: format!("{coffee}g"),
+            coffee_label: format!("{}g", coffee.grams()),
             water_label: format!("{water}g"),
-            ratio_label: ratio
-                .ratio()
-                .map_or_else(|| BrewRatio::NONE_LABEL.to_owned(), BrewRatio::label),
+            ratio_label: ratio.ratio().label(),
             ratio,
             duration_label: metrics.duration_label(&recipe),
             style: LabelStyle::of(&recipe, metrics),
+            pours,
+            next_labels,
             recipe,
         }
+    }
+
+    /// The recipe shown, as the catalog held it when the page opened it.
+    pub(crate) fn recipe(&self) -> &Recipe {
+        &self.recipe
     }
 
     /// The same recipe at the ratio `adjusted`, or at its own.
@@ -54,7 +68,26 @@ impl BrewView {
     /// number `run`; none past the end.
     pub(crate) fn step(&self, run: u64, index: usize) -> Option<RunningStep> {
         let step = self.recipe.steps().get(index)?;
-        Some(RunningStep::begin(run, index, step.clone()))
+        Some(RunningStep::begin(run, index, index, step.clone()))
+    }
+
+    /// The step after `step`, in the same run; none after the last.
+    pub(crate) fn next_step(&self, step: &RunningStep) -> Option<RunningStep> {
+        let index = step.index() + 1;
+        let next = self.recipe.steps().get(index)?;
+        Some(RunningStep::begin(
+            step.run(),
+            step.first(),
+            index,
+            next.clone(),
+        ))
+    }
+
+    /// How a run that started at step `first` ended: the steps it brewed,
+    /// timed by `metrics`.
+    pub(crate) fn finished(&self, first: usize, metrics: &BrewMetrics) -> FinishedBrew {
+        let brewed = self.recipe.steps().iter().skip(first);
+        FinishedBrew::new(metrics.duration_label_of(brewed.map(|step| step.duration())))
     }
 
     /// The name of the step at `index`; none past the end.
@@ -66,13 +99,14 @@ impl BrewView {
         self.recipe.steps().len()
     }
 
-    /// Every step with its status: before `current` done, at it current,
-    /// after it pending. With no current step, all pending.
+    /// Every step with its status: before the `current` index done, at it
+    /// the given status (`Current`, or `Paused`), after it pending. With no
+    /// current step, all pending; with one past the last step, all done.
     ///
     /// Each step also gets its share of the whole brew, laid end to end from
     /// 0 to 1, for the dial's step track. A brew of 0-second steps shares it
     /// equally.
-    pub(crate) fn step_rows(&self, current: Option<usize>) -> Vec<StepRow> {
+    pub(crate) fn step_rows(&self, current: Option<(usize, StepStatus)>) -> Vec<StepRow> {
         let steps = self.recipe.steps();
         let seconds: Vec<u32> = steps.iter().map(|s| s.duration().seconds()).collect();
         let weights = if seconds.iter().all(|&s| s == 0) {
@@ -85,24 +119,54 @@ impl BrewView {
         steps
             .iter()
             .zip(weights.iter())
+            .zip(self.pours.iter())
             .enumerate()
-            .map(|(index, (step, &weight))| {
+            .map(|(index, ((step, &weight), pour))| {
                 let start = elapsed;
                 elapsed = elapsed.saturating_add(weight);
                 StepRow {
                     number_label: (index + 1).to_string(),
                     name: step.name().to_owned(),
                     duration_label: step.duration().seconds_label(),
-                    status: match current.map(|c| index.cmp(&c)) {
-                        Some(Ordering::Less) => StepStatus::Done,
-                        Some(Ordering::Equal) => StepStatus::Current,
-                        Some(Ordering::Greater) | None => StepStatus::Pending,
+                    pour_label: pour.map(Pour::label),
+                    status: match current.map(|(c, status)| (index.cmp(&c), status)) {
+                        Some((Ordering::Less, _)) => StepStatus::Done,
+                        Some((Ordering::Equal, status)) => status,
+                        Some((Ordering::Greater, _)) | None => StepStatus::Pending,
                     },
                     track_start: f64::from(start) / whole,
                     track_end: f64::from(elapsed) / whole,
                 }
             })
             .collect()
+    }
+
+    /// What the scale should read once step `index` has poured, `Pour to
+    /// 150g`: its pour and every earlier one, at the water shown. None for
+    /// a step that pours nothing, or past the end.
+    pub fn pour_to_label(&self, index: usize) -> Option<String> {
+        self.pours.get(index).copied().flatten().map(Pour::to_label)
+    }
+
+    /// What the scale reads once every step has poured, `Poured to 300g`,
+    /// at the water shown; none for a recipe whose steps pour nothing.
+    pub fn poured_label(&self) -> Option<String> {
+        self.pours
+            .iter()
+            .rev()
+            .find_map(|pour| *pour)
+            .map(Pour::poured_to_label)
+    }
+
+    /// What comes after step `index`, shown under the dial while it runs
+    /// or is paused: `Next: Pour 2 · 0:45 · 100g` (the pour only if that
+    /// step pours, at the water shown), or [`BrewView::LAST_STEP_LABEL`] on
+    /// the last step (and past it).
+    pub fn next_label(&self, index: usize) -> String {
+        self.next_labels
+            .get(index)
+            .cloned()
+            .unwrap_or_else(|| Self::LAST_STEP_LABEL.to_owned())
     }
 
     /// Where step `index` sits in the brew, `Step 2 of 3`.
@@ -132,7 +196,7 @@ impl BrewView {
         &self.water_label
     }
 
-    /// Water per gram of coffee, `1:5`; `—` without coffee.
+    /// Water per gram of coffee, `1:5`.
     pub fn ratio_label(&self) -> &str {
         &self.ratio_label
     }
@@ -151,4 +215,26 @@ impl BrewView {
     pub fn duration_label(&self) -> &str {
         &self.duration_label
     }
+}
+
+/// For each step, the label of the one after it; the last reads
+/// [`BrewView::LAST_STEP_LABEL`].
+fn next_labels(recipe: &Recipe, pours: &[Option<Pour>], metrics: &BrewMetrics) -> Vec<String> {
+    let steps = recipe.steps();
+    (1..=steps.len())
+        .map(
+            |next| match (steps.get(next), pours.get(next).copied().flatten()) {
+                (Some(step), pour) => {
+                    let duration = metrics.duration_label_of([step.duration()]);
+                    match pour {
+                        Some(pour) => {
+                            format!("Next: {} · {duration} · {}", step.name(), pour.label())
+                        }
+                        None => format!("Next: {} · {duration}", step.name()),
+                    }
+                }
+                (None, _) => BrewView::LAST_STEP_LABEL.to_owned(),
+            },
+        )
+        .collect()
 }

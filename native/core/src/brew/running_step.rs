@@ -1,9 +1,11 @@
 use crate::model::{RecipeStep, StepDuration};
 
-/// The step a running brew is on, and how long it has left.
+/// The step a running or paused brew is on, and how long it has left.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunningStep {
     run: u64,
+    /// The step this run started from.
+    first: usize,
     index: usize,
     step: RecipeStep,
     remaining: StepDuration,
@@ -11,11 +13,12 @@ pub struct RunningStep {
 
 impl RunningStep {
     /// Starts `step` (at `index` in its recipe) with its full duration left,
-    /// as part of start number `run`.
-    pub(crate) fn begin(run: u64, index: usize, step: RecipeStep) -> Self {
+    /// as part of start number `run`, which began at step `first`.
+    pub(crate) fn begin(run: u64, first: usize, index: usize, step: RecipeStep) -> Self {
         let remaining = step.duration();
         Self {
             run,
+            first,
             index,
             step,
             remaining,
@@ -37,12 +40,23 @@ impl RunningStep {
         self.run
     }
 
+    /// The step this run started from: 0 for the whole recipe, more after
+    /// a long-press on a later step. Step changes keep it.
+    pub fn first(&self) -> usize {
+        self.first
+    }
+
     pub fn index(&self) -> usize {
         self.index
     }
 
     pub fn name(&self) -> &str {
         self.step.name()
+    }
+
+    /// The step's full duration.
+    pub fn duration(&self) -> StepDuration {
+        self.step.duration()
     }
 
     pub fn remaining(&self) -> StepDuration {

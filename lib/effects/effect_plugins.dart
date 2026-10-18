@@ -11,17 +11,22 @@ abstract interface class EffectPlugins {
 
   Future<void> vibrate(int ms);
 
+  /// Alternating pause and buzz lengths in ms, starting with a pause.
+  Future<void> vibratePattern(List<int> patternMs);
+
   Future<void> keepScreenOn({required bool on});
 
   Future<void> showBrewNotification({required String title, String? next});
 
   Future<void> hideBrewNotification();
+
+  Future<void> copyToClipboard(String text);
 }
 
-/// [EffectPlugins] on `audioplayers`, `vibration` and `wakelock_plus`, and
-/// the app's own Android brew-notification channel (`MainActivity.kt`),
-/// which other platforms skip. The step sound is loaded once, when this is
-/// created.
+/// [EffectPlugins] on `audioplayers`, `vibration` and `wakelock_plus`,
+/// Flutter's `Clipboard`, and the app's own Android brew-notification
+/// channel (`MainActivity.kt`), which other platforms skip. The step sound
+/// is loaded once, when this is created.
 class PluginEffects implements EffectPlugins {
   PluginEffects() : _player = AudioPlayer() {
     _loaded = _load();
@@ -52,6 +57,10 @@ class PluginEffects implements EffectPlugins {
   Future<void> vibrate(int ms) => Vibration.vibrate(duration: ms);
 
   @override
+  Future<void> vibratePattern(List<int> patternMs) =>
+      Vibration.vibrate(pattern: patternMs);
+
+  @override
   Future<void> keepScreenOn({required bool on}) =>
       WakelockPlus.toggle(enable: on);
 
@@ -72,4 +81,8 @@ class PluginEffects implements EffectPlugins {
     if (!_hasBrewNotification) return;
     await _brewNotification.invokeMethod<void>('hide');
   }
+
+  @override
+  Future<void> copyToClipboard(String text) =>
+      Clipboard.setData(ClipboardData(text: text));
 }

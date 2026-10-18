@@ -1,7 +1,11 @@
-use crate::model::{ModelError, RecipeId, RecipeName, RecipeStep};
+use crate::model::{
+    CoffeeDose, ModelError, PourScale, RecipeId, RecipeName, RecipeStep, WaterAmount,
+    WaterScaleError,
+};
 
-/// A brew recipe. Every field is a valid-by-construction value; the derived
-/// brew figures live in `BrewMetrics`, not here.
+/// A brew recipe. Every field is a valid-by-construction value: the coffee
+/// dose and the total water are stored, the figures derived from them and
+/// the steps (ratio, total time) live in `BrewMetrics`, not here.
 ///
 /// Change is expressed as named operations that consume the recipe and
 /// return the changed one — there are no setters.
@@ -10,6 +14,8 @@ pub struct Recipe {
     id: RecipeId,
     name: RecipeName,
     description: String,
+    coffee: CoffeeDose,
+    water: WaterAmount,
     steps: Vec<RecipeStep>,
 }
 
@@ -18,19 +24,23 @@ impl Recipe {
         id: RecipeId,
         name: RecipeName,
         description: String,
+        coffee: CoffeeDose,
+        water: WaterAmount,
         steps: Vec<RecipeStep>,
     ) -> Self {
         Self {
             id,
             name,
             description,
+            coffee,
+            water,
             steps,
         }
     }
 
     /// A fresh recipe with no description and no steps.
-    pub fn blank(id: RecipeId, name: RecipeName) -> Self {
-        Self::new(id, name, String::new(), Vec::new())
+    pub fn blank(id: RecipeId, name: RecipeName, coffee: CoffeeDose, water: WaterAmount) -> Self {
+        Self::new(id, name, String::new(), coffee, water, Vec::new())
     }
 
     pub fn renamed(self, name: RecipeName) -> Self {
@@ -61,6 +71,42 @@ impl Recipe {
         Ok(self)
     }
 
+    /// The recipe at `water_grams` of total water, the coffee kept: what a
+    /// brew at an adjusted ratio shows, made the recipe's own. Every step's
+    /// pour is scaled by [`PourScale`], the rule the brew page shows them
+    /// by, so the stored pours are the ones shown. The total water and each
+    /// scaled pour must be a [`WaterAmount`]; a step that pours nothing
+    /// still pours nothing.
+    pub fn with_water_scaled_to(self, water_grams: u32) -> Result<Self, WaterScaleError> {
+        let water = WaterAmount::try_parse(i64::from(water_grams))
+            .map_err(|_| WaterScaleError::Water { grams: water_grams })?;
+        let pours = PourScale::new(self.water, water_grams).pours(&self.steps);
+        let steps = self
+            .steps
+            .into_iter()
+            .zip(pours)
+            .enumerate()
+            .map(|(index, (step, pour))| {
+                let Some(pour) = pour else {
+                    return Ok(step);
+                };
+                let grams = pour.grams();
+                let amount = WaterAmount::try_parse(i64::from(grams)).map_err(|_| {
+                    WaterScaleError::Pour {
+                        position: index + 1,
+                        grams,
+                    }
+                })?;
+                Ok(step.pouring(Some(amount)))
+            })
+            .collect::<Result<_, _>>()?;
+        Ok(Self {
+            water,
+            steps,
+            ..self
+        })
+    }
+
     pub fn id(&self) -> &RecipeId {
         &self.id
     }
@@ -71,6 +117,16 @@ impl Recipe {
 
     pub fn description(&self) -> &str {
         &self.description
+    }
+
+    /// Ground coffee the recipe uses.
+    pub fn coffee(&self) -> CoffeeDose {
+        self.coffee
+    }
+
+    /// Water the whole recipe uses.
+    pub fn water(&self) -> WaterAmount {
+        self.water
     }
 
     pub fn steps(&self) -> &[RecipeStep] {

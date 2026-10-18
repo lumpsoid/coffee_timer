@@ -3,14 +3,22 @@
 
 use std::io::{self, Write};
 
-use coffee_timer_core::brew::{BrewState, Effect, RatioSetting, StepRow, StepStatus};
+use coffee_timer_core::brew::{
+    BrewState, BrewView, Effect, RatioSetting, RunningStep, StepRow, StepStatus,
+};
 use coffee_timer_core::catalog::{CatalogChange, RecipeSummary};
 use coffee_timer_core::editor::EditorState;
-use coffee_timer_core::model::{AccentOption, Settings, ThemeSelection};
+use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, ThemeSelection};
 
+/// One list row; a pinned recipe's name is followed by `[pinned]`.
 pub fn summary(out: &mut impl Write, summary: &RecipeSummary) -> io::Result<()> {
+    let pinned = if summary.pin.is_pinned() {
+        " [pinned]"
+    } else {
+        ""
+    };
     let line = format!(
-        "{}  {}  Coffee: {}  Water: {}  Time: {}  {}",
+        "{}  {}{pinned}  Coffee: {}  Water: {}  Time: {}  {}",
         summary.id.as_str(),
         summary.name,
         summary.coffee_label,
@@ -30,7 +38,7 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
     writeln!(out, "{}", view.description())?;
     let adjusted = match view.ratio() {
         RatioSetting::Adjusted(_) => " (adjusted)",
-        RatioSetting::NoCoffee | RatioSetting::Recipe(_) => "",
+        RatioSetting::Recipe(_) => "",
     };
     writeln!(
         out,
@@ -41,9 +49,12 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
         view.duration_label()
     )?;
     for row in state.step_rows() {
+        let pour = row
+            .pour_label
+            .map_or_else(String::new, |pour| format!("  {pour}"));
         writeln!(
             out,
-            "  {}. {}  {}  {}",
+            "  {}. {}  {}{pour}  {}",
             row.number_label,
             row.name,
             row.duration_label,
@@ -53,13 +64,39 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
     Ok(())
 }
 
-/// One line of the timer: the countdown and step while running, the total
-/// while idle; then every step's status.
+/// One line of the timer: the countdown and step while running or paused,
+/// with its "pour to" target if it pours and what comes next, the total
+/// while idle, the time
+/// brewed (and the scale's final reading, if any step pours) once done;
+/// then every step's status.
 pub fn timer_line(state: &BrewState) -> String {
+    let pour_to = |view: &BrewView, step: &RunningStep| {
+        view.pour_to_label(step.index())
+            .map_or_else(String::new, |target| format!(" ({target})"))
+    };
     let timer = match state {
         BrewState::Empty => BrewState::EMPTY_LABEL.to_owned(),
         BrewState::Idle(view) => format!("idle {}", view.duration_label()),
-        BrewState::Running(_, step) => format!("{} {}", step.remaining_label(), step.name()),
+        BrewState::Running(view, step) => format!(
+            "{} {}{}  {}",
+            step.remaining_label(),
+            step.name(),
+            pour_to(view, step),
+            view.next_label(step.index())
+        ),
+        BrewState::Paused(view, step) => format!(
+            "paused {} {}{}  {}",
+            step.remaining_label(),
+            step.name(),
+            pour_to(view, step),
+            view.next_label(step.index())
+        ),
+        BrewState::Finished(view, finished) => format!(
+            "done {}{}",
+            finished.total_label(),
+            view.poured_label()
+                .map_or_else(String::new, |poured| format!(" ({poured})"))
+        ),
     };
     format!("{timer}  |  {}", statuses(&state.step_rows()))
 }
@@ -68,6 +105,10 @@ pub fn effects(out: &mut impl Write, effects: &[Effect]) -> io::Result<()> {
     for effect in effects {
         match effect {
             Effect::Vibrate { ms } => writeln!(out, "[vibrate {ms}ms]")?,
+            Effect::VibratePattern { pattern_ms } => {
+                let pattern: Vec<String> = pattern_ms.iter().map(u32::to_string).collect();
+                writeln!(out, "[vibrate pattern {}ms]", pattern.join("/"))?;
+            }
             Effect::PlayStepSound => writeln!(out, "[sound]")?,
             Effect::KeepScreenOn(true) => writeln!(out, "[screen on]")?,
             Effect::KeepScreenOn(false) => writeln!(out, "[screen off]")?,
@@ -91,6 +132,9 @@ pub fn change(out: &mut impl Write, change: &CatalogChange) -> io::Result<()> {
 pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
     writeln!(out, "Theme: {}", settings.theme().storage_value())?;
     writeln!(out, "Accent: {}", settings.accent().to_hex())?;
+    writeln!(out, "Sound: {}", settings.sound().storage_value())?;
+    writeln!(out, "Vibration: {}", settings.vibration().storage_value())?;
+    writeln!(out, "Pre-alert: {}", settings.pre_alert().label())?;
     let themes: Vec<&str> = ThemeSelection::ALL
         .into_iter()
         .map(ThemeSelection::storage_value)
@@ -100,6 +144,15 @@ pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
     for option in AccentOption::ALL {
         writeln!(out, "  {:<7} {}", option.name(), option.color().to_hex())?;
     }
+    let leads: Vec<String> = PreAlertLead::ALL
+        .into_iter()
+        .map(|lead| lead.seconds().to_string())
+        .collect();
+    writeln!(
+        out,
+        "Pre-alert options: {} (seconds; 0 is off)",
+        leads.join(", ")
+    )?;
     Ok(())
 }
 
@@ -112,15 +165,32 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
     let name = draft
         .name_error()
         .map(|error| format!("Recipe name \"{}\": {error}", draft.name()));
-    let steps = draft.step_rows().into_iter().filter_map(|row| {
-        row.duration_error.map(|error| {
+    let coffee = draft
+        .coffee_error()
+        .map(|error| format!("Coffee \"{}\": {error}", draft.coffee()));
+    let water = draft
+        .water_error()
+        .map(|error| format!("Water \"{}\": {error}", draft.water()));
+    let steps = draft.step_rows().into_iter().flat_map(|row| {
+        let duration = row.duration_error.map(|error| {
             format!(
                 "{} \"{}\", duration \"{}\": {error}",
                 row.name_label, row.name, row.duration_text
             )
-        })
+        });
+        let water = row.water_error.map(|error| {
+            format!(
+                "{} \"{}\", grams \"{}\": {error}",
+                row.name_label, row.name, row.water_text
+            )
+        });
+        duration.into_iter().chain(water)
     });
-    name.into_iter().chain(steps).collect()
+    name.into_iter()
+        .chain(coffee)
+        .chain(water)
+        .chain(steps)
+        .collect()
 }
 
 fn statuses(rows: &[StepRow]) -> String {
@@ -134,6 +204,7 @@ fn status(status: StepStatus) -> &'static str {
     match status {
         StepStatus::Done => "done",
         StepStatus::Current => "current",
+        StepStatus::Paused => "paused",
         StepStatus::Pending => "pending",
     }
 }

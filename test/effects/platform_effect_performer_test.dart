@@ -22,6 +22,10 @@ class _FakePlugins implements EffectPlugins {
   Future<void> vibrate(int ms) async => calls.add('vibrate $ms');
 
   @override
+  Future<void> vibratePattern(List<int> patternMs) async =>
+      calls.add('vibrate pattern ${patternMs.join('/')}');
+
+  @override
   Future<void> keepScreenOn({required bool on}) async =>
       calls.add('screen $on');
 
@@ -33,6 +37,9 @@ class _FakePlugins implements EffectPlugins {
 
   @override
   Future<void> hideBrewNotification() async => calls.add('notify off');
+
+  @override
+  Future<void> copyToClipboard(String text) async => calls.add('copy $text');
 }
 
 void main() {
@@ -47,6 +54,9 @@ void main() {
   test('each variant is one plugin call', () async {
     await performer.perform(const PlatformEffectPlayStepSound());
     await performer.perform(const PlatformEffectVibrate(ms: 100));
+    await performer.perform(
+      const PlatformEffectVibratePattern(patternMs: [0, 400, 200, 400]),
+    );
     await performer.perform(const PlatformEffectKeepScreenOn(on: true));
     await performer.perform(const PlatformEffectKeepScreenOn(on: false));
     await performer.perform(
@@ -59,15 +69,20 @@ void main() {
       const PlatformEffectShowBrewNotification(title: 'Pour · 00:10'),
     );
     await performer.perform(const PlatformEffectHideBrewNotification());
+    await performer.perform(
+      const PlatformEffectCopyToClipboard(text: '{"version":1}'),
+    );
 
     expect(plugins.calls, [
       'sound',
       'vibrate 100',
+      'vibrate pattern 0/400/200/400',
       'screen true',
       'screen false',
       'notify Bloom · 00:35 | Next: Pour',
       'notify Pour · 00:10 | null',
       'notify off',
+      'copy {"version":1}',
     ]);
   });
 

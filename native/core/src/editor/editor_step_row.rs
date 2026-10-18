@@ -16,4 +16,11 @@ pub struct EditorStepRow {
     pub duration_label: String,
     /// `Enter seconds` or `0–5999 seconds`, once errors are shown.
     pub duration_error: Option<String>,
+    /// Moves on each time core replaces the duration text (a nudge), never
+    /// while it is typed: a field showing an older revision reloads the text.
+    pub duration_revision: u32,
+    /// The grams poured as typed; blank is no pour.
+    pub water_text: String,
+    /// `Enter grams` or `1–2000 g`, once errors are shown.
+    pub water_error: Option<String>,
 }

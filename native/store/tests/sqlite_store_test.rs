@@ -1,12 +1,12 @@
-//! `SqliteStore`: schema v1 and seed, recipe order, step replacement,
+//! `SqliteStore`: schema v4 and seed, recipe doses, step pours, recipe pins, recipe order, appending in one transaction, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepDuration, StepId,
-    ThemeSelection,
+    AccentColor, CoffeeDose, Pin, PreAlertLead, Recipe, RecipeId, RecipeName, RecipeStep, Settings,
+    StepDuration, StepId, StoredSettings, ThemeSelection, Toggle, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
 use coffee_timer_core::settings::SettingsController;
@@ -80,6 +80,7 @@ fn step(id: &str, name: &str, seconds: i64) -> Outcome<RecipeStep> {
         StepId::try_parse(id)?,
         name.to_owned(),
         StepDuration::try_parse(seconds)?,
+        None,
     ))
 }
 
@@ -88,8 +89,27 @@ fn recipe(id: &str, name: &str, steps: Vec<RecipeStep>) -> Outcome<Recipe> {
         RecipeId::try_parse(id)?,
         RecipeName::try_parse(name)?,
         format!("{name} notes"),
+        CoffeeDose::try_parse(20)?,
+        WaterAmount::try_parse(300)?,
         steps,
     ))
+}
+
+/// `(id, coffee grams, water grams)` of each recipe.
+fn doses(recipes: &[Recipe]) -> Vec<(&str, u32, u32)> {
+    recipes
+        .iter()
+        .map(|r| (r.id().as_str(), r.coffee().grams(), r.water().grams()))
+        .collect()
+}
+
+/// `(step id, water grams)` of every step, in catalog order.
+fn pours(recipes: &[Recipe]) -> Vec<(&str, Option<u32>)> {
+    recipes
+        .iter()
+        .flat_map(Recipe::steps)
+        .map(|s| (s.id().as_str(), s.water().map(WaterAmount::grams)))
+        .collect()
 }
 
 fn ids(recipes: &[Recipe]) -> Vec<&str> {
@@ -110,13 +130,108 @@ fn fresh_database_is_seeded_with_espresso_then_pour_over() -> TestResult {
 }
 
 #[test]
-fn opened_file_is_at_schema_v1() -> TestResult {
+fn fresh_database_seeds_real_doses() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    assert_eq!(
+        doses(&store.load_all()?),
+        [("espresso-uuid", 18, 36), ("pourover-uuid", 15, 250)]
+    );
+    Ok(())
+}
+
+#[test]
+fn doses_round_trip_and_follow_an_upsert() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let first = recipe("r1", "V60", vec![step("s1", "Pour", 90)?])?;
+    store.upsert(&first)?;
+    let edited = Recipe::new(
+        first.id().clone(),
+        first.name().clone(),
+        first.description().to_owned(),
+        CoffeeDose::try_parse(16)?,
+        WaterAmount::try_parse(256)?,
+        first.steps().to_vec(),
+    );
+    store.upsert(&edited)?;
+    let loaded = store.load_all()?;
+    assert_eq!(doses(&loaded).last(), Some(&("r1", 16, 256)));
+    Ok(())
+}
+
+#[test]
+fn fresh_database_seeds_the_pour_over_pours() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    assert_eq!(
+        pours(&store.load_all()?),
+        [
+            ("step1", None),
+            ("step2", None),
+            ("step3", None),
+            ("step4", Some(50)),
+            ("step5", Some(200)),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn step_pours_round_trip() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let bloom = RecipeStep::new(
+        StepId::try_parse("s1")?,
+        "Bloom".to_owned(),
+        StepDuration::try_parse(30)?,
+        Some(WaterAmount::try_parse(45)?),
+    );
+    store.upsert(&recipe("r1", "V60", vec![bloom, step("s2", "Wait", 60)?])?)?;
+    let loaded = store.load_all()?;
+    assert_eq!(pours(&loaded[2..]), [("s1", Some(45)), ("s2", None)]);
+    Ok(())
+}
+
+#[test]
+fn stored_pours_out_of_range_are_clamped() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    drop(SqliteStore::open(&path)?);
+    Connection::open(&path)?.execute_batch(
+        "UPDATE step SET water_grams = 0 WHERE id = 'step4';
+         UPDATE step SET water_grams = 99999 WHERE id = 'step5';",
+    )?;
+    let store = SqliteStore::open(&path)?;
+    let loaded = store.load_all()?;
+    assert_eq!(
+        pours(&loaded[1..]),
+        [("step3", None), ("step4", Some(1)), ("step5", Some(2000))]
+    );
+    Ok(())
+}
+
+#[test]
+fn stored_doses_out_of_range_are_clamped() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    drop(SqliteStore::open(&path)?);
+    Connection::open(&path)?.execute_batch(
+        "UPDATE recipe SET coffee_grams = 0, water_grams = 0 WHERE id = 'espresso-uuid';
+         UPDATE recipe SET coffee_grams = 999, water_grams = 99999 WHERE id = 'pourover-uuid';",
+    )?;
+    let store = SqliteStore::open(&path)?;
+    assert_eq!(
+        doses(&store.load_all()?),
+        [("espresso-uuid", 1, 1), ("pourover-uuid", 200, 2000)]
+    );
+    Ok(())
+}
+
+#[test]
+fn opened_file_is_at_schema_v4() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
     SqliteStore::open(&path)?;
     let version: u32 =
         Connection::open(&path)?.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 1);
+    assert_eq!(version, 4);
     Ok(())
 }
 
@@ -225,6 +340,148 @@ fn failed_upsert_leaves_the_store_unchanged() -> TestResult {
 }
 
 #[test]
+fn insert_at_puts_a_recipe_back_in_its_place_with_its_steps() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.upsert(&recipe("r1", "V60", Vec::new())?)?;
+    let removed = store
+        .load_all()?
+        .into_iter()
+        .find(|r| r.id().as_str() == "pourover-uuid")
+        .ok_or("no pour over")?;
+    store.remove(removed.id())?;
+
+    store.insert_at(&removed, 1, Pin::Unpinned)?;
+
+    let loaded = store.load_all()?;
+    assert_eq!(ids(&loaded), ["espresso-uuid", "pourover-uuid", "r1"]);
+    assert_eq!(loaded.get(1), Some(&removed));
+    store.upsert(&recipe("r2", "Aeropress", Vec::new())?)?;
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["espresso-uuid", "pourover-uuid", "r1", "r2"],
+        "later upserts still append"
+    );
+    Ok(())
+}
+
+#[test]
+fn insert_at_the_front_or_past_the_end() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.insert_at(&recipe("first", "V60", Vec::new())?, 0, Pin::Unpinned)?;
+    store.insert_at(&recipe("last", "Aeropress", Vec::new())?, 99, Pin::Unpinned)?;
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["first", "espresso-uuid", "pourover-uuid", "last"]
+    );
+    Ok(())
+}
+
+#[test]
+fn append_all_adds_every_recipe_unpinned_at_the_end_with_its_steps() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.set_pin(&rid("pourover-uuid")?, Pin::Pinned)?;
+    let v60 = recipe(
+        "v60",
+        "V60",
+        vec![step("v1", "Bloom", 30)?, step("v2", "Pour", 90)?],
+    )?;
+    let aero = recipe("aero", "Aeropress", vec![step("a1", "Steep", 60)?])?;
+    store.append_all(&[v60.clone(), aero.clone()])?;
+
+    let loaded = store.load_all()?;
+    assert_eq!(
+        ids(&loaded),
+        ["espresso-uuid", "pourover-uuid", "v60", "aero"]
+    );
+    assert_eq!(shape(&loaded[2..]), shape(&[v60, aero]));
+    assert_eq!(pinned_ids(&store)?, ["pourover-uuid"]);
+    Ok(())
+}
+
+#[test]
+fn append_all_with_a_known_id_appends_none() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let fresh = recipe("fresh", "V60", vec![step("f1", "Bloom", 30)?])?;
+    let known = recipe("espresso-uuid", "Again", Vec::new())?;
+    assert!(store.append_all(&[fresh, known]).is_err());
+    assert_eq!(ids(&store.load_all()?), ["espresso-uuid", "pourover-uuid"]);
+    Ok(())
+}
+
+fn rid(id: &str) -> Outcome<RecipeId> {
+    Ok(RecipeId::try_parse(id)?)
+}
+
+fn pinned_ids(store: &SqliteStore) -> Outcome<Vec<String>> {
+    Ok(store
+        .load_pinned()?
+        .iter()
+        .map(|id| id.as_str().to_owned())
+        .collect())
+}
+
+#[test]
+fn fresh_database_pins_nothing() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    assert!(store.load_pinned()?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn set_pin_round_trips_in_stored_order_and_keeps_positions() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.upsert(&recipe("r1", "V60", Vec::new())?)?;
+    store.set_pin(&rid("r1")?, Pin::Pinned)?;
+    store.set_pin(&rid("espresso-uuid")?, Pin::Pinned)?;
+    assert_eq!(pinned_ids(&store)?, ["espresso-uuid", "r1"]);
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["espresso-uuid", "pourover-uuid", "r1"],
+        "a pin moves no row"
+    );
+
+    store.set_pin(&rid("espresso-uuid")?, Pin::Unpinned)?;
+    assert_eq!(pinned_ids(&store)?, ["r1"]);
+    store.set_pin(&rid("missing")?, Pin::Pinned)?;
+    assert_eq!(pinned_ids(&store)?, ["r1"], "an unknown id changes nothing");
+    Ok(())
+}
+
+#[test]
+fn upsert_keeps_a_pin_and_a_new_recipe_is_unpinned() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.set_pin(&rid("pourover-uuid")?, Pin::Pinned)?;
+    store.upsert(&recipe("pourover-uuid", "Renamed", Vec::new())?)?;
+    store.upsert(&recipe("r1", "V60", Vec::new())?)?;
+    assert_eq!(pinned_ids(&store)?, ["pourover-uuid"]);
+    Ok(())
+}
+
+#[test]
+fn insert_at_stores_the_pin_it_is_given() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.insert_at(&recipe("r1", "V60", Vec::new())?, 1, Pin::Pinned)?;
+    assert_eq!(pinned_ids(&store)?, ["r1"]);
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["espresso-uuid", "r1", "pourover-uuid"]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_removed_and_reinserted_recipe_takes_only_the_pin_it_is_given() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.set_pin(&rid("espresso-uuid")?, Pin::Pinned)?;
+    let espresso = store.load_all()?.into_iter().next().ok_or("no espresso")?;
+    store.remove(espresso.id())?;
+    assert!(store.load_pinned()?.is_empty());
+    store.insert_at(&espresso, 0, Pin::Unpinned)?;
+    assert!(store.load_pinned()?.is_empty());
+    Ok(())
+}
+
+#[test]
 fn remove_deletes_the_recipe_and_its_steps() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
@@ -285,7 +542,10 @@ fn stored_rows_are_read_through_the_core_constructors() -> TestResult {
 #[test]
 fn fresh_settings_load_the_fallback() -> TestResult {
     let store = SqliteStore::open_in_memory()?;
-    assert_eq!(store.load()?, Settings::from_storage(None, None));
+    assert_eq!(
+        store.load()?,
+        Settings::from_storage(StoredSettings::default())
+    );
     Ok(())
 }
 
@@ -299,6 +559,59 @@ fn settings_round_trip() -> TestResult {
     let second = first.with_theme(ThemeSelection::Light);
     store.save(second)?;
     assert_eq!(store.load()?, second);
+
+    for sound in Toggle::ALL {
+        for vibration in Toggle::ALL {
+            for lead in PreAlertLead::ALL {
+                let cues = second
+                    .with_sound(sound)
+                    .with_vibration(vibration)
+                    .with_pre_alert(lead);
+                store.save(cues)?;
+                assert_eq!(store.load()?, cues);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn cue_settings_are_stored_as_key_value_rows() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    let mut store = SqliteStore::open(&path)?;
+    store.save(
+        Settings::FALLBACK
+            .with_sound(Toggle::Off)
+            .with_pre_alert(PreAlertLead::Seconds10),
+    )?;
+    let raw = Connection::open(&path)?;
+    let row = |key: &str| -> rusqlite::Result<String> {
+        raw.query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+            row.get(0)
+        })
+    };
+    assert_eq!(row("sound")?, "off");
+    assert_eq!(row("vibration")?, "on");
+    assert_eq!(row("pre_alert_seconds")?, "10");
+    Ok(())
+}
+
+#[test]
+fn malformed_cue_rows_fall_back_per_field() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    let store = SqliteStore::open(&path)?;
+    let raw = Connection::open(&path)?;
+    raw.execute(
+        "INSERT INTO settings (key, value) VALUES ('theme', 'dark'), ('sound', 'loud'),
+         ('vibration', 'off'), ('pre_alert_seconds', '7')",
+        [],
+    )?;
+    assert_eq!(
+        store.load()?,
+        Settings::new(ThemeSelection::Dark, AccentColor::FALLBACK).with_vibration(Toggle::Off)
+    );
     Ok(())
 }
 
@@ -313,7 +626,13 @@ fn invalid_or_missing_settings_rows_fall_back_per_field() -> TestResult {
         "INSERT INTO settings (key, value) VALUES ('theme', 'sepia')",
         [],
     )?;
-    assert_eq!(store.load()?, Settings::from_storage(Some("sepia"), None));
+    assert_eq!(
+        store.load()?,
+        Settings::from_storage(StoredSettings {
+            theme: Some("sepia"),
+            ..StoredSettings::default()
+        })
+    );
 
     raw.execute(
         "INSERT INTO settings (key, value) VALUES ('accent_color', '-FF0000')",
@@ -362,5 +681,35 @@ fn catalog_and_settings_controllers_persist_through_one_store() -> TestResult {
     assert_eq!(ids(catalog.state()), ["pourover-uuid", "r1"]);
     assert_eq!(shape(catalog.state()), expected_recipes);
     assert_eq!(*settings.state(), expected_settings);
+    Ok(())
+}
+
+#[test]
+fn the_catalog_lists_pins_first_after_a_reopen() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    let mut catalog = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    catalog.load()?;
+    catalog.upsert(recipe("r1", "V60", Vec::new())?)?;
+    catalog.set_pin(&rid("r1")?, Pin::Pinned)?;
+    catalog.set_pin(&rid("pourover-uuid")?, Pin::Pinned)?;
+    drop(catalog);
+
+    let mut catalog = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    catalog.load()?;
+    let listed: Vec<&str> = catalog.listed().iter().map(|r| r.id().as_str()).collect();
+    assert_eq!(listed, ["pourover-uuid", "r1", "espresso-uuid"]);
+    assert_eq!(
+        ids(catalog.state()),
+        ["espresso-uuid", "pourover-uuid", "r1"]
+    );
+
+    catalog.remove(rid("pourover-uuid")?)?;
+    catalog.restore(&rid("pourover-uuid")?)?;
+    drop(catalog);
+    let mut catalog = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    catalog.load()?;
+    assert_eq!(catalog.pin_of(&rid("pourover-uuid")?), Pin::Pinned);
+    assert_eq!(catalog.index_of(&rid("pourover-uuid")?), Some(0));
     Ok(())
 }

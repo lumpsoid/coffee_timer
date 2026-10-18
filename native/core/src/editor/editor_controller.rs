@@ -1,7 +1,10 @@
 use crate::catalog::{CatalogChange, RecipeCatalog};
-use crate::editor::{DeleteError, Draft, EditError, EditorState, SaveError, StepPreset};
+use crate::editor::{
+    DeleteError, Draft, DurationNudge, EditError, EditorState, SaveError, StepPreset,
+};
 use crate::model::{BrewMetrics, RecipeId, StepId};
 use crate::ports::IdGen;
+use crate::transfer::{ImportError, RecipeDocument, RecipeImport};
 
 /// Owner of the recipe editor page: one draft, new or of an existing recipe.
 ///
@@ -25,10 +28,11 @@ impl EditorController {
         }
     }
 
-    /// Opens a draft for a new recipe: no name, one blank `0` second step.
+    /// Opens a draft for a new recipe: no name, 15 g coffee to 250 g water,
+    /// one blank `0` second step.
     /// Replaces any open draft.
     pub fn new_draft(&mut self) {
-        self.state = EditorState::Open(Draft::new(self.ids.as_mut(), &self.metrics));
+        self.state = EditorState::Open(Box::new(Draft::new(self.ids.as_mut(), &self.metrics)));
     }
 
     /// Opens a draft of the recipe with `id`, as stored. Replaces any open
@@ -37,7 +41,28 @@ impl EditorController {
         let recipe = catalog
             .get(id)
             .ok_or_else(|| EditError::UnknownRecipe(id.clone()))?;
-        self.state = EditorState::Open(Draft::of(recipe, self.ids.as_mut(), &self.metrics));
+        self.state = EditorState::Open(Box::new(Draft::of(
+            recipe,
+            self.ids.as_mut(),
+            &self.metrics,
+        )));
+        Ok(())
+    }
+
+    /// Opens a draft of a new recipe copied from the recipe with `id`
+    /// (see [`Draft`]'s copy: `<name> copy`, fresh ids). Replaces any open
+    /// draft. Nothing is saved until [`EditorController::save`], which
+    /// appends it; closing leaves the catalog as it was. An id the catalog
+    /// does not hold is an error and changes nothing.
+    pub fn duplicate(&mut self, id: &RecipeId, catalog: &RecipeCatalog) -> Result<(), EditError> {
+        let recipe = catalog
+            .get(id)
+            .ok_or_else(|| EditError::UnknownRecipe(id.clone()))?;
+        self.state = EditorState::Open(Box::new(Draft::copy_of(
+            recipe,
+            self.ids.as_mut(),
+            &self.metrics,
+        )));
         Ok(())
     }
 
@@ -51,12 +76,42 @@ impl EditorController {
         Ok(())
     }
 
+    /// The coffee grams as typed.
+    pub fn set_coffee(&mut self, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_coffee(raw);
+        Ok(())
+    }
+
+    /// The water grams as typed.
+    pub fn set_water(&mut self, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_water(raw);
+        Ok(())
+    }
+
     pub fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_step_name(row, raw)
     }
 
     pub fn set_step_duration(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_step_duration(row, raw)
+    }
+
+    /// A step card's quick button: moves the row's duration by the nudge's
+    /// seconds, from what its `MM:SS` label shows (text that is not a number
+    /// counts as `0`), clamped to `0..=5999`. The duration text becomes the
+    /// new seconds, so the row's duration error clears and the total
+    /// follows; the row's `duration_revision` moves on.
+    pub fn nudge_step_duration(
+        &mut self,
+        row: &StepId,
+        nudge: DurationNudge,
+    ) -> Result<(), EditError> {
+        self.draft_mut()?.nudge_step_duration(row, nudge)
+    }
+
+    /// The grams the step pours, as typed; blank is no pour.
+    pub fn set_step_water(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_step_water(row, raw)
     }
 
     /// Appends a row named after `preset`, `0` seconds long, and returns
@@ -70,6 +125,14 @@ impl EditorController {
     pub fn remove_step(&mut self, row: &StepId) -> Result<(), EditError> {
         let draft = self.state.draft_mut().ok_or(EditError::NoDraft)?;
         draft.remove_step(row, self.ids.as_mut())
+    }
+
+    /// Moves the row to position `to` (0-based, counted after the move),
+    /// with its typed text, errors and pour; step labels follow the new
+    /// positions. An unknown row or a position past the last row is an error
+    /// and changes nothing.
+    pub fn move_step(&mut self, row: &StepId, to: usize) -> Result<(), EditError> {
+        self.draft_mut()?.move_step(row, to)
     }
 
     /// Saves the draft to `catalog` and closes it. Field errors show from
@@ -112,6 +175,26 @@ impl EditorController {
                 Err(error)
             }
         }
+    }
+
+    /// Adds every recipe in the document `text` to `catalog` as a new
+    /// recipe, after the ones there: fresh recipe and step ids from this
+    /// controller's [`IdGen`], unpinned. All or nothing: a document with
+    /// any invalid value, or a failed write, adds none and mints no id.
+    /// The draft, open or not, is left alone.
+    ///
+    /// It lives here because the editor is the one minter of new recipes'
+    /// ids; a second `IdGen` could hand out an id the editor also does.
+    pub fn import(
+        &mut self,
+        text: &str,
+        catalog: &mut RecipeCatalog,
+    ) -> Result<RecipeImport, ImportError> {
+        let recipes = RecipeDocument::decode(text)?
+            .into_iter()
+            .map(|recipe| recipe.into_recipe(self.ids.as_mut()))
+            .collect();
+        Ok(RecipeImport::new(catalog.append_all(recipes)?))
     }
 
     /// Leaves the page without saving.

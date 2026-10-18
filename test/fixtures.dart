@@ -1,7 +1,11 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 
 /// Hand-built signal values, shaped like the ones Rust sends.
-RecipeSummary summary(String id, {String name = 'V60'}) => RecipeSummary(
+RecipeSummary summary(
+  String id, {
+  String name = 'V60',
+  bool pinned = false,
+}) => RecipeSummary(
   id: id,
   name: name,
   description: 'clean',
@@ -9,6 +13,7 @@ RecipeSummary summary(String id, {String name = 'V60'}) => RecipeSummary(
   waterLabel: '100 g',
   timeLabel: '1:35',
   label: label(),
+  pinned: pinned,
 );
 
 RecipeLabel label({LabelTone tone = LabelTone.roast}) => RecipeLabel(
@@ -29,6 +34,8 @@ EditorDraft draft({
   canDelete: canDelete,
   name: name,
   description: '',
+  coffee: '15',
+  water: '250',
   totalLabel: '0:30',
   steps: const [
     EditorStep(
@@ -37,6 +44,8 @@ EditorDraft draft({
       name: 'Bloom',
       durationText: '30',
       durationLabel: '00:30',
+      durationRevision: 0,
+      waterText: '',
     ),
   ],
   addStepButtons: const [
@@ -44,6 +53,28 @@ EditorDraft draft({
     AddStepButton(preset: StepPresetChoice.addWater, label: 'Add water'),
     AddStepButton(preset: StepPresetChoice.wait, label: 'Wait'),
     AddStepButton(preset: StepPresetChoice.blank, label: 'Add Step'),
+  ],
+  durationNudgeButtons: const [
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.minusLarge,
+      label: '−15',
+      description: 'Subtract 15 seconds',
+    ),
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.minusSmall,
+      label: '−5',
+      description: 'Subtract 5 seconds',
+    ),
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.plusSmall,
+      label: '+5',
+      description: 'Add 5 seconds',
+    ),
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.plusLarge,
+      label: '+15',
+      description: 'Add 15 seconds',
+    ),
   ],
   notice: notice,
 );
@@ -76,6 +107,9 @@ BrewRecipe brewRecipe({List<BrewStepStatus>? statuses}) => BrewRecipe(
 SettingsUpdate settings({
   ThemeChoice theme = ThemeChoice.system,
   int accent = 0xFF2196F3,
+  bool sound = true,
+  bool vibration = true,
+  int preAlertSeconds = 3,
 }) => SettingsUpdate(
   theme: theme,
   accent: accent,
@@ -83,5 +117,14 @@ SettingsUpdate settings({
   accents: const [
     AccentChoice(name: 'Blue', argb: 0xFF2196F3),
     AccentChoice(name: 'Red', argb: 0xFFF44336),
+  ],
+  sound: sound,
+  vibration: vibration,
+  preAlertSeconds: preAlertSeconds,
+  preAlerts: const [
+    PreAlertChoice(seconds: 0, label: 'Off'),
+    PreAlertChoice(seconds: 3, label: '3 s'),
+    PreAlertChoice(seconds: 5, label: '5 s'),
+    PreAlertChoice(seconds: 10, label: '10 s'),
   ],
 );

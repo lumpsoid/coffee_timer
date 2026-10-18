@@ -1,17 +1,30 @@
-use crate::model::{StepDuration, StepId};
+use crate::model::{StepDuration, StepId, WaterAmount};
 
-/// One step of a brew: an id, a name, and how long it runs. Immutable — a
-/// step is replaced, never edited in place.
+/// One step of a brew: an id, a name, how long it runs, and the water
+/// poured in it, if any. Immutable — a step is replaced, never edited in
+/// place.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RecipeStep {
     id: StepId,
     name: String,
     duration: StepDuration,
+    water: Option<WaterAmount>,
 }
 
 impl RecipeStep {
-    pub fn new(id: StepId, name: String, duration: StepDuration) -> Self {
-        Self { id, name, duration }
+    /// `water` is what the step pours; none for a step that pours nothing.
+    pub fn new(
+        id: StepId,
+        name: String,
+        duration: StepDuration,
+        water: Option<WaterAmount>,
+    ) -> Self {
+        Self {
+            id,
+            name,
+            duration,
+            water,
+        }
     }
 
     /// The name to store for a step at `position` (1-based), given the raw
@@ -25,6 +38,11 @@ impl RecipeStep {
         }
     }
 
+    /// The same step pouring `water` instead; none pours nothing.
+    pub fn pouring(self, water: Option<WaterAmount>) -> Self {
+        Self { water, ..self }
+    }
+
     pub fn id(&self) -> &StepId {
         &self.id
     }
@@ -35,5 +53,11 @@ impl RecipeStep {
 
     pub fn duration(&self) -> StepDuration {
         self.duration
+    }
+
+    /// The water poured in this step, at the recipe's own ratio; none for a
+    /// step that pours nothing.
+    pub fn water(&self) -> Option<WaterAmount> {
+        self.water
     }
 }

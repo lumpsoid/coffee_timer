@@ -29,10 +29,16 @@ class PlatformEffectPerformer {
   Future<void> _call(PlatformEffect effect) => switch (effect) {
     PlatformEffectPlayStepSound() => _plugins.playStepSound(),
     PlatformEffectVibrate(:final ms) => _plugins.vibrate(ms),
+    PlatformEffectVibratePattern(:final patternMs) => _plugins.vibratePattern(
+      patternMs,
+    ),
     PlatformEffectKeepScreenOn(:final on) => _plugins.keepScreenOn(on: on),
     PlatformEffectShowBrewNotification(:final title, :final next) =>
       _plugins.showBrewNotification(title: title, next: next),
     PlatformEffectHideBrewNotification() => _plugins.hideBrewNotification(),
+    PlatformEffectCopyToClipboard(:final text) => _plugins.copyToClipboard(
+      text,
+    ),
     _ => Future.value(),
   };
 }

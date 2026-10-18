@@ -1,4 +1,4 @@
-use crate::model::{AccentColor, Settings, ThemeSelection};
+use crate::model::{AccentColor, PreAlertLead, Settings, ThemeSelection, Toggle};
 use crate::ports::{SettingsStore, StoreError};
 
 /// Owner of the user's settings. Every change is written through the store
@@ -32,6 +32,18 @@ impl SettingsController {
     /// the legacy app stored and loaded any ARGB value.
     pub fn set_accent(&mut self, accent: AccentColor) -> Result<(), StoreError> {
         self.apply(self.state.with_accent(accent))
+    }
+
+    pub fn set_sound(&mut self, sound: Toggle) -> Result<(), StoreError> {
+        self.apply(self.state.with_sound(sound))
+    }
+
+    pub fn set_vibration(&mut self, vibration: Toggle) -> Result<(), StoreError> {
+        self.apply(self.state.with_vibration(vibration))
+    }
+
+    pub fn set_pre_alert(&mut self, pre_alert: PreAlertLead) -> Result<(), StoreError> {
+        self.apply(self.state.with_pre_alert(pre_alert))
     }
 
     pub fn state(&self) -> &Settings {

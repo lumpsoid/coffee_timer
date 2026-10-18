@@ -1,35 +1,86 @@
 //! Catalog ↔ recipe list signals.
 
-use coffee_timer_core::catalog::{self, CatalogChange, RecipeCatalog};
+use coffee_timer_core::brew::SaveRatioError;
+use coffee_timer_core::catalog::{
+    self, CatalogChange, PinError, RecipeCatalog, RemovedRecipe, RestoreError,
+};
 use coffee_timer_core::editor::DeleteError;
 use coffee_timer_core::model::{self, BrewMetrics, LabelStyle, Recipe};
+use coffee_timer_core::transfer::{ExportError, ImportError};
 
 use crate::signals::{
     LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListUpdate, RecipeSummary, StainCorner,
 };
 
 impl RecipeListUpdate {
-    /// Every recipe the catalog holds, in order.
+    /// Every recipe the catalog holds, in list order.
     pub fn snapshot(catalog: &RecipeCatalog) -> Self {
         Self::Snapshot {
-            recipes: catalog.state().iter().map(summary).collect(),
+            recipes: catalog
+                .listed()
+                .into_iter()
+                .map(|recipe| summary(recipe, catalog))
+                .collect(),
         }
     }
 
     /// The diff for a persisted change: the changed id's row as `catalog`
-    /// now holds it, or its removal when the catalog holds no such recipe.
+    /// now holds it, at its place, or its removal when the catalog holds no
+    /// such recipe, with the catalog's undo offer for it if any.
     /// Read from the catalog like `BrewController::on_catalog_change`, so
     /// an `Upserted` id the catalog lacks (which it never returns) cannot
     /// send a stale row.
     pub fn of(change: &CatalogChange, catalog: &RecipeCatalog) -> Self {
         let (CatalogChange::Upserted(id) | CatalogChange::Removed(id)) = change;
-        match catalog.get(id) {
-            Some(recipe) => Self::Upserted {
-                recipe: summary(recipe),
+        match catalog.get(id).zip(catalog.index_of(id)) {
+            Some((recipe, index)) => Self::Upserted {
+                recipe: summary(recipe, catalog),
+                index: u32::try_from(index).unwrap_or(u32::MAX),
             },
             None => Self::Removed {
                 id: id.as_str().to_owned(),
+                undo_notice: catalog.restorable(id).map(RemovedRecipe::notice),
             },
+        }
+    }
+}
+
+impl From<RestoreError> for RecipeListUpdate {
+    fn from(error: RestoreError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<PinError> for RecipeListUpdate {
+    fn from(error: PinError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<SaveRatioError> for RecipeListUpdate {
+    fn from(error: SaveRatioError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ExportError> for RecipeListUpdate {
+    fn from(error: ExportError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ImportError> for RecipeListUpdate {
+    fn from(error: ImportError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
         }
     }
 }
@@ -42,8 +93,8 @@ impl From<DeleteError> for RecipeListUpdate {
     }
 }
 
-fn summary(recipe: &Recipe) -> RecipeSummary {
-    catalog::RecipeSummary::of(recipe, &BrewMetrics::default()).into()
+fn summary(recipe: &Recipe, catalog: &RecipeCatalog) -> RecipeSummary {
+    catalog::RecipeSummary::of(recipe, catalog.pin_of(recipe.id()), &BrewMetrics::default()).into()
 }
 
 impl From<catalog::RecipeSummary> for RecipeSummary {
@@ -56,6 +107,7 @@ impl From<catalog::RecipeSummary> for RecipeSummary {
             water_label: s.water_label,
             time_label: s.time_label,
             label: s.style.into(),
+            pinned: s.pin.is_pinned(),
         }
     }
 }
@@ -92,7 +144,9 @@ impl From<LabelStyle> for RecipeLabel {
 #[cfg(test)]
 mod tests {
     use coffee_timer_core::fakes::FakeRecipeStore;
-    use coffee_timer_core::model::{RecipeId, RecipeName, RecipeStep, StepDuration, StepId};
+    use coffee_timer_core::model::{
+        CoffeeDose, RecipeId, RecipeName, RecipeStep, StepDuration, StepId, WaterAmount,
+    };
 
     use super::*;
 
@@ -103,10 +157,13 @@ mod tests {
             RecipeId::try_parse("r1")?,
             RecipeName::try_parse("V60")?,
             "clean".to_owned(),
+            CoffeeDose::try_parse(20)?,
+            WaterAmount::try_parse(100)?,
             vec![RecipeStep::new(
                 StepId::try_parse("s1")?,
                 "Add coffee".to_owned(),
                 StepDuration::try_parse(95)?,
+                None,
             )],
         ))
     }
@@ -122,8 +179,8 @@ mod tests {
         assert_eq!(row.name, "V60");
         assert_eq!(row.description, "clean");
         assert_eq!(row.time_label, "1:35");
-        assert!(row.coffee_label.ends_with(" g"));
-        assert!(row.water_label.ends_with(" g"));
+        assert_eq!(row.coffee_label, "20 g");
+        assert_eq!(row.water_label, "100 g");
         assert!(matches!(row.label.tone, LabelTone::Roast));
     }
 
@@ -142,10 +199,12 @@ mod tests {
     fn upserted_sends_the_stored_row() -> TestResult {
         let mut catalog = catalog_with(vec![])?;
         let change = catalog.upsert(v60()?)?;
-        let RecipeListUpdate::Upserted { recipe } = RecipeListUpdate::of(&change, &catalog) else {
+        let RecipeListUpdate::Upserted { recipe, index } = RecipeListUpdate::of(&change, &catalog)
+        else {
             return Err("not upserted".into());
         };
         assert_v60_row(&recipe);
+        assert_eq!(index, 0);
         Ok(())
     }
 
@@ -153,10 +212,77 @@ mod tests {
     fn removed_sends_the_id() -> TestResult {
         let mut catalog = catalog_with(vec![v60()?])?;
         let change = catalog.remove(RecipeId::try_parse("r1")?)?;
-        let RecipeListUpdate::Removed { id } = RecipeListUpdate::of(&change, &catalog) else {
+        let RecipeListUpdate::Removed { id, undo_notice } = RecipeListUpdate::of(&change, &catalog)
+        else {
             return Err("not removed".into());
         };
         assert_eq!(id, "r1");
+        assert_eq!(undo_notice.as_deref(), Some("Deleted V60"));
+        Ok(())
+    }
+
+    #[test]
+    fn a_restore_sends_the_row_at_its_old_place() -> TestResult {
+        let other = Recipe::blank(
+            RecipeId::try_parse("r2")?,
+            model::RecipeName::try_parse("Aero")?,
+            CoffeeDose::try_parse(15)?,
+            WaterAmount::try_parse(250)?,
+        );
+        let mut catalog = catalog_with(vec![v60()?, other])?;
+        catalog.remove(RecipeId::try_parse("r1")?)?;
+        let change = catalog.restore(&RecipeId::try_parse("r1")?)?;
+        let RecipeListUpdate::Upserted { recipe, index } = RecipeListUpdate::of(&change, &catalog)
+        else {
+            return Err("not upserted".into());
+        };
+        assert_v60_row(&recipe);
+        assert_eq!(index, 0);
+        Ok(())
+    }
+
+    #[test]
+    fn a_pin_sends_the_row_pinned_at_the_top() -> TestResult {
+        let other = Recipe::blank(
+            RecipeId::try_parse("r2")?,
+            model::RecipeName::try_parse("Aero")?,
+            CoffeeDose::try_parse(15)?,
+            WaterAmount::try_parse(250)?,
+        );
+        let mut catalog = catalog_with(vec![v60()?, other])?;
+        let change = catalog.set_pin(&RecipeId::try_parse("r2")?, model::Pin::Pinned)?;
+        let RecipeListUpdate::Upserted { recipe, index } = RecipeListUpdate::of(&change, &catalog)
+        else {
+            return Err("not upserted".into());
+        };
+        assert_eq!(recipe.id, "r2");
+        assert!(recipe.pinned);
+        assert_eq!(index, 0);
+        let RecipeListUpdate::Snapshot { recipes } = RecipeListUpdate::snapshot(&catalog) else {
+            return Err("not a snapshot".into());
+        };
+        let rows: Vec<_> = recipes.iter().map(|r| (r.id.as_str(), r.pinned)).collect();
+        assert_eq!(rows, [("r2", true), ("r1", false)]);
+
+        let change = catalog.set_pin(&RecipeId::try_parse("r2")?, model::Pin::Unpinned)?;
+        let RecipeListUpdate::Upserted { recipe, index } = RecipeListUpdate::of(&change, &catalog)
+        else {
+            return Err("not upserted".into());
+        };
+        assert!(!recipe.pinned);
+        assert_eq!(index, 1, "back to its place");
+        Ok(())
+    }
+
+    #[test]
+    fn removing_an_unknown_id_offers_no_undo() -> TestResult {
+        let mut catalog = catalog_with(vec![v60()?])?;
+        let change = catalog.remove(RecipeId::try_parse("r9")?)?;
+        let RecipeListUpdate::Removed { undo_notice, .. } = RecipeListUpdate::of(&change, &catalog)
+        else {
+            return Err("not removed".into());
+        };
+        assert_eq!(undo_notice, None);
         Ok(())
     }
 
@@ -164,10 +290,12 @@ mod tests {
     fn an_upserted_id_the_catalog_lacks_is_removed() -> TestResult {
         let catalog = catalog_with(vec![])?;
         let change = CatalogChange::Upserted(RecipeId::try_parse("r9")?);
-        let RecipeListUpdate::Removed { id } = RecipeListUpdate::of(&change, &catalog) else {
+        let RecipeListUpdate::Removed { id, undo_notice } = RecipeListUpdate::of(&change, &catalog)
+        else {
             return Err("not removed".into());
         };
         assert_eq!(id, "r9");
+        assert_eq!(undo_notice, None);
         Ok(())
     }
 

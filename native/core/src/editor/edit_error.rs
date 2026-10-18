@@ -13,6 +13,9 @@ pub enum EditError {
     UnknownRecipe(RecipeId),
     /// The draft has no step row with this id.
     UnknownStep(StepId),
+    /// A step row cannot move to position `to` (0-based): the draft has
+    /// only `rows` rows.
+    StepPositionOutOfRange { to: usize, rows: usize },
 }
 
 impl fmt::Display for EditError {
@@ -21,6 +24,9 @@ impl fmt::Display for EditError {
             Self::NoDraft => write!(f, "No recipe is being edited"),
             Self::UnknownRecipe(id) => write!(f, "No recipe with id {}", id.as_str()),
             Self::UnknownStep(id) => write!(f, "No step with id {}", id.as_str()),
+            Self::StepPositionOutOfRange { to, rows } => {
+                write!(f, "No step position {to} in a recipe of {rows} steps")
+            }
         }
     }
 }

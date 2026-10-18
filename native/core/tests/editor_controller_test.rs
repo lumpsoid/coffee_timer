@@ -5,12 +5,13 @@
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::{
-    DeleteError, Draft, DraftMode, EditError, EditorController, EditorState, EditorStepRow,
-    SaveError, StepPreset,
+    DeleteError, Draft, DraftMode, DurationNudge, EditError, EditorController, EditorState,
+    EditorStepRow, SaveError, StepPreset,
 };
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
-    ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    CoffeeDose, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -32,10 +33,13 @@ fn v60() -> Result<Recipe, ModelError> {
         rid("recipe-1")?,
         RecipeName::try_parse("V60")?,
         "clean".to_owned(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
         vec![RecipeStep::new(
             sid("step-1")?,
             "Bloom".to_owned(),
             StepDuration::try_parse(30)?,
+            None,
         )],
     ))
 }
@@ -44,6 +48,8 @@ fn espresso() -> Result<Recipe, ModelError> {
     Ok(Recipe::blank(
         rid("espresso")?,
         RecipeName::try_parse("Espresso")?,
+        CoffeeDose::try_parse(18)?,
+        WaterAmount::try_parse(36)?,
     ))
 }
 
@@ -157,6 +163,9 @@ fn new_draft_starts_with_one_blank_step_and_no_name() -> TestResult {
             duration_text: "0".to_owned(),
             duration_label: "00:00".to_owned(),
             duration_error: None,
+            duration_revision: 0,
+            water_text: String::new(),
+            water_error: None,
         }]
     );
     Ok(())
@@ -184,6 +193,9 @@ fn edit_prefills_from_the_stored_recipe() -> TestResult {
             duration_text: "30".to_owned(),
             duration_label: "00:30".to_owned(),
             duration_error: None,
+            duration_revision: 0,
+            water_text: String::new(),
+            water_error: None,
         }]
     );
     Ok(())
@@ -233,8 +245,14 @@ fn actions_without_a_draft_are_errors() -> TestResult {
     let s1 = sid("s1")?;
     assert_eq!(editor.set_name("x"), Err(EditError::NoDraft));
     assert_eq!(editor.set_description("x"), Err(EditError::NoDraft));
+    assert_eq!(editor.set_coffee("18"), Err(EditError::NoDraft));
+    assert_eq!(editor.set_water("36"), Err(EditError::NoDraft));
     assert_eq!(editor.set_step_name(&s1, "x"), Err(EditError::NoDraft));
     assert_eq!(editor.set_step_duration(&s1, "1"), Err(EditError::NoDraft));
+    assert_eq!(
+        editor.nudge_step_duration(&s1, DurationNudge::PlusSmall),
+        Err(EditError::NoDraft)
+    );
     assert_eq!(editor.add_step(StepPreset::Wait), Err(EditError::NoDraft));
     assert_eq!(editor.remove_step(&s1), Err(EditError::NoDraft));
     assert_eq!(editor.save(&mut catalog), Err(SaveError::NoDraft));
@@ -325,6 +343,184 @@ fn name_and_description_are_trimmed_on_save() -> TestResult {
     let saved = catalog.get(&rid("r1")?).ok_or("not saved")?;
     assert_eq!(saved.name().as_str(), "Aeropress");
     assert_eq!(saved.description(), "strong");
+    Ok(())
+}
+
+// Coffee and water
+
+/// `(coffee, water)` grams of the saved recipe `id`.
+fn saved_dose(catalog: &RecipeCatalog, id: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+    let saved = catalog.get(&rid(id)?).ok_or("not saved")?;
+    Ok((saved.coffee().grams(), saved.water().grams()))
+}
+
+#[test]
+fn a_new_draft_starts_with_a_one_cup_dose() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    let draft = draft(&editor)?;
+    assert_eq!((draft.coffee(), draft.water()), ("15", "250"));
+    editor.set_name("V60")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_dose(&catalog, "r1")?, (15, 250));
+    Ok(())
+}
+
+#[test]
+fn edit_prefills_the_stored_dose_and_saves_the_typed_one() -> TestResult {
+    let mut catalog = catalog(vec![espresso()?])?;
+    let mut editor = editing("espresso", &catalog)?;
+    let draft = draft(&editor)?;
+    assert_eq!((draft.coffee(), draft.water()), ("18", "36"));
+    editor.set_name("Lungo")?;
+    editor.set_coffee(" 18 ")?;
+    editor.set_water("54")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_dose(&catalog, "espresso")?, (18, 54));
+    Ok(())
+}
+
+#[test]
+fn dose_errors_show_from_the_first_save_and_follow_the_text() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_coffee("lots")?;
+    editor.set_water("0")?;
+    assert_eq!(draft(&editor)?.coffee_error(), None, "hidden before save");
+    assert_eq!(draft(&editor)?.water_error(), None, "hidden before save");
+
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert!(catalog.state().is_empty());
+    assert_eq!(draft(&editor)?.coffee(), "lots", "keeps the text as typed");
+    assert_eq!(
+        draft(&editor)?.coffee_error().as_deref(),
+        Some("Enter grams")
+    );
+    assert_eq!(draft(&editor)?.water_error().as_deref(), Some("1–2000 g"));
+
+    editor.set_coffee("201")?;
+    editor.set_water("2000")?;
+    assert_eq!(draft(&editor)?.coffee_error().as_deref(), Some("1–200 g"));
+    assert_eq!(draft(&editor)?.water_error(), None);
+
+    editor.set_coffee("200")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_dose(&catalog, "r1")?, (200, 2000));
+    Ok(())
+}
+
+// Step pours
+
+/// The grams each step of the saved recipe `id` pours.
+fn saved_pours(
+    catalog: &RecipeCatalog,
+    id: &str,
+) -> Result<Vec<Option<u32>>, Box<dyn std::error::Error>> {
+    let saved = catalog.get(&rid(id)?).ok_or("not saved")?;
+    Ok(saved
+        .steps()
+        .iter()
+        .map(|s| s.water().map(WaterAmount::grams))
+        .collect())
+}
+
+#[test]
+fn a_new_row_pours_nothing_until_grams_are_typed() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    let water = editor.add_step(StepPreset::AddWater)?;
+    assert_eq!(row(&editor, "s2")?.name, "Add water");
+    assert_eq!(row(&editor, "s2")?.water_text, "", "left for the grams");
+    editor.set_step_water(&water, " 60 ")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_pours(&catalog, "r1")?, [None, Some(60)]);
+    Ok(())
+}
+
+#[test]
+fn edit_prefills_the_stored_pours_and_blank_clears_one() -> TestResult {
+    let poured = Recipe::new(
+        rid("recipe-1")?,
+        RecipeName::try_parse("V60")?,
+        String::new(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+        vec![RecipeStep::new(
+            sid("step-1")?,
+            "Bloom".to_owned(),
+            StepDuration::try_parse(30)?,
+            Some(WaterAmount::try_parse(50)?),
+        )],
+    );
+    let mut catalog = catalog(vec![poured])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    assert_eq!(row(&editor, "step-1")?.water_text, "50");
+    editor.set_step_water(&sid("step-1")?, "  ")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_pours(&catalog, "recipe-1")?, [None]);
+    Ok(())
+}
+
+#[test]
+fn pour_errors_show_from_the_first_save_and_follow_the_text() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_step_water(&sid("s1")?, "0")?;
+    assert_eq!(row(&editor, "s1")?.water_error, None, "hidden before save");
+
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert!(catalog.state().is_empty());
+    assert_eq!(row(&editor, "s1")?.water_error.as_deref(), Some("1–2000 g"));
+    editor.set_step_water(&sid("s1")?, "lots")?;
+    assert_eq!(
+        row(&editor, "s1")?.water_error.as_deref(),
+        Some("Enter grams")
+    );
+    editor.set_step_water(&sid("s1")?, "2000")?;
+    assert_eq!(row(&editor, "s1")?.water_error, None);
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_pours(&catalog, "r1")?, [Some(2000)]);
+    Ok(())
+}
+
+#[test]
+fn set_step_water_of_an_unknown_row_is_an_error() -> TestResult {
+    let mut editor = new_draft();
+    assert_eq!(
+        editor.set_step_water(&sid("nope")?, "50"),
+        Err(EditError::UnknownStep(sid("nope")?))
+    );
+    Ok(())
+}
+
+#[test]
+fn the_pour_hint_shows_while_step_pours_miss_the_recipes_water() -> TestResult {
+    let mut editor = new_draft();
+    assert_eq!(draft(&editor)?.pour_hint(), None, "no step pours");
+    editor.set_step_water(&sid("s1")?, "50")?;
+    assert_eq!(
+        draft(&editor)?.pour_hint().as_deref(),
+        Some("Step pours add up to 50 g of 250 g")
+    );
+    let pour = editor.add_step(StepPreset::AddWater)?;
+    editor.set_step_water(&pour, "lots")?;
+    assert_eq!(
+        draft(&editor)?.pour_hint().as_deref(),
+        Some("Step pours add up to 50 g of 250 g"),
+        "an invalid pour is left out"
+    );
+    editor.set_step_water(&pour, "200")?;
+    assert_eq!(draft(&editor)?.pour_hint(), None, "they add up");
+    editor.set_water("300")?;
+    assert_eq!(
+        draft(&editor)?.pour_hint().as_deref(),
+        Some("Step pours add up to 250 g of 300 g")
+    );
+    editor.set_water("")?;
+    assert_eq!(draft(&editor)?.pour_hint(), None, "no water to compare");
     Ok(())
 }
 
@@ -453,6 +649,9 @@ fn removing_the_last_row_leaves_one_blank_row() -> TestResult {
             duration_text: "0".to_owned(),
             duration_label: "00:00".to_owned(),
             duration_error: None,
+            duration_revision: 0,
+            water_text: String::new(),
+            water_error: None,
         }]
     );
     Ok(())
@@ -477,6 +676,10 @@ fn unknown_row_is_an_error_and_changes_nothing() -> TestResult {
     assert_eq!(editor.remove_step(&missing), unknown);
     assert_eq!(editor.set_step_name(&missing, "x"), unknown);
     assert_eq!(editor.set_step_duration(&missing, "1"), unknown);
+    assert_eq!(
+        editor.nudge_step_duration(&missing, DurationNudge::PlusLarge),
+        unknown
+    );
     assert_eq!(editor.state(), &before);
     Ok(())
 }
@@ -488,6 +691,252 @@ fn edits_address_a_row_not_a_position() -> TestResult {
     editor.remove_step(&sid("s1")?)?;
     editor.set_step_duration(&sid("s2")?, "12")?;
     assert_eq!(row(&editor, "s2")?.duration_text, "12");
+    Ok(())
+}
+
+// Nudging durations
+
+#[test]
+fn nudge_buttons_are_minus_15_minus_5_plus_5_plus_15() {
+    let buttons: Vec<_> = DurationNudge::ALL
+        .into_iter()
+        .map(|nudge| {
+            (
+                nudge.delta_seconds(),
+                nudge.button_label(),
+                nudge.description(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        buttons,
+        [
+            (-15, "−15".to_owned(), "Subtract 15 seconds".to_owned()),
+            (-5, "−5".to_owned(), "Subtract 5 seconds".to_owned()),
+            (5, "+5".to_owned(), "Add 5 seconds".to_owned()),
+            (15, "+15".to_owned(), "Add 15 seconds".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn nudge_moves_the_duration_up_and_down() -> TestResult {
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    editor.set_step_duration(&s1, "30")?;
+    editor.nudge_step_duration(&s1, DurationNudge::PlusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "45");
+    editor.nudge_step_duration(&s1, DurationNudge::PlusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "50");
+    editor.nudge_step_duration(&s1, DurationNudge::MinusSmall)?;
+    editor.nudge_step_duration(&s1, DurationNudge::MinusLarge)?;
+    let shown = row(&editor, "s1")?;
+    assert_eq!(shown.duration_text, "30");
+    assert_eq!(shown.duration_label, "00:30");
+    Ok(())
+}
+
+#[test]
+fn nudge_clamps_at_both_bounds() -> TestResult {
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    editor.set_step_duration(&s1, "10")?;
+    editor.nudge_step_duration(&s1, DurationNudge::MinusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "0");
+    editor.nudge_step_duration(&s1, DurationNudge::MinusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "0");
+
+    editor.set_step_duration(&s1, "5990")?;
+    editor.nudge_step_duration(&s1, DurationNudge::PlusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "5999");
+    editor.nudge_step_duration(&s1, DurationNudge::PlusSmall)?;
+    let shown = row(&editor, "s1")?;
+    assert_eq!(shown.duration_text, "5999");
+    assert_eq!(shown.duration_label, "99:59");
+    Ok(())
+}
+
+#[test]
+fn nudge_starts_from_what_the_label_shows_for_invalid_text() -> TestResult {
+    // Not a number reads as 0 (label `00:00`); an out-of-range number as
+    // its bound (label `99:59`). The nudge leaves valid text.
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    for (text, nudge, expected) in [
+        ("abc", DurationNudge::PlusSmall, "5"),
+        ("", DurationNudge::PlusLarge, "15"),
+        ("   ", DurationNudge::MinusSmall, "0"),
+        ("1.5", DurationNudge::PlusSmall, "5"),
+        ("-20", DurationNudge::PlusSmall, "5"),
+        ("7000", DurationNudge::MinusSmall, "5994"),
+        (" 40 ", DurationNudge::PlusSmall, "45"),
+    ] {
+        editor.set_step_duration(&s1, text)?;
+        editor.nudge_step_duration(&s1, nudge)?;
+        assert_eq!(row(&editor, "s1")?.duration_text, expected, "{text:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn nudge_clears_the_rows_duration_error() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    editor.set_name("Nudged")?;
+    editor.set_step_duration(&s1, "abc")?;
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert_eq!(
+        row(&editor, "s1")?.duration_error.as_deref(),
+        Some(ENTER_SECONDS)
+    );
+
+    editor.nudge_step_duration(&s1, DurationNudge::PlusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_error, None);
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("r1")?).ok_or("not saved")?;
+    assert_eq!(saved_steps(saved), [("s1", "Step 1", 15)]);
+    Ok(())
+}
+
+#[test]
+fn nudge_updates_the_total() -> TestResult {
+    let mut editor = new_draft();
+    editor.set_step_duration(&sid("s1")?, "60")?;
+    let s2 = editor.add_step(StepPreset::Wait)?;
+    editor.set_step_duration(&s2, "30")?;
+    editor.nudge_step_duration(&s2, DurationNudge::PlusLarge)?;
+    assert_eq!(draft(&editor)?.total_label(), "1:45");
+    Ok(())
+}
+
+#[test]
+fn nudge_moves_only_that_rows_revision() -> TestResult {
+    // Typing keeps the revision, so the field keeps its own text; a nudge
+    // moves it on, so the field reloads the new text.
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    let s2 = editor.add_step(StepPreset::Blank)?;
+    editor.set_step_duration(&s1, "30")?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 0);
+    editor.nudge_step_duration(&s1, DurationNudge::PlusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 1);
+    editor.set_step_duration(&s1, "40")?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 1);
+    editor.nudge_step_duration(&s1, DurationNudge::MinusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 2);
+    assert_eq!(row(&editor, "s2")?.duration_revision, 0);
+    assert_eq!(row(&editor, s2.as_str())?.duration_text, "0");
+    Ok(())
+}
+
+// Moving rows
+
+/// A new draft with rows `s1`, `s2`, `s3`, each named after its id.
+fn three_rows() -> Result<EditorController, Box<dyn std::error::Error>> {
+    let mut editor = new_draft();
+    editor.add_step(StepPreset::Blank)?;
+    editor.add_step(StepPreset::Blank)?;
+    for id in ["s1", "s2", "s3"] {
+        editor.set_step_name(&sid(id)?, id)?;
+    }
+    Ok(editor)
+}
+
+#[test]
+fn move_up_puts_the_row_at_the_position() -> TestResult {
+    let mut editor = three_rows()?;
+    editor.move_step(&sid("s3")?, 0)?;
+    assert_eq!(row_ids(&editor)?, ["s3", "s1", "s2"]);
+    Ok(())
+}
+
+#[test]
+fn move_down_counts_the_position_after_the_move() -> TestResult {
+    let mut editor = three_rows()?;
+    editor.move_step(&sid("s1")?, 1)?;
+    assert_eq!(row_ids(&editor)?, ["s2", "s1", "s3"]);
+    editor.move_step(&sid("s2")?, 2)?;
+    assert_eq!(row_ids(&editor)?, ["s1", "s3", "s2"]);
+    Ok(())
+}
+
+#[test]
+fn move_to_its_own_position_changes_nothing() -> TestResult {
+    let mut editor = three_rows()?;
+    let before = editor.state().clone();
+    editor.move_step(&sid("s2")?, 1)?;
+    assert_eq!(editor.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn move_past_the_last_row_is_an_error_and_changes_nothing() -> TestResult {
+    let mut editor = three_rows()?;
+    let before = editor.state().clone();
+    assert_eq!(
+        editor.move_step(&sid("s1")?, 3),
+        Err(EditError::StepPositionOutOfRange { to: 3, rows: 3 })
+    );
+    assert_eq!(editor.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn move_of_an_unknown_row_or_without_a_draft_is_an_error() -> TestResult {
+    let mut editor = three_rows()?;
+    let before = editor.state().clone();
+    let missing = sid("missing")?;
+    assert_eq!(
+        editor.move_step(&missing, 0),
+        Err(EditError::UnknownStep(missing.clone()))
+    );
+    assert_eq!(editor.state(), &before);
+    assert_eq!(
+        self::editor().move_step(&missing, 0),
+        Err(EditError::NoDraft)
+    );
+    Ok(())
+}
+
+#[test]
+fn a_moved_row_keeps_its_text_errors_and_pour_and_labels_follow_positions() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = three_rows()?;
+    editor.set_step_duration(&sid("s3")?, "abc")?;
+    editor.set_step_water(&sid("s3")?, "60")?;
+    editor.set_step_water(&sid("s1")?, "0")?;
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+
+    editor.move_step(&sid("s3")?, 0)?;
+
+    let moved = row(&editor, "s3")?;
+    assert_eq!(moved.name_label, "Step 1 name");
+    assert_eq!(moved.name, "s3");
+    assert_eq!(moved.duration_text, "abc");
+    assert_eq!(moved.duration_error.as_deref(), Some(ENTER_SECONDS));
+    assert_eq!(moved.water_text, "60");
+    assert_eq!(moved.water_error, None);
+    let pushed = row(&editor, "s1")?;
+    assert_eq!(pushed.name_label, "Step 2 name");
+    assert_eq!(pushed.water_text, "0");
+    assert_eq!(pushed.water_error.as_deref(), Some("1–2000 g"));
+    assert_eq!(row(&editor, "s2")?.duration_error, None);
+    Ok(())
+}
+
+#[test]
+fn save_keeps_the_moved_order() -> TestResult {
+    let mut catalog = catalog(vec![v60()?])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    editor.add_step(StepPreset::AddWater)?;
+    editor.move_step(&sid("s1")?, 0)?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("recipe-1")?).ok_or("missing")?;
+    assert_eq!(
+        saved_steps(saved),
+        [("s1", "Add water", 0), ("step-1", "Bloom", 30)]
+    );
     Ok(())
 }
 
@@ -680,6 +1129,38 @@ fn delete_removes_the_edited_recipe_and_closes() -> TestResult {
 }
 
 #[test]
+fn an_editor_delete_can_be_undone_through_the_catalog() -> TestResult {
+    let poured = v60()?.with_step_added(RecipeStep::new(
+        sid("step-2")?,
+        "Pour".to_owned(),
+        StepDuration::try_parse(60)?,
+        Some(WaterAmount::try_parse(150)?),
+    ));
+    let mut catalog = catalog(vec![espresso()?, poured.clone(), v60_named("c", "Aero")?])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    editor.delete(&mut catalog)?;
+
+    let change = catalog.restore(&rid("recipe-1")?)?;
+
+    assert_eq!(change, CatalogChange::Upserted(rid("recipe-1")?));
+    assert_eq!(
+        catalog.state(),
+        [espresso()?, poured, v60_named("c", "Aero")?],
+        "the whole recipe, back in its place"
+    );
+    Ok(())
+}
+
+fn v60_named(id: &str, name: &str) -> Result<Recipe, ModelError> {
+    Ok(Recipe::blank(
+        rid(id)?,
+        RecipeName::try_parse(name)?,
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+    ))
+}
+
+#[test]
 fn delete_of_a_new_recipe_has_nothing_to_delete() -> TestResult {
     // Legacy: "create mode has nothing to delete".
     let mut catalog = catalog(vec![v60()?])?;
@@ -840,5 +1321,199 @@ fn create_edit_then_delete_a_recipe() -> TestResult {
     assert_eq!(editor.delete(&mut catalog)?, CatalogChange::Removed(id));
     assert!(catalog.state().is_empty());
     assert!(is_closed(&editor));
+    Ok(())
+}
+
+// Duplicate
+
+/// `pour-over` "Pour Over", "bright", 15 g to 250 g: Bloom 30s pouring
+/// 50 g, Pour 120s pouring 200 g.
+fn pour_over() -> Result<Recipe, ModelError> {
+    Ok(Recipe::new(
+        rid("pour-over")?,
+        RecipeName::try_parse("Pour Over")?,
+        "bright".to_owned(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+        vec![
+            RecipeStep::new(
+                sid("bloom")?,
+                "Bloom".to_owned(),
+                StepDuration::try_parse(30)?,
+                Some(WaterAmount::try_parse(50)?),
+            ),
+            RecipeStep::new(
+                sid("pour")?,
+                "Pour".to_owned(),
+                StepDuration::try_parse(120)?,
+                Some(WaterAmount::try_parse(200)?),
+            ),
+        ],
+    ))
+}
+
+/// An editor with a copy of `id` from `catalog` open.
+fn duplicating(
+    id: &str,
+    catalog: &RecipeCatalog,
+) -> Result<EditorController, Box<dyn std::error::Error>> {
+    let mut editor = editor();
+    editor.duplicate(&rid(id)?, catalog)?;
+    Ok(editor)
+}
+
+#[test]
+fn duplicate_opens_a_new_draft_with_fresh_ids() -> TestResult {
+    let catalog = catalog(vec![espresso()?, pour_over()?])?;
+    let editor = duplicating("pour-over", &catalog)?;
+    let draft = draft(&editor)?;
+    assert_eq!(draft.id().as_str(), "r1");
+    assert_eq!(draft.mode(), DraftMode::New);
+    assert_eq!(draft.title(), "New Recipe");
+    assert!(!draft.can_delete());
+    assert_eq!(row_ids(&editor)?, ["s1", "s2"]);
+    Ok(())
+}
+
+#[test]
+fn duplicate_copies_every_field_and_names_it_a_copy() -> TestResult {
+    let catalog = catalog(vec![pour_over()?])?;
+    let editor = duplicating("pour-over", &catalog)?;
+    let draft = draft(&editor)?;
+    assert_eq!(draft.name(), "Pour Over copy");
+    assert_eq!(draft.description(), "bright");
+    assert_eq!(draft.coffee(), "15");
+    assert_eq!(draft.water(), "250");
+    let steps: Vec<_> = rows(&editor)?
+        .into_iter()
+        .map(|r| (r.name, r.duration_text, r.water_text))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            ("Bloom".to_owned(), "30".to_owned(), "50".to_owned()),
+            ("Pour".to_owned(), "120".to_owned(), "200".to_owned()),
+        ]
+    );
+    assert_eq!(draft.total_label(), "2:30");
+    assert_eq!(draft.notice(), None);
+    Ok(())
+}
+
+#[test]
+fn duplicate_of_a_long_name_keeps_the_copy_within_the_bound() -> TestResult {
+    let long = "x".repeat(RecipeName::MAX_GENERATED_CHARS);
+    let recipe = pour_over()?.renamed(RecipeName::try_parse(&long)?);
+    let catalog = catalog(vec![recipe])?;
+    let editor = duplicating("pour-over", &catalog)?;
+    assert_eq!(
+        draft(&editor)?.name(),
+        RecipeName::try_parse(&long)?.copy_of().as_str()
+    );
+    assert_eq!(
+        draft(&editor)?.name().chars().count(),
+        RecipeName::MAX_GENERATED_CHARS
+    );
+    Ok(())
+}
+
+#[test]
+fn duplicate_of_an_unknown_id_is_an_error_and_changes_nothing() -> TestResult {
+    let catalog = catalog(vec![pour_over()?])?;
+    let mut editor = editor();
+    assert_eq!(
+        editor.duplicate(&rid("nope")?, &catalog),
+        Err(EditError::UnknownRecipe(rid("nope")?))
+    );
+    assert!(is_closed(&editor));
+    let mut open = editing("pour-over", &catalog)?;
+    let before = open.state().clone();
+    assert!(open.duplicate(&rid("nope")?, &catalog).is_err());
+    assert_eq!(open.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn saving_a_duplicate_appends_it_and_leaves_the_source() -> TestResult {
+    let mut catalog = catalog(vec![pour_over()?, espresso()?])?;
+    let mut editor = duplicating("pour-over", &catalog)?;
+    assert_eq!(
+        editor.save(&mut catalog)?,
+        CatalogChange::Upserted(rid("r1")?)
+    );
+    assert!(is_closed(&editor));
+    let ids: Vec<_> = catalog.state().iter().map(|r| r.id().as_str()).collect();
+    assert_eq!(ids, ["pour-over", "espresso", "r1"]);
+    assert_eq!(catalog.get(&rid("pour-over")?), Some(&pour_over()?));
+    let copy = catalog.get(&rid("r1")?).ok_or("copy not saved")?;
+    assert_eq!(copy.name().as_str(), "Pour Over copy");
+    assert_eq!(copy.description(), "bright");
+    assert_eq!(copy.coffee().grams(), 15);
+    assert_eq!(copy.water().grams(), 250);
+    assert_eq!(
+        saved_steps(copy),
+        [("s1", "Bloom", 30), ("s2", "Pour", 120)]
+    );
+    let pours: Vec<_> = copy
+        .steps()
+        .iter()
+        .map(|s| s.water().map(WaterAmount::grams))
+        .collect();
+    assert_eq!(pours, [Some(50), Some(200)]);
+    Ok(())
+}
+
+#[test]
+fn a_duplicate_of_a_pinned_recipe_is_saved_unpinned_at_the_end() -> TestResult {
+    let mut catalog = catalog_of(
+        FakeRecipeStore::with_recipes(vec![espresso()?, pour_over()?]).pinning(&rid("pour-over")?),
+    )?;
+    let mut editor = duplicating("pour-over", &catalog)?;
+    editor.save(&mut catalog)?;
+    assert_eq!(catalog.pin_of(&rid("r1")?), Pin::Unpinned);
+    assert_eq!(catalog.pin_of(&rid("pour-over")?), Pin::Pinned);
+    let listed: Vec<_> = catalog.listed().iter().map(|r| r.id().as_str()).collect();
+    assert_eq!(listed, ["pour-over", "espresso", "r1"]);
+    Ok(())
+}
+
+#[test]
+fn editing_a_pinned_recipe_keeps_it_pinned() -> TestResult {
+    let mut catalog = catalog_of(
+        FakeRecipeStore::with_recipes(vec![espresso()?, pour_over()?]).pinning(&rid("pour-over")?),
+    )?;
+    let mut editor = editing("pour-over", &catalog)?;
+    editor.set_name("Pour Over 2")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(catalog.pin_of(&rid("pour-over")?), Pin::Pinned);
+    assert_eq!(catalog.index_of(&rid("pour-over")?), Some(0));
+    catalog.load()?;
+    assert_eq!(
+        catalog.pin_of(&rid("pour-over")?),
+        Pin::Pinned,
+        "stored too"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_renamed_duplicate_saves_under_the_typed_name() -> TestResult {
+    let mut catalog = catalog(vec![pour_over()?])?;
+    let mut editor = duplicating("pour-over", &catalog)?;
+    editor.set_name("Iced pour over")?;
+    editor.save(&mut catalog)?;
+    let copy = catalog.get(&rid("r1")?).ok_or("copy not saved")?;
+    assert_eq!(copy.name().as_str(), "Iced pour over");
+    Ok(())
+}
+
+#[test]
+fn closing_a_duplicate_leaves_the_catalog_unchanged() -> TestResult {
+    let catalog = catalog(vec![pour_over()?, espresso()?])?;
+    let before = catalog.state().to_vec();
+    let mut editor = duplicating("pour-over", &catalog)?;
+    editor.close();
+    assert!(is_closed(&editor));
+    assert_eq!(catalog.state(), before.as_slice());
     Ok(())
 }

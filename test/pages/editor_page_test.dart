@@ -21,8 +21,13 @@ void main() {
       ..apply(RecipeListUpdateSnapshot(recipes: [summary('r1')]));
   });
 
-  /// A home page with the editor pushed over it.
+  /// A home page with the editor pushed over it, on a phone-sized screen
+  /// (411 × 891), so a card that overflows a phone's width fails the test.
   Future<void> pumpEditor(WidgetTester tester) async {
+    tester.view
+      ..physicalSize = const Size(1080, 2340)
+      ..devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -53,7 +58,11 @@ void main() {
     tester,
   ) async {
     // A draft left open from before is not this page's.
-    editor.apply(EditorUpdateOpen(draft: draft(id: 'old', name: 'Old')));
+    editor.apply(
+      EditorUpdateOpen(
+        draft: draft(id: 'old', name: 'Old'),
+      ),
+    );
     await pumpEditor(tester);
     expect(opens, 1);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -65,6 +74,10 @@ void main() {
     expect(find.text('Total duration: 0:30'), findsOneWidget);
     expect(find.text('Step 1 name'), findsOneWidget);
     expect(find.text('MM:SS — 00:30'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Coffee (g)'), findsOneWidget);
+    expect(find.text('15'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Water (g)'), findsOneWidget);
+    expect(find.text('250'), findsOneWidget);
   });
 
   testWidgets('renders the add-step buttons from state, in order', (
@@ -93,6 +106,10 @@ void main() {
           name: '',
           nameError: 'Enter a recipe name',
           description: '',
+          coffee: '0',
+          coffeeError: '1–200 g',
+          water: 'x',
+          waterError: 'Enter grams',
           totalLabel: '0:00',
           steps: [
             EditorStep(
@@ -102,17 +119,144 @@ void main() {
               durationText: 'x',
               durationLabel: '00:00',
               durationError: 'Enter seconds',
+              durationRevision: 0,
+              waterText: '0',
+              waterError: '1–2000 g',
             ),
           ],
+          pourHint: 'Step pours add up to 0 g of 250 g',
           addStepButtons: [],
+          durationNudgeButtons: [],
         ),
       ),
     );
     await tester.pump();
 
     expect(find.text('Enter a recipe name'), findsOneWidget);
+    expect(find.text('1–200 g'), findsOneWidget);
+    expect(find.text('Enter grams'), findsOneWidget);
     expect(find.text('Enter seconds'), findsOneWidget);
+    expect(find.text('1–2000 g'), findsOneWidget);
+    expect(find.text('Step pours add up to 0 g of 250 g'), findsOneWidget);
     expect(find.byTooltip('Delete'), findsNothing);
+  });
+
+  // The reorderable list re-creates a moved card (its item key includes the
+  // index), so a field keyed by position would keep the old row's text here.
+  testWidgets('a step order from Rust moves each card with its own fields', (
+    tester,
+  ) async {
+    EditorStep step(String id, int position, String name) => EditorStep(
+      id: id,
+      nameLabel: 'Step $position name',
+      name: name,
+      durationText: '0',
+      durationLabel: '00:00',
+      durationRevision: 0,
+      waterText: '',
+    );
+    FormFieldState<String> nameField(String id) => tester.state(
+      find
+          .descendant(
+            of: find.byKey(ValueKey(id)),
+            matching: find.byType(TextFormField),
+          )
+          .first,
+    );
+
+    await pumpEditor(tester);
+    editor.apply(
+      EditorUpdateOpen(
+        draft: draft().copyWith(
+          steps: [step('s1', 1, 'Bloom'), step('s2', 2, 'Pour')],
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byIcon(Icons.drag_handle), findsNWidgets(2));
+
+    editor.apply(
+      EditorUpdateOpen(
+        draft: draft().copyWith(
+          steps: [step('s2', 1, 'Pour'), step('s1', 2, 'Bloom')],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(nameField('s1').value, 'Bloom');
+    expect(nameField('s2').value, 'Pour');
+    final labels = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .map((field) => field.decoration?.labelText)
+        .where((label) => label?.endsWith(' name') ?? false)
+        .toList();
+    expect(labels, ['Recipe name', 'Step 1 name', 'Step 2 name']);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('s2'))).dy,
+      lessThan(tester.getTopLeft(find.byKey(const ValueKey('s1'))).dy),
+    );
+  });
+
+  testWidgets('renders the duration nudge buttons from state, in order', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    editor.apply(EditorUpdateOpen(draft: draft()));
+    await tester.pump();
+
+    final labels = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(Tooltip),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data);
+    expect(labels, ['−15', '−5', '+5', '+15']);
+    expect(find.byTooltip('Add 15 seconds'), findsOneWidget);
+  });
+
+  testWidgets('a nudged duration from Rust replaces the field text, typing '
+      'does not', (tester) async {
+    EditorStep step(String text, int revision) => EditorStep(
+      id: 's1',
+      nameLabel: 'Step 1 name',
+      name: 'Bloom',
+      durationText: text,
+      durationLabel: '00:00',
+      durationRevision: revision,
+      waterText: '',
+    );
+    Finder durationField() =>
+        find.widgetWithText(TextFormField, 'Duration (seconds)');
+    String? durationValue() =>
+        tester.state<FormFieldState<String>>(durationField()).value;
+
+    await pumpEditor(tester);
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('30', 0)])),
+    );
+    await tester.pump();
+    expect(durationValue(), '30');
+
+    // Typing (as the field's own change, so nothing is sent): Rust echoes
+    // the text at the same revision; the field keeps what it holds, even
+    // when an echo lags behind the keystrokes.
+    tester.state<FormFieldState<String>>(durationField()).didChange('305');
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('30', 0)])),
+    );
+    await tester.pump();
+    expect(durationValue(), '305');
+
+    // A nudge: new text at a new revision.
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('320', 1)])),
+    );
+    await tester.pump();
+    expect(durationValue(), '320');
+    expect(find.text('320'), findsOneWidget);
   });
 
   testWidgets('pops when Rust answers its opening with Closed', (
@@ -172,7 +316,7 @@ void main() {
     await tester.tap(find.byTooltip('Delete'));
     await tester.pumpAndSettle();
     expect(
-      find.text('Delete "V60"? This action cannot be undone.'),
+      find.text('Delete "V60"?'),
       findsOneWidget,
     );
   });

@@ -19,9 +19,17 @@ pub struct StartBrew {
     pub from: u32,
 }
 
-/// Stop the running brew; the recipe stays open.
+/// Stop the running or paused brew; the recipe stays open.
 #[derive(Deserialize, DartSignal)]
 pub struct ResetBrew;
+
+/// Hold the running brew on its step, with the time it has left.
+#[derive(Deserialize, DartSignal)]
+pub struct PauseBrew;
+
+/// Count the paused brew down again from where it was held.
+#[derive(Deserialize, DartSignal)]
+pub struct ResumeBrew;
 
 /// Change the open recipe's ratio for this brew only; the coffee stays and
 /// the water follows.
@@ -40,6 +48,12 @@ pub enum BrewRatioChange {
     Recipe,
 }
 
+/// Make the brew's adjusted ratio the open recipe's own: save the water
+/// and step pours shown. A refusal (too much water, a pour out of range) or
+/// a store failure comes back as `RecipeListUpdate::Failed`.
+#[derive(Deserialize, DartSignal)]
+pub struct SaveBrewRatio;
+
 /// The brew page closed.
 #[derive(Deserialize, DartSignal)]
 pub struct LeaveBrew;
@@ -56,6 +70,28 @@ pub enum BrewUpdate {
         recipe: BrewRecipe,
         timer: BrewTimer,
     },
+    /// The timer is held on `timer.step_index` with `timer.remaining_label`
+    /// left; that step's status is `Paused`.
+    Paused {
+        recipe: BrewRecipe,
+        timer: BrewTimer,
+    },
+    /// The last step ran out; every step's status is `Done`. Stopped like
+    /// `Idle`: a `StartBrew` brews again, a `ResetBrew` goes back to idle.
+    Finished {
+        recipe: BrewRecipe,
+        finished: BrewFinished,
+    },
+}
+
+/// How the last run ended.
+#[derive(Serialize, SignalPiece)]
+pub struct BrewFinished {
+    /// How long the run brewed, `M:SS`.
+    pub total_label: String,
+    /// What the scale should read now, `Poured to 300g`; none when no step
+    /// pours.
+    pub poured_label: Option<String>,
 }
 
 /// The open recipe with each step's status.
@@ -68,7 +104,7 @@ pub struct BrewRecipe {
     pub coffee_label: String,
     /// `100g`, at the ratio shown.
     pub water_label: String,
-    /// Water per gram of coffee, `1:5`; `—` without coffee.
+    /// Water per gram of coffee, `1:5`.
     pub ratio_label: String,
     pub ratio: BrewRatioSetting,
     /// Total, `M:SS`.
@@ -86,6 +122,9 @@ pub struct BrewStep {
     pub name: String,
     /// `Ns`.
     pub duration_label: String,
+    /// The water this step pours at the water shown, `50g`; none for a step
+    /// that pours nothing.
+    pub pour_label: Option<String>,
     pub status: BrewStepStatus,
     /// The step's arc on the dial's step track, as fractions of the whole
     /// brew: steps lie end to end from 0.0 to 1.0.
@@ -96,8 +135,6 @@ pub struct BrewStep {
 /// Whose ratio the page shows.
 #[derive(Serialize, SignalPiece)]
 pub enum BrewRatioSetting {
-    /// The recipe has no coffee; its ratio cannot change.
-    NoCoffee,
     /// The recipe's own ratio.
     Recipe,
     /// Changed for this brew; water and ratio differ from the recipe's.
@@ -107,11 +144,14 @@ pub enum BrewRatioSetting {
 #[derive(Serialize, SignalPiece)]
 pub enum BrewStepStatus {
     Done,
+    /// Being counted down.
     Current,
+    /// The step a paused brew is held on.
+    Paused,
     Pending,
 }
 
-/// The step being counted down.
+/// The step being counted down, or held while paused.
 #[derive(Serialize, SignalPiece)]
 pub struct BrewTimer {
     /// Start number of this brew: grows with every accepted `StartBrew`,
@@ -125,6 +165,12 @@ pub struct BrewTimer {
     pub position_label: String,
     /// `MM:SS` left.
     pub remaining_label: String,
+    /// What the scale should read once this step has poured, `Pour to
+    /// 150g`; none for a step that pours nothing.
+    pub pour_to_label: Option<String>,
+    /// What comes next, shown under the dial: `Next: Pour 2 · 0:45 ·
+    /// 100g` (the pour only if that step pours), or `Last step`.
+    pub next_label: String,
     /// Period of the ring's repeating sweep, in seconds: the step's full
     /// duration. None for a 0-second step (the ring stays still).
     pub sweep_seconds: Option<u32>,
@@ -138,6 +184,10 @@ pub enum PlatformEffect {
     Vibrate {
         ms: u32,
     },
+    /// Alternating pause and buzz lengths in ms, starting with a pause.
+    VibratePattern {
+        pattern_ms: Vec<u32>,
+    },
     KeepScreenOn {
         on: bool,
     },
@@ -150,4 +200,8 @@ pub enum PlatformEffect {
         next: Option<String>,
     },
     HideBrewNotification,
+    /// Put `text` on the clipboard: an exported recipe document.
+    CopyToClipboard {
+        text: String,
+    },
 }

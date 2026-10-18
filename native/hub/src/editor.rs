@@ -1,15 +1,18 @@
 //! Editor state ↔ editor signals.
 
-use coffee_timer_core::editor::{Draft, EditorState, EditorStepRow, StepPreset};
+use coffee_timer_core::editor::{Draft, DurationNudge, EditorState, EditorStepRow, StepPreset};
 
-use crate::signals::{AddStepButton, EditorDraft, EditorStep, EditorUpdate, StepPresetChoice};
+use crate::signals::{
+    AddStepButton, DurationNudgeButton, DurationNudgeChoice, EditorDraft, EditorStep, EditorUpdate,
+    StepPresetChoice,
+};
 
 impl From<&EditorState> for EditorUpdate {
     fn from(state: &EditorState) -> Self {
         match state {
             EditorState::Closed => Self::Closed,
             EditorState::Open(draft) => Self::Open {
-                draft: Box::new(draft.into()),
+                draft: Box::new(EditorDraft::from(&**draft)),
             },
         }
     }
@@ -24,13 +27,26 @@ impl From<&Draft> for EditorDraft {
             name: draft.name().to_owned(),
             name_error: draft.name_error(),
             description: draft.description().to_owned(),
+            coffee: draft.coffee().to_owned(),
+            coffee_error: draft.coffee_error(),
+            water: draft.water().to_owned(),
+            water_error: draft.water_error(),
             total_label: draft.total_label(),
+            pour_hint: draft.pour_hint(),
             steps: draft.step_rows().into_iter().map(EditorStep::from).collect(),
             add_step_buttons: StepPreset::ALL
                 .into_iter()
                 .map(|preset| AddStepButton {
                     preset: preset.into(),
                     label: preset.button_label().to_owned(),
+                })
+                .collect(),
+            duration_nudge_buttons: DurationNudge::ALL
+                .into_iter()
+                .map(|nudge| DurationNudgeButton {
+                    nudge: nudge.into(),
+                    label: nudge.button_label(),
+                    description: nudge.description(),
                 })
                 .collect(),
             notice: draft.notice().map(str::to_owned),
@@ -47,6 +63,9 @@ impl From<EditorStepRow> for EditorStep {
             duration_text: row.duration_text,
             duration_label: row.duration_label,
             duration_error: row.duration_error,
+            duration_revision: row.duration_revision,
+            water_text: row.water_text,
+            water_error: row.water_error,
         }
     }
 }
@@ -69,6 +88,28 @@ impl From<StepPresetChoice> for StepPreset {
             StepPresetChoice::AddWater => Self::AddWater,
             StepPresetChoice::Wait => Self::Wait,
             StepPresetChoice::Blank => Self::Blank,
+        }
+    }
+}
+
+impl From<DurationNudge> for DurationNudgeChoice {
+    fn from(nudge: DurationNudge) -> Self {
+        match nudge {
+            DurationNudge::MinusLarge => Self::MinusLarge,
+            DurationNudge::MinusSmall => Self::MinusSmall,
+            DurationNudge::PlusSmall => Self::PlusSmall,
+            DurationNudge::PlusLarge => Self::PlusLarge,
+        }
+    }
+}
+
+impl From<DurationNudgeChoice> for DurationNudge {
+    fn from(choice: DurationNudgeChoice) -> Self {
+        match choice {
+            DurationNudgeChoice::MinusLarge => Self::MinusLarge,
+            DurationNudgeChoice::MinusSmall => Self::MinusSmall,
+            DurationNudgeChoice::PlusSmall => Self::PlusSmall,
+            DurationNudgeChoice::PlusLarge => Self::PlusLarge,
         }
     }
 }

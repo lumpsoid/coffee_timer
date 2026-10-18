@@ -93,7 +93,8 @@ Effects are one-shot instructions: `Vibrate { ms }`, `PlayStepSound`,
 
 Kept: start from step 0 or a chosen step; one tick per second; at a step
 boundary vibrate + sound + next step; after the last step screen-on off,
-ended, vibrate, no sound; reset turns screen-on off; leaving resets silently.
+ended, vibrate, no sound (since changed deliberately: see **Done** under
+the deliberate changes); reset turns screen-on off; leaving resets silently.
 
 Fixed / changed:
 
@@ -175,6 +176,62 @@ Fixed / changed:
   are no installs to migrate.
 - A new `RemoveRecipe` intent deletes from the list without opening a
   draft.
+
+## Changed after the port
+
+Deliberate changes to behavior the port had kept.
+
+- **Real coffee and water amounts (schema v2).** Legacy `BrewMetrics`
+  derived the figures from the step count: 10 g coffee and 50 g water per
+  step, so the ratio was always `1:5`. A recipe now stores its coffee dose
+  (`CoffeeDose`, 1–200 g) and total water (`WaterAmount`, 1–2000 g),
+  edited in the editor with the other fields' live validation. The list
+  card, the brew page label, the ratio, and the brew page's ratio adjuster
+  all use the stored values. The v2 migration gives each existing recipe
+  what the old formula showed (a recipe the formula would put outside the
+  bounds, such as one with no steps, reads clamped into them). A new
+  database seeds Espresso 18 g / 36 g and Pour Over 15 g / 250 g. Because a
+  dose is never 0 g, the brew page's "no coffee, no ratio" case
+  (`RatioSetting::NoCoffee`, `BrewError::NoCoffee`) is gone.
+- **Pause and resume.** Legacy (and the port) reset a running brew when the
+  dial was tapped. Tapping it now pauses (`BrewState::Paused`, keeping the
+  step and its time left) and tapping again resumes. Reset moved to a Reset
+  button under the dial, shown while a brew runs or is paused, rather than
+  to a long-press on the dial: long-press already means "start from here"
+  on the steps, and a visible button is discoverable where a second
+  gesture on the same dial is not. While paused the screen may sleep and
+  the notification stays, reading `Paused`. Every rule about stopping
+  (reset, leave, open, an edit or delete of the open recipe) treats a
+  paused brew like a running one.
+- **Undo a delete.** Legacy deletes were final, and both delete dialogs
+  said "This action cannot be undone." A delete, from the list or the
+  editor, now offers a `Deleted V60` snackbar with Undo, which restores
+  the whole recipe at its old place; the dialogs now ask only
+  `Delete "V60"?`. Only the last removal can be undone, and it is held in
+  memory, not stored.
+- **Done.** Legacy (and the port) went back to idle after the last step,
+  so an ended brew looked like one never started, and it ended with the
+  same single 100 ms buzz as a step boundary, with no sound. The brew now
+  ends in `BrewState::Finished`: the dial reads `DONE`, the time the run
+  brewed (from the step it started at; the recipe's total for a full brew)
+  and, when any step pours, the scale's final reading (`Poured to 250g`,
+  at the ratio shown); every step is marked done. Finishing returns
+  screen-on off, a double long buzz (`VibratePattern [0, 400, 200, 400]`),
+  the step sound, then the notification hidden (last, so the platform keeps
+  the app awake for the buzz and sound). Tapping the dial while done brews
+  again from step 1, in one tap, as it does while idle; the Reset button
+  (shown while done) goes back to idle; long-pressing a step starts there.
+  A ratio change keeps a finished brew finished, as it keeps idle idle;
+  an edit to the open recipe shows the new version idle, and a delete
+  shows "Empty recipe", with no effects, exactly as while idle.
+- **Save the ratio to the recipe.** The brew page's ratio sheet offers
+  "Save to recipe" while the ratio is adjusted: the recipe takes the water
+  shown and every step pour as shown (`PourScale`), coffee kept, and the
+  brew keeps its place. For that, a catalog change that leaves the open
+  recipe exactly as the brew page shows it no longer resets a running,
+  paused or finished brew to idle; before, any save of the open recipe
+  did, even one that changed nothing. A save that changes the recipe still
+  resets it.
 
 ## Phases
 

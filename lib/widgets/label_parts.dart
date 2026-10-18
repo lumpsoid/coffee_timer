@@ -64,6 +64,27 @@ class LabelBadge extends StatelessWidget {
   }
 }
 
+/// A small push pin inked in the label's accent, tilted as if stuck in by
+/// hand: the mark of a pinned recipe.
+class LabelPinMark extends StatelessWidget {
+  const LabelPinMark({required this.colors, super.key});
+
+  final LabelColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Transform.rotate(
+      angle: math.pi / 6,
+      child: Icon(
+        Icons.push_pin,
+        size: 15,
+        color: colors.accent.withValues(alpha: 0.9),
+        semanticLabel: 'Pinned',
+      ),
+    );
+  }
+}
+
 /// The description as a tagline between dashes.
 class LabelTagline extends StatelessWidget {
   const LabelTagline({required this.text, required this.colors, super.key});
@@ -115,7 +136,9 @@ class LabelSpecs extends StatelessWidget {
         children: [
           for (final (i, spec) in specs.indexed) ...[
             if (i > 0) rule,
-            Expanded(child: _Spec(colors: colors, spec: spec)),
+            Expanded(
+              child: _Spec(colors: colors, spec: spec),
+            ),
           ],
         ],
       ),

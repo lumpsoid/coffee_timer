@@ -1,0 +1,73 @@
+use crate::brew::{Effect, RunningStep};
+use crate::model::{PreAlertLead, Settings, Toggle};
+
+/// The cues a brew gives, as named config: the buzz and sound at a step
+/// boundary and at the finish, and the lighter pre-alert buzz a few
+/// seconds before a step ends. Built from the user's [`Settings`] on every
+/// tick ([`crate::brew::BrewController::tick`]), so muting is decided
+/// here: with sound off no cue plays the sound, with vibration off none
+/// buzzes, and the shell carries out whatever is left.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CuePolicy {
+    pre_alert: PreAlertLead,
+    sound: Toggle,
+    vibration: Toggle,
+}
+
+impl CuePolicy {
+    /// Buzz length at each step boundary (legacy `vibrate_leaf.dart`:
+    /// `Vibration.vibrate(duration: 100)`).
+    pub const STEP_BUZZ_MS: u32 = 100;
+
+    /// The pre-alert's buzz, shorter than a step boundary's 100 ms so the
+    /// two feel different.
+    pub const PRE_ALERT_MS: u32 = 40;
+
+    /// The end of a brew: two long buzzes, so it does not feel like one more
+    /// step boundary. Pause and buzz lengths in ms, starting with a pause.
+    pub const FINISH_PATTERN_MS: [u32; 4] = [0, 400, 200, 400];
+
+    /// The cues `settings` allow.
+    pub fn of(settings: &Settings) -> Self {
+        Self {
+            pre_alert: settings.pre_alert(),
+            sound: settings.sound(),
+            vibration: settings.vibration(),
+        }
+    }
+
+    /// The pre-alert for `step`, just ticked, if this is its moment: the
+    /// tick that leaves exactly the lead time. That moment comes once per
+    /// step (the countdown only falls, and pausing keeps it), and never at
+    /// a step boundary (the lead is at least 1 s). A step no longer than
+    /// the lead gets none: it would buzz at its start, or never. It is a
+    /// buzz, so vibration off silences it.
+    pub(crate) fn pre_alert(self, step: &RunningStep) -> Option<Effect> {
+        let lead = self.pre_alert.seconds();
+        let due =
+            lead > 0 && step.duration().seconds() > lead && step.remaining().seconds() == lead;
+        (due && self.vibration.is_on()).then_some(Effect::Vibrate {
+            ms: Self::PRE_ALERT_MS,
+        })
+    }
+
+    /// A step boundary's cues: a buzz, then the sound.
+    pub(crate) fn step_boundary(self) -> Vec<Effect> {
+        self.buzz_then_sound(Effect::Vibrate {
+            ms: Self::STEP_BUZZ_MS,
+        })
+    }
+
+    /// The finish's cues: the two long buzzes, then the sound.
+    pub(crate) fn finish(self) -> Vec<Effect> {
+        self.buzz_then_sound(Effect::VibratePattern {
+            pattern_ms: Self::FINISH_PATTERN_MS.to_vec(),
+        })
+    }
+
+    fn buzz_then_sound(self, buzz: Effect) -> Vec<Effect> {
+        let buzz = self.vibration.is_on().then_some(buzz);
+        let sound = self.sound.is_on().then_some(Effect::PlayStepSound);
+        buzz.into_iter().chain(sound).collect()
+    }
+}

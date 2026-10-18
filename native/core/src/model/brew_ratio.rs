@@ -1,3 +1,5 @@
+use crate::model::{CoffeeDose, WaterAmount};
+
 /// Grams of water per gram of coffee, kept in tenths: `1:15.5` is 155.
 ///
 /// A recipe's own ratio can be any value. A ratio adjusted on the brew page
@@ -13,18 +15,12 @@ impl BrewRatio {
     pub const MAX_TENTHS: u32 = 300;
     /// One adjustment step, `0.5`.
     pub const STEP_TENTHS: u32 = 5;
-    /// What stands in for the ratio of a recipe without coffee.
-    pub const NONE_LABEL: &'static str = "—";
-
-    /// `water` per gram of `coffee`, rounded half up to a tenth. None
-    /// without coffee.
-    pub fn of(coffee_grams: u32, water_grams: u32) -> Option<Self> {
-        let coffee = u64::from(coffee_grams);
-        if coffee == 0 {
-            return None;
-        }
-        let tenths = (u64::from(water_grams) * 20 + coffee) / (coffee * 2);
-        Some(Self(u32::try_from(tenths).unwrap_or(u32::MAX)))
+    /// `water` per gram of `coffee`, rounded half up to a tenth. A dose is
+    /// never zero, so there always is one.
+    pub fn of(coffee: CoffeeDose, water: WaterAmount) -> Self {
+        let coffee = u64::from(coffee.grams()).max(1);
+        let tenths = (u64::from(water.grams()) * 20 + coffee) / (coffee * 2);
+        Self(u32::try_from(tenths).unwrap_or(u32::MAX))
     }
 
     /// One step more water: up to the next multiple of the step, at most
@@ -41,9 +37,10 @@ impl BrewRatio {
         Self(previous.clamp(Self::MIN_TENTHS, Self::MAX_TENTHS))
     }
 
-    /// The water for `coffee_grams` at this ratio, rounded half up to a gram.
-    pub fn water_grams(self, coffee_grams: u32) -> u32 {
-        let tenth_grams = u64::from(coffee_grams) * u64::from(self.0);
+    /// The water for `coffee` at this ratio, rounded half up to a gram. An
+    /// adjusted ratio may call for more water than a recipe can store.
+    pub fn water_grams(self, coffee: CoffeeDose) -> u32 {
+        let tenth_grams = u64::from(coffee.grams()) * u64::from(self.0);
         u32::try_from((tenth_grams + 5) / 10).unwrap_or(u32::MAX)
     }
 

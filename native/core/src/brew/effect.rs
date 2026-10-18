@@ -7,6 +7,11 @@ pub enum Effect {
     Vibrate {
         ms: u32,
     },
+    /// A buzz pattern: alternating pause and buzz lengths in ms, starting
+    /// with a pause (`[0, 400, 200, 400]` is two long buzzes).
+    VibratePattern {
+        pattern_ms: Vec<u32>,
+    },
     PlayStepSound,
     /// Keep the screen awake (`true`) or let it sleep again (`false`).
     KeepScreenOn(bool),

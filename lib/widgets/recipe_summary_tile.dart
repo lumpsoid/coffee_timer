@@ -7,9 +7,10 @@ import 'package:flutter/material.dart';
 
 /// One row in the recipe list, drawn as a printed coffee-bag label: the name
 /// in a stamped badge, the description as a tagline, the brew figures in a
-/// spec grid. Pure cosmetics: the figures arrive as labels computed in Rust
-/// (`20 g`, `1:35`) and the look as a [RecipeLabel]; only the captions are
-/// UI text.
+/// spec grid. A pinned recipe carries a small pin in the corner opposite
+/// the roast meter. Pure cosmetics: the figures arrive as labels computed
+/// in Rust (`20 g`, `1:35`) and the look as a [RecipeLabel]; only the
+/// captions are UI text.
 class RecipeSummaryTile extends StatelessWidget {
   const RecipeSummaryTile({
     required this.name,
@@ -18,6 +19,7 @@ class RecipeSummaryTile extends StatelessWidget {
     required this.waterLabel,
     required this.timeLabel,
     required this.label,
+    this.pinned = false,
     this.onTap,
     this.onLongPress,
     super.key,
@@ -29,6 +31,9 @@ class RecipeSummaryTile extends StatelessWidget {
   final String waterLabel;
   final String timeLabel;
   final RecipeLabel label;
+
+  /// Whether to show the pin marker.
+  final bool pinned;
   final VoidCallback? onTap;
   final VoidCallback? onLongPress;
 
@@ -67,6 +72,12 @@ class RecipeSummaryTile extends StatelessWidget {
                   right: 16,
                   child: RoastMeter.of(label.tone, colors),
                 ),
+                if (pinned)
+                  Positioned(
+                    top: 11,
+                    left: 16,
+                    child: LabelPinMark(colors: colors),
+                  ),
               ],
             ),
           ),

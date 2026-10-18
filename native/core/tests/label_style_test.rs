@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 
 use coffee_timer_core::model::{
-    BrewMetrics, LabelShade, LabelStyle, LabelTexture, LabelTone, ModelError, Recipe, RecipeId,
-    RecipeName, RecipeStep, StainCorner, StepDuration, StepId,
+    BrewMetrics, CoffeeDose, LabelShade, LabelStyle, LabelTexture, LabelTone, ModelError, Recipe,
+    RecipeId, RecipeName, RecipeStep, StainCorner, StepDuration, StepId, WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -16,6 +16,7 @@ fn recipe(id: &str, name: &str, step_seconds: &[i64]) -> Result<Recipe, ModelErr
                 StepId::try_parse(&format!("s{i}"))?,
                 "step".to_owned(),
                 StepDuration::clamped(s),
+                None,
             ))
         })
         .collect::<Result<_, ModelError>>()?;
@@ -23,6 +24,8 @@ fn recipe(id: &str, name: &str, step_seconds: &[i64]) -> Result<Recipe, ModelErr
         RecipeId::try_parse(id)?,
         RecipeName::try_parse(name)?,
         String::new(),
+        CoffeeDose::try_parse(20)?,
+        WaterAmount::try_parse(100)?,
         steps,
     ))
 }

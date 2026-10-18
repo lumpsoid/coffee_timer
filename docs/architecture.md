@@ -34,9 +34,9 @@ and not on each other. Dart sees only the generated signal classes.
 
 | Controller | State object | Owns |
 |---|---|---|
-| [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>` | the recipe list and its persistence (shared) |
-| [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme and accent, and their persistence |
-| [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` | the open recipe and its timer |
+| [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>` and the pinned ids, plus the last `RemovedRecipe` | the recipe list, its pins and persistence, and the one removal that can be undone (shared) |
+| [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme, accent and brew cues (sound, vibration, pre-alert), and their persistence |
+| [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` / `Finished(view, finished)` | the open recipe and its timer |
 | [`EditorController`](../native/core/src/editor/editor_controller.rs) | [`EditorState`](../native/core/src/editor/editor_state.rs): `Closed` / `Open(Draft)` | one draft, new or of an existing recipe |
 
 An action takes plain values and mutates the state. It returns only what
@@ -47,8 +47,13 @@ assert the state.
 The state objects are complete views, so the screens hold no logic. Every
 label is computed in core: `20g`, `1:35`, `MM:SS`, `Ns`, `Step N name`. Core
 also computes each step's status, the field errors, and the editor's notice.
-[`BrewMetrics`](../native/core/src/model/brew_metrics.rs) is the one home for
-the coffee, water and total-duration figures.
+The coffee and water grams are stored on the recipe, as `CoffeeDose` and
+`WaterAmount`, and each step may store the water it pours, as an optional
+`WaterAmount`. [`BrewMetrics`](../native/core/src/model/brew_metrics.rs) is
+the one home for the figures derived from them and the steps: the ratio and
+the total duration. [`PourScale`](../native/core/src/model/pour_scale.rs)
+is the one rounding rule for the step pours at a brew's water, and gives
+each pouring step its grams and its `Pour to 150g` running total.
 
 A failed write leaves the state unchanged and returns `Err`. Draft
 actions are the exception. They clear the previous notice whatever they do.
@@ -62,25 +67,31 @@ actions are the exception. They clear the previous notice whatever they do.
   `IdGen`. Tests use the fakes in
   [`core/src/fakes`](../native/core/src/fakes), which are compiled only for
   tests and under the `test-fakes` feature.
+- **The user's settings** enter `BrewController::tick` as `&Settings`,
+  read from `SettingsController::state()` on every tick (see
+  [the timer](#the-timer)).
 - **The shared controller** `RecipeCatalog` enters as an action argument.
-  `BrewController::open`, `BrewController::on_catalog_change` and
-  `EditorController::edit` take `&RecipeCatalog`. `EditorController::save`
-  and `EditorController::delete` take `&mut RecipeCatalog`. Every
+  `BrewController::open`, `BrewController::on_catalog_change`,
+  `EditorController::edit` and `EditorController::duplicate` take
+  `&RecipeCatalog`. `EditorController::save`,
+  `EditorController::delete` and `BrewController::save_ratio` take
+  `&mut RecipeCatalog`. Every
   cross-feature dependency therefore appears in a signature, and the borrow
   checker proves who reads and who writes. Nothing uses `Rc<RefCell>` or
   `Arc<Mutex>` around controllers.
 
 No coordinator object exists. A flow belongs to the controller of the
-feature that starts it. The editor saves through the catalog, and the
-catalog writes through its store before it updates its state.
+feature that starts it. The editor saves through the catalog, and so does
+the brew page's "Save to recipe"; the catalog writes through its store
+before it updates its state.
 
 ## The `CatalogChange` flow
 
 [`CatalogChange`](../native/core/src/catalog/catalog_change.rs) is
 `Upserted(id)` or `Removed(id)`. `RecipeCatalog::upsert` and
 `RecipeCatalog::remove` return it only after the store has written the
-change. `EditorController::save` and `EditorController::delete` pass it
-through. `RecipeCatalog::load` returns `Result<(), StoreError>` and no
+change. `EditorController::save`, `EditorController::delete` and
+`BrewController::save_ratio` pass it through. `RecipeCatalog::load` returns `Result<(), StoreError>` and no
 change. It is boot-only.
 
 Each shell passes every change on unconditionally, with one `pass_on`
@@ -88,7 +99,8 @@ function:
 
 - **Hub** ([`run.rs`](../native/hub/src/run.rs)):
   1. Sends `RecipeListUpdate::of(&change, &catalog)` as the list diff. It
-     reads the row from the catalog, so it is `Upserted { recipe }`, or
+     reads the row from the catalog, so it is `Upserted { recipe, index }`
+     (its place in list order), or
      `Removed { id }` when the catalog no longer holds that id.
   2. Calls `brew.on_catalog_change(&change, &catalog)`.
   3. Sends the brew view and its effects.
@@ -96,31 +108,122 @@ function:
   then calls `brew.on_catalog_change` and prints its effects.
 
 `BrewController::on_catalog_change` ignores a change to any recipe that is
-not open. If the change hits the open recipe, the controller reopens it from
-the catalog. An edit shows the new version, idle, and stops a running brew.
+not open, and one that leaves the open recipe exactly as the page shows
+it. If the change hits the open recipe, the controller reopens it from
+the catalog. An edit shows the new version, idle, and stops a running or
+paused brew.
 A delete shows "Empty recipe".
 
-Three intents produce a change: the editor's save, the editor's delete, and
-the list's `RemoveRecipe`. `RemoveRecipe` calls `RecipeCatalog::remove`
-directly, without opening a draft.
+Eight intents produce a change: the editor's save, the editor's delete, the
+list's `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe` and
+`ImportRecipes` (one change per imported recipe), and the brew page's
+`SaveBrewRatio`. `RemoveRecipe` calls `RecipeCatalog::remove` directly,
+without opening a draft.
+
+**Importing and exporting.** The recipe document is
+[`RecipeDocument`](../native/core/src/transfer/recipe_document.rs): pure
+encoding and decoding over strings, every imported value through its
+model type. `RecipeCatalog::export(ids)` encodes recipes it holds (every
+one, in list order, for no ids). An import is
+`EditorController::import(text, &mut catalog)`: the editor is the one
+minter of new recipes' ids, so the import uses its `IdGen` rather than a
+second one that could hand out the same ids. It decodes the whole
+document first, then mints the ids, then calls
+`RecipeCatalog::append_all`, which writes every recipe in one store
+transaction (`RecipeStore::append_all`) before it updates its state.
+So an import is all or nothing: one paste is one action with one
+message, and since the document carries no ids, a partial import fixed
+and pasted again would duplicate the recipes that got in. Each new
+recipe's `Upserted` goes through `pass_on` like any change; the list
+diff puts it at its index, after every recipe already listed, since an
+imported recipe is unpinned. The hub then sends
+`RecipeListUpdate::Notice { message: "Imported 2 recipes" }`. An export
+in the hub is `PlatformEffect::CopyToClipboard { text }` and then
+`Notice { message: "Copied 2 recipes" }`: the effect is the hub's, not a
+core `Effect`, since copying is how the GUI head delivers the text (the
+CLI writes it to stdout or a file). The clipboard is read in Dart, whose
+`ImportRecipes { text }` carries it as is.
+
+**Saving the brew's ratio.** The flow belongs to the brew page, which
+starts it, so `BrewController::save_ratio(&mut catalog)` owns it, as
+`EditorController::save` owns the editor's: no new ordering owner, and the
+hub only passes the change on. The controller takes its adjusted ratio's
+water (`BrewRatio::water_grams` of the coffee, the figure the page shows),
+builds the recipe with `Recipe::with_water_scaled_to`, whose step pours
+come from the same `PourScale` the page shows, so what was shown is what
+is saved, and upserts it. Only after the write does it replace its own
+view with the saved recipe at its own ratio, keeping the timer's place
+(`BrewState::map_view`): the steps and their times are unchanged, so a
+running, paused or finished brew carries on. The returned `Upserted`
+goes through `pass_on` like any change; the list gets the new row, and
+`on_catalog_change` finds the page already showing that recipe and does
+nothing. A water over 2000 g or a scaled pour outside 1–2000 g is
+`SaveRatioError::OutOfRange`, and nothing changes. With under 10 g of
+coffee the whole grams saved can give the recipe a slightly different
+ratio label than the adjusted one showed (3 g at 1:15.5 is 47 g of water,
+`1:15.7`); the grams are what is kept.
+
+**Undoing a delete.** Both deletes go through `RecipeCatalog::remove`,
+which keeps the removed recipe, whole, with its index, as a
+[`RemovedRecipe`](../native/core/src/catalog/removed_recipe.rs). It is
+catalog data, so it lives in the catalog rather than in a controller of its
+own: only the catalog sees every removal, and a restore is a catalog write
+like any other. The next removal of a listed recipe replaces it,
+`restore(id)` uses it up, and it is never stored, so a restart drops it.
+`RecipeListUpdate::of` reads `catalog.restorable(id)` for a `Removed`
+change and sends its text as `Removed { undo_notice: "Deleted V60" }`;
+`RecipeListHolder` passes that on as an `UndoOffer`, and the list page shows
+a snackbar with an **Undo**. Flutter picks only how long it stays up. Undo
+sends `UndoRemoveRecipe { recipe_id }`; `restore` writes the recipe back at
+its index (`RecipeStore::insert_at`) and returns `Upserted(id)`, which goes
+through `pass_on` like any change. The list diff `Upserted` carries the
+row's index, so Dart inserts a restored row at its old place. An id that is
+not the last removal, or one already back, is `RestoreError::NothingToUndo`
+and changes nothing.
+
+**Pinning.** Which recipes are pinned is catalog metadata (a set of ids
+beside `Vec<Recipe>`, stored as `recipe.pinned`), not a `Recipe` field: it
+says where the user keeps a recipe, not how it brews. So the editor's save
+keeps it without carrying it through the draft, a duplicate (a new id)
+starts unpinned, and pinning the open recipe leaves a running brew alone,
+since `on_catalog_change` finds the recipe unchanged. The list's order is
+[`PinnedFirst`](../native/core/src/catalog/pinned_first.rs): pinned
+recipes, then the rest, each in stored order. A pin moves no stored row,
+so unpinning puts a recipe back where it stood among the unpinned, and the
+undo of a delete restores the stored index and the pin, and so the place.
+`RecipeCatalog::listed` is that order (the snapshot and the CLI's `list`),
+and `index_of` a place in it. `set_pin` returns `Upserted(id)`, which goes
+through `pass_on` like any change. The diff expresses the move with no new
+variant: `Upserted { recipe, index }` means "the row with this id now reads
+so and stands at `index`", and Dart drops the row with that id, if any,
+then inserts it at `index`. The same rule serves an edit (same index), a
+new recipe (the end) and a restore (its old place).
 
 ## Effects
 
 An [`Effect`](../native/core/src/brew/effect.rs) is a platform command that
-a controller has already decided on: `Vibrate { ms }`, `PlayStepSound`,
-`KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
+a controller has already decided on: `Vibrate { ms }`,
+`VibratePattern { pattern_ms }` (pause and buzz lengths, starting with a
+pause), `PlayStepSound`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
 `HideBrewNotification`. Only `BrewController` returns effects. The hub maps
 each effect to a `PlatformEffect` signal and sends it after the brew view.
+The hub also sends `PlatformEffect::CopyToClipboard { text }` itself for
+an export (see [importing and exporting](#the-catalogchange-flow)).
 Dart's [`PlatformEffectPerformer`](../lib/effects/platform_effect_performer.dart)
-makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`,
-`[sound]`, `[screen on]`, `[screen off]`, `[notify Bloom · 00:35 | Next:
+makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`
+(`[vibrate 40ms]` for the pre-alert),
+`[vibrate pattern 0/400/200/400ms]`, `[sound]`, `[screen on]`, `[screen off]`, `[notify Bloom · 00:35 | Next:
 Pour]` and `[notify off]`.
 
 **The brew notification.** A
 [`BrewNotice`](../native/core/src/brew/brew_notice.rs) is the running step
 and its countdown, `Bloom · 00:35`, and the next step, `Next: Pour`, which
 is left out on the last step. A running brew shows it from start to stop,
-refreshed on every tick. On Android,
+refreshed on every tick. A paused brew keeps it, reading
+`Bloom · 00:35 · Paused`: the foreground service then keeps the paused
+brew alive in the background and one tap from the app. (It still holds its
+partial wake lock while paused; nothing ticks, so that costs little, and
+releasing it would need a second notification kind for no visible gain.) On Android,
 [`BrewService`](../android/app/src/main/kotlin/com/example/coffee_timer/BrewService.kt)
 performs it as a foreground service that holds a partial wake lock. That
 keeps the process alive and the CPU awake, so the hub keeps ticking and the
@@ -139,27 +242,76 @@ clock. Time arrives as `tick()`, one call per second while
 - `start(from)` begins step `from` with its full duration and returns
   `KeepScreenOn(true)` + `ShowBrewNotification`. If no recipe is open, or `from` is out of range, it
   returns `Err(BrewError)` and changes nothing. Starting while a brew is
-  running restarts it.
+  running, paused or finished restarts it, as a new run.
+- `pause()` holds a running brew on its step with the time it has left
+  (`Paused`) and returns `KeepScreenOn(false)` + the `Paused`
+  notification. The screen may sleep: nothing on it moves until resumed,
+  and a forgotten pause should not keep the display lit. `resume()` counts
+  down again from there, in the same run, and returns `KeepScreenOn(true)`
+  + the running notification. Neither vibrates or plays the sound. Pausing
+  anything but a running brew (`NotRunning`), or resuming anything but a
+  paused one (`NotPaused`), is an `Err` that changes nothing. `tick()` does
+  nothing while paused, and the shell does not tick then.
 - `tick()` takes one second off the current step, and never goes below zero.
   Every tick that leaves the brew running returns `ShowBrewNotification`
   last. When a step reaches zero, the next step begins and the tick returns
-  `Vibrate` + `PlayStepSound` before it. After the last step, the brew goes
-  back to `Idle` and the tick returns `KeepScreenOn(false)` + `Vibrate` +
-  `HideBrewNotification`, with no sound. The hide comes last, so the app is
-  still kept awake for the final buzz. A 0-second step shows `00:00` for one
-  tick.
-- `reset()` stops the brew and keeps the recipe open. `leave()` stops the
+  `Vibrate` + `PlayStepSound` before it. The tick that leaves a step
+  exactly the pre-alert lead (3 s by default) returns `Vibrate { ms: 40 }`
+  before the notification: a lighter cue that the step is about to end.
+  Its rule is [`CuePolicy`](../native/core/src/brew/cue_policy.rs), named
+  config built from the user's settings. Since the countdown only falls and a pause keeps it, the
+  moment comes once per step: pausing and resuming around it never
+  repeats it, and a restart is a new countdown. A step no longer than the
+  lead gets none. The lead is at least 1 s, so the pre-alert never shares
+  a tick with a step boundary or the finish: the last step gets its
+  pre-alert 3 s before the end, and the finishing tick carries only the
+  finish effects. After the last step, the brew is
+  `Finished` and the tick returns `KeepScreenOn(false)` +
+  `VibratePattern [0, 400, 200, 400]` (two long buzzes, unlike a step
+  boundary) + `PlayStepSound` + `HideBrewNotification`. The hide comes
+  last, so the app is still kept awake for the final buzz and sound. A
+  0-second step shows `00:00` for one tick.
+- **Muting and the pre-alert lead are settings, decided in core.**
+  `tick(&Settings)` builds `CuePolicy::of(settings)` on every call, and
+  only `CuePolicy` makes the cue effects: with sound off a tick returns
+  no `PlayStepSound`, with vibration off no `Vibrate` (step boundary or
+  pre-alert) and no finish `VibratePattern`, and the pre-alert comes at
+  the settings' lead (off, 3, 5 or 10 s). The screen and notification
+  effects are never muted. The settings are passed in, not copied into the
+  brew controller: `SettingsController` stays their one owner, there is no
+  second copy for the hub and the CLI to keep in step at boot and after
+  every change, and the dependency shows in the signature. The hub reads
+  `c.settings.state()` at each beat, so a change mid-brew applies from the
+  next tick. Flutter performs every effect it gets and filters none.
+- While running or paused, `BrewView::next_label(index)` previews the
+  step after the current one, `Next: Pour 2 · 0:45 · 100g` (its `M:SS`
+  duration, and its pour at the water shown if it pours), or `Last step`.
+  It goes out as `BrewTimer.next_label`; the page shows it under the dial.
+- `Finished(view, finished)` marks every step done. `FinishedBrew` holds
+  the time the run brewed, `M:SS`: the steps from the one it started at
+  (`RunningStep::first`) to the last, summed by `BrewMetrics`.
+  `BrewView::poured_label` is the scale's final reading, `Poured to 250g`,
+  at the ratio shown, or none when no step pours. A finished brew is
+  stopped like an idle one: `tick()` does nothing, `pause()`/`resume()`
+  are `Err`, `adjust_ratio` keeps it finished at the new ratio, and a
+  catalog change to its recipe reopens it idle (or empty) with no effects.
+  The GUI's dial tap starts a new brew from step 1, as it does while idle.
+- `reset()` stops the brew (or clears a finished one) and keeps the recipe
+  open, idle. `leave()` stops the
   brew and empties the page. `open(id)` stops any running brew. All three
-  return `KeepScreenOn(false)` + `HideBrewNotification` only when a brew was
-  running, and never
-  vibrate or play the sound.
+  return `KeepScreenOn(false)` + `HideBrewNotification` when a brew was
+  running, only `HideBrewNotification` when it was paused (the screen
+  already sleeps), nothing otherwise, and never vibrate or play the
+  sound.
 - `adjust_ratio(change)` changes the open recipe's ratio for this brew
   only: one step of 0.5 more or less water per gram of coffee, within
   `1:1..=1:30`, or back to the recipe's own. The coffee stays and the water
-  follows. It returns no effects and leaves a running timer alone. `open`
-  and `leave` drop the adjustment. An edit to the open recipe keeps it. A
-  recipe without coffee has no ratio and the change is
-  `Err(BrewError::NoCoffee)`.
+  follows, and so does every step's pour (scaled by `PourScale`). It
+  returns no effects and leaves a running or paused timer alone. `open`
+  and `leave` drop the adjustment. An edit to the open recipe keeps it,
+  applied to the edited recipe's coffee. `save_ratio` makes it the
+  recipe's own (see [the catalog-change flow](#the-catalogchange-flow)). Every recipe has coffee
+  (`CoffeeDose` is at least 1 g), so every recipe has a ratio to change.
 - Every accepted start increments a run number, held in
   [`RunningStep`](../native/core/src/brew/running_step.rs). Each tick and
   step change keeps it, so a restart of the same step is distinguishable from
@@ -170,9 +322,14 @@ clock. Time arrives as `tick()`, one call per second while
 accepted `StartBrew` replaces it with a new interval whose first beat lands
 exactly one second later (`interval_at`, `MissedTickBehavior::Delay`). Each
 beat calls `tick()`. After every loop iteration, the hub drops the interval
-if the brew is no longer running. While there is no interval, the tick arm
+if the brew is no longer running, so a pause drops it too. An accepted
+`ResumeBrew` creates a new one, like `StartBrew`: the first tick after a
+resume lands a full second later, so the part of a second already counted
+before the pause is given back. While there is no interval, the tick arm
 of `select!` stays pending. The CLI's `brew` command does the same with a
-one-second sleep, or no wait at all with `--fast`.
+one-second sleep, or no wait at all with `--fast`; with `--pause-at` it
+pauses after that tick, waits `--pause-for` seconds without ticking, then
+resumes.
 
 ## The hub task
 
@@ -247,14 +404,33 @@ feature's state as usual. The user sees an error only in these cases:
   field errors (`Enter a recipe name`, `Enter seconds`, `0–5999 seconds`)
   are already on the draft.
 - **`RecipeListUpdate::Failed { message }`.** This is a one-shot notice when
-  a list `RemoveRecipe` fails in the store. The message is core's
-  `DeleteError::Store` text, `Failed to delete recipe: …`. The list is
+  a list `RemoveRecipe` fails in the store, an `UndoRemoveRecipe` fails,
+  a `PinRecipe` / `UnpinRecipe` fails, a `SaveBrewRatio` is refused or
+  fails, an `ExportRecipes` names an unknown recipe, or an
+  `ImportRecipes` is refused or fails. The message is core's
+  `DeleteError::Store` text, `Failed to delete recipe: …`, its
+  `RestoreError` text, `Nothing to undo` or `Failed to restore recipe: …`,
+  its `PinError` text, `No recipe with id …` or `Failed to save the pin: …`,
+  its `SaveRatioError` text, `Can't save this ratio: 2050 g of water is
+  outside 1–2000 g` or `Failed to save recipe: …`, its `ExportError`
+  text, `No recipe with id …`, or its `ImportError` text, `Can't import:
+  Recipe 2, step 3, seconds: 0–5999 seconds` or `Failed to import
+  recipes: …`. The list is
   unchanged. `RecipeListHolder` forwards the message on its `failures`
-  stream, and the list page shows a snackbar for each one.
+  stream, and the list page shows a snackbar for each one. The snackbar
+  goes through the app's one `ScaffoldMessenger`, so it shows on the brew
+  page too, which closes its ratio sheet when Save is tapped so the
+  snackbar is not hidden under it.
+- **`RecipeListUpdate::Notice { message }`** is the same kind of one-shot
+  snackbar for a finished export or import (`Copied 2 recipes`,
+  `Imported 1 recipe`), forwarded on `RecipeListHolder.notices`.
 - **`BootFailed`.** See [Startup](#startup-and-shutdown).
 
 Everything else is only logged. That covers an out-of-range `StartBrew`, an
-unknown row id, a settings write that fails (the settings stay unchanged),
+unknown row id, an `EditRecipe` or `DuplicateRecipe` whose recipe the
+catalog does not hold (`No recipe with id …`; the editor stays as it was,
+normally closed, so the page that sent it pops on the `Closed` answer),
+a settings write that fails (the settings stay unchanged),
 an empty recipe id, and an intent sent with no draft open. The CLI prints
 the core error text instead and exits non-zero.
 
@@ -276,7 +452,8 @@ the core error text instead and exits non-zero.
   call is logged and does not block the next effect.
 - **Pages** ([`lib/pages`](../lib/pages)) read holders and send intents. A
   page that opens something sends the opening intent itself (`OpenBrew`,
-  `NewDraft` or `EditRecipe`), then shows only states that arrive after it,
+  `NewDraft`, `EditRecipe` or `DuplicateRecipe`, which carries only the
+  source id: Rust loads the recipe from the catalog), then shows only states that arrive after it,
   never one left over from earlier. Leaving the brew page sends `LeaveBrew`.
   The editor page pops when Rust sends `EditorUpdate::Closed`, which happens
   after a save, after a delete, or in answer to `CloseEditor` on back.
