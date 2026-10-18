@@ -23,6 +23,7 @@ mod step_duration;
 mod step_id;
 mod theme_selection;
 mod water_amount;
+mod water_scale_error;
 
 pub use accent_color::AccentColor;
 pub use accent_option::AccentOption;
@@ -46,3 +47,4 @@ pub use step_duration::StepDuration;
 pub use step_id::StepId;
 pub use theme_selection::ThemeSelection;
 pub use water_amount::WaterAmount;
+pub use water_scale_error::WaterScaleError;

@@ -34,6 +34,10 @@ pub enum Command {
             allow_negative_numbers = true
         )]
         ratio_steps: i32,
+        /// Save the adjusted ratio to the recipe, as the brew page's "Save
+        /// to recipe" does: its water and step pours become the ones shown.
+        #[arg(long, requires = "ratio_steps")]
+        save: bool,
     },
     /// Create a recipe.
     New(NewRecipe),

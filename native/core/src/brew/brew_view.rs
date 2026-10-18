@@ -54,6 +54,11 @@ impl BrewView {
         }
     }
 
+    /// The recipe shown, as the catalog held it when the page opened it.
+    pub(crate) fn recipe(&self) -> &Recipe {
+        &self.recipe
+    }
+
     /// The same recipe at the ratio `adjusted`, or at its own.
     pub(crate) fn with_ratio(self, adjusted: Option<BrewRatio>, metrics: &BrewMetrics) -> Self {
         Self::of(self.recipe, metrics, adjusted)

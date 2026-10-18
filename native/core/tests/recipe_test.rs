@@ -1,8 +1,8 @@
 //! Port of `test/domain/recipe_test.dart`.
 
 use coffee_timer_core::model::{
-    BrewMetrics, BrewRatio, CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, RecipeStep,
-    StepDuration, StepId, WaterAmount,
+    BrewMetrics, BrewRatio, CoffeeDose, ModelError, PourScale, Recipe, RecipeId, RecipeName,
+    RecipeStep, StepDuration, StepId, WaterAmount, WaterScaleError,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -467,5 +467,111 @@ fn brew_ratio_water_rounds_half_up_to_a_gram() -> TestResult {
     let r = ratio(10, 155)?;
     assert_eq!(r.water_grams(dose(15)?), 233);
     assert_eq!(r.water_grams(dose(1)?), 16);
+    Ok(())
+}
+
+// with_water_scaled_to
+
+/// 15 g coffee to `water_grams`, with steps pouring `pours` grams each
+/// (`None` pours nothing).
+fn pouring(water_grams: i64, pours: &[Option<i64>]) -> Result<Recipe, ModelError> {
+    let steps = pours
+        .iter()
+        .enumerate()
+        .map(|(i, &grams)| {
+            Ok(RecipeStep::new(
+                StepId::try_parse(&format!("s{i}"))?,
+                format!("Step {}", i + 1),
+                StepDuration::try_parse(30)?,
+                grams.map(WaterAmount::try_parse).transpose()?,
+            ))
+        })
+        .collect::<Result<_, ModelError>>()?;
+    Ok(Recipe::new(
+        RecipeId::try_parse("r")?,
+        RecipeName::try_parse("V60")?,
+        "Clean".to_owned(),
+        dose(15)?,
+        water(water_grams)?,
+        steps,
+    ))
+}
+
+fn step_pours(recipe: &Recipe) -> Vec<Option<u32>> {
+    recipe
+        .steps()
+        .iter()
+        .map(|step| step.water().map(WaterAmount::grams))
+        .collect()
+}
+
+#[test]
+fn scaling_the_water_stores_the_pours_pour_scale_shows() -> TestResult {
+    let before = pouring(250, &[None, Some(33), Some(33), Some(184)])?;
+    let shown: Vec<Option<u32>> = PourScale::new(before.water(), 255)
+        .pours(before.steps())
+        .into_iter()
+        .map(|pour| pour.map(|p| p.grams()))
+        .collect();
+    let after = before.clone().with_water_scaled_to(255)?;
+    assert_eq!(after.water().grams(), 255);
+    assert_eq!(step_pours(&after), shown);
+    assert_eq!(step_pours(&after), [None, Some(34), Some(33), Some(188)]);
+    // Everything else is kept.
+    assert_eq!(after.id(), before.id());
+    assert_eq!(after.name(), before.name());
+    assert_eq!(after.description(), "Clean");
+    assert_eq!(after.coffee(), before.coffee());
+    let ids = |r: &Recipe| r.steps().iter().map(|s| s.id().clone()).collect::<Vec<_>>();
+    assert_eq!(ids(&after), ids(&before));
+    Ok(())
+}
+
+#[test]
+fn scaling_to_the_same_water_changes_nothing() -> TestResult {
+    let before = pouring(250, &[Some(50), Some(200)])?;
+    assert_eq!(before.clone().with_water_scaled_to(250)?, before);
+    Ok(())
+}
+
+#[test]
+fn scaling_past_what_a_recipe_holds_is_an_error() -> TestResult {
+    let recipe = pouring(250, &[Some(250)])?;
+    assert_eq!(
+        recipe.clone().with_water_scaled_to(2001),
+        Err(WaterScaleError::Water { grams: 2001 })
+    );
+    assert_eq!(
+        recipe.with_water_scaled_to(0),
+        Err(WaterScaleError::Water { grams: 0 })
+    );
+    Ok(())
+}
+
+#[test]
+fn a_scaled_pour_out_of_range_is_an_error() -> TestResult {
+    // Pours need not add up to the water: 2000 g of pours in 1000 g.
+    let recipe = pouring(1000, &[None, Some(2000)])?;
+    assert_eq!(
+        recipe.with_water_scaled_to(1050),
+        Err(WaterScaleError::Pour {
+            position: 2,
+            grams: 2100
+        })
+    );
+    // A pour that rounds away to nothing: 1 g at 0.4 is 0 g.
+    let recipe = pouring(100, &[Some(1), Some(1)])?;
+    let error = recipe
+        .with_water_scaled_to(40)
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(
+        error,
+        WaterScaleError::Pour {
+            position: 1,
+            grams: 0
+        }
+    );
+    assert_eq!(error.to_string(), "step 1 would pour 0 g, outside 1–2000 g");
     Ok(())
 }

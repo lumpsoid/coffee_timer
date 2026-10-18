@@ -4,13 +4,13 @@
 
 use coffee_timer_core::brew::{
     BrewController, BrewError, BrewNotice, BrewState, BrewView, CuePolicy, Effect, RatioChange,
-    RatioSetting, StepStatus,
+    RatioSetting, SaveRatioError, StepStatus,
 };
-use coffee_timer_core::catalog::RecipeCatalog;
+use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
     BrewMetrics, CoffeeDose, LabelStyle, ModelError, Recipe, RecipeId, RecipeName, RecipeStep,
-    StepDuration, StepId, WaterAmount,
+    StepDuration, StepId, WaterAmount, WaterScaleError,
 };
 
 use StepStatus::{Current, Done, Pending};
@@ -584,6 +584,19 @@ fn an_edit_to_another_recipe_changes_nothing() -> TestResult {
         brew.tick(),
         [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:02", None)]
     );
+    Ok(())
+}
+
+#[test]
+fn a_save_that_leaves_the_open_recipe_as_shown_changes_nothing() -> TestResult {
+    let (mut brew, mut catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.tick();
+    let before = brew.state().clone();
+
+    let change = catalog.upsert(recipe("a", &[3, 2])?)?;
+    assert_eq!(brew.on_catalog_change(&change, &catalog), []);
+    assert_eq!(brew.state(), &before, "still running, same step");
     Ok(())
 }
 
@@ -1466,5 +1479,230 @@ fn a_pouring_next_step_shows_its_pour_at_the_ratio_shown() -> TestResult {
     );
     brew.start(2)?;
     assert_eq!(next_label(&brew).as_deref(), Some("Last step"));
+    Ok(())
+}
+
+// saving the adjusted ratio
+
+/// Each stored step pour of recipe `p` in `catalog`.
+fn stored_pours(catalog: &RecipeCatalog) -> Result<Vec<Option<u32>>, ModelError> {
+    Ok(catalog
+        .get(&id("p")?)
+        .map(|recipe| {
+            recipe
+                .steps()
+                .iter()
+                .map(|step| step.water().map(WaterAmount::grams))
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+#[test]
+fn saving_the_ratio_stores_the_water_and_pours_shown() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    let pours_shown = pour_labels(&brew);
+    assert_eq!(
+        pours_shown,
+        [None, Some("51g".to_owned()), Some("204g".to_owned())]
+    );
+
+    let change = brew.save_ratio(&mut catalog)?;
+    assert_eq!(change, CatalogChange::Upserted(id("p")?));
+
+    let saved = catalog.get(&id("p")?).ok_or("no recipe")?;
+    assert_eq!(saved.coffee().grams(), 15, "the coffee stays");
+    assert_eq!(saved.water().grams(), 255);
+    assert_eq!(stored_pours(&catalog)?, [None, Some(51), Some(204)]);
+
+    // The page shows the saved recipe at its own ratio, the same figures.
+    let view = brew.state().view().ok_or("no view")?;
+    assert!(matches!(view.ratio(), RatioSetting::Recipe(_)));
+    assert_eq!(dose(&brew), shown("15g", "255g", "1:17"));
+    assert_eq!(pour_labels(&brew), pours_shown);
+    assert_eq!(view.pour_to_label(2).as_deref(), Some("Pour to 255g"));
+    Ok(())
+}
+
+#[test]
+fn saving_the_ratio_updates_the_recipe_list_row() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    brew.adjust_ratio(RatioChange::LessWater)?;
+    let change = brew.save_ratio(&mut catalog)?;
+    let CatalogChange::Upserted(saved) = &change else {
+        return Err("expected an upsert".into());
+    };
+    let row = RecipeSummary::of(
+        catalog.get(saved).ok_or("no recipe")?,
+        &BrewMetrics::default(),
+    );
+    // 1:16.7 -> 1:16.5: 247.5 g rounds to 248 g.
+    assert_eq!(row.water_label, "248 g");
+    assert_eq!(catalog.index_of(saved), Some(0), "it keeps its place");
+    Ok(())
+}
+
+#[test]
+fn saving_the_ratio_keeps_a_running_brew_where_it_is() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    let _effects = brew.start(0)?;
+    for _ in 0..6 {
+        let _effects = brew.tick();
+    }
+    assert_eq!(timer(&brew), running(1, "00:01"));
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+
+    let change = brew.save_ratio(&mut catalog)?;
+    assert_eq!(timer(&brew), running(1, "00:01"), "still on Bloom");
+    assert_eq!(run(&brew), Some(1), "the same run");
+    assert_eq!(statuses(&brew), [Done, Current, Pending]);
+    assert_eq!(pour_to(&brew).as_deref(), Some("Pour to 51g"));
+
+    // The shell passes the change on; the page already shows it.
+    let before = brew.state().clone();
+    assert_eq!(brew.on_catalog_change(&change, &catalog), []);
+    assert_eq!(brew.state(), &before);
+
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Pour · 00:03", None)]
+    );
+    assert_eq!(pour_to(&brew).as_deref(), Some("Pour to 255g"));
+    Ok(())
+}
+
+#[test]
+fn saving_the_ratio_keeps_a_paused_or_finished_brew() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    let _effects = brew.start(1)?;
+    let _effects = brew.pause()?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    let held_before = brew.state().paused().cloned();
+    let change = brew.save_ratio(&mut catalog)?;
+    assert_eq!(brew.on_catalog_change(&change, &catalog), []);
+    assert_eq!(brew.state().paused().cloned(), held_before);
+
+    let (mut brew, mut catalog) = pour_over()?;
+    let _effects = brew.start(0)?;
+    while brew.state().is_running() {
+        let _effects = brew.tick();
+    }
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    let change = brew.save_ratio(&mut catalog)?;
+    assert_eq!(brew.on_catalog_change(&change, &catalog), []);
+    assert_eq!(finished(&brew), Some("0:10"));
+    assert_eq!(statuses(&brew), [Done, Done, Done]);
+    let view = brew.state().view().ok_or("no view")?;
+    assert_eq!(view.poured_label().as_deref(), Some("Poured to 255g"));
+    Ok(())
+}
+
+#[test]
+fn saving_more_water_than_a_recipe_holds_is_an_error() -> TestResult {
+    // 100 g of coffee at 1:19 is 1900 g; two steps of 0.5 later, 2000 g.
+    let catalog_recipes = vec![dosed("a", 100, 1900, &[5])?];
+    let mut catalog = catalog(catalog_recipes.clone())?;
+    let mut brew = BrewController::new();
+    let _effects = brew.open(&id("a")?, &catalog);
+    for _ in 0..3 {
+        brew.adjust_ratio(RatioChange::MoreWater)?;
+    }
+    assert_eq!(dose(&brew), shown("100g", "2050g", "1:20.5"));
+    let before = brew.state().clone();
+
+    let error = brew
+        .save_ratio(&mut catalog)
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(
+        error,
+        SaveRatioError::OutOfRange(WaterScaleError::Water { grams: 2050 })
+    );
+    assert_eq!(
+        error.to_string(),
+        "Can't save this ratio: 2050 g of water is outside 1–2000 g"
+    );
+    assert_eq!(brew.state(), &before, "still adjusted");
+    assert_eq!(catalog.state(), catalog_recipes.as_slice());
+
+    brew.adjust_ratio(RatioChange::LessWater)?;
+    brew.save_ratio(&mut catalog)?;
+    assert_eq!(
+        catalog.get(&id("a")?).map(|r| r.water().grams()),
+        Some(2000),
+        "2000 g still fits"
+    );
+    Ok(())
+}
+
+#[test]
+fn saving_a_scaled_pour_out_of_range_is_an_error() -> TestResult {
+    // The pours need not add up to the water: 2000 g poured of 250 g.
+    let flood = Recipe::new(
+        id("f")?,
+        RecipeName::try_parse("Flood")?,
+        String::new(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+        vec![RecipeStep::new(
+            StepId::try_parse("f-s0")?,
+            "Flood".to_owned(),
+            StepDuration::try_parse(5)?,
+            Some(WaterAmount::try_parse(2000)?),
+        )],
+    );
+    let mut catalog = catalog(vec![flood.clone()])?;
+    let mut brew = BrewController::new();
+    let _effects = brew.open(&id("f")?, &catalog);
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    assert_eq!(pour_labels(&brew), [Some("2040g".to_owned())]);
+
+    assert_eq!(
+        brew.save_ratio(&mut catalog),
+        Err(SaveRatioError::OutOfRange(WaterScaleError::Pour {
+            position: 1,
+            grams: 2040
+        }))
+    );
+    assert_eq!(catalog.get(&id("f")?), Some(&flood));
+    Ok(())
+}
+
+#[test]
+fn saving_the_recipes_own_ratio_or_none_is_an_error() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    let before = brew.state().clone();
+    assert_eq!(
+        brew.save_ratio(&mut catalog),
+        Err(SaveRatioError::NotAdjusted)
+    );
+    assert_eq!(brew.state(), &before);
+
+    let _effects = brew.leave();
+    assert_eq!(brew.save_ratio(&mut catalog), Err(SaveRatioError::NoRecipe));
+    Ok(())
+}
+
+#[test]
+fn a_failed_ratio_save_changes_nothing() -> TestResult {
+    let recipes = vec![dosed("a", 20, 100, &[5])?];
+    let mut catalog = RecipeCatalog::new(Box::new(
+        FakeRecipeStore::with_recipes(recipes.clone()).failing_writes(),
+    ));
+    catalog.load()?;
+    let mut brew = BrewController::new();
+    let _effects = brew.open(&id("a")?, &catalog);
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    let before = brew.state().clone();
+
+    let error = brew
+        .save_ratio(&mut catalog)
+        .err()
+        .ok_or("expected an error")?;
+    assert!(matches!(error, SaveRatioError::Store(_)), "{error}");
+    assert!(error.to_string().starts_with("Failed to save recipe: "));
+    assert_eq!(brew.state(), &before);
+    assert_eq!(catalog.state(), recipes.as_slice());
     Ok(())
 }

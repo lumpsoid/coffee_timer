@@ -11,6 +11,7 @@ mod finished_brew;
 mod ratio_change;
 mod ratio_setting;
 mod running_step;
+mod save_ratio_error;
 mod step_row;
 mod step_status;
 
@@ -25,5 +26,6 @@ pub use finished_brew::FinishedBrew;
 pub use ratio_change::RatioChange;
 pub use ratio_setting::RatioSetting;
 pub use running_step::RunningStep;
+pub use save_ratio_error::SaveRatioError;
 pub use step_row::StepRow;
 pub use step_status::StepStatus;

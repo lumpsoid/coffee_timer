@@ -224,6 +224,14 @@ Deliberate changes to behavior the port had kept.
   A ratio change keeps a finished brew finished, as it keeps idle idle;
   an edit to the open recipe shows the new version idle, and a delete
   shows "Empty recipe", with no effects, exactly as while idle.
+- **Save the ratio to the recipe.** The brew page's ratio sheet offers
+  "Save to recipe" while the ratio is adjusted: the recipe takes the water
+  shown and every step pour as shown (`PourScale`), coffee kept, and the
+  brew keeps its place. For that, a catalog change that leaves the open
+  recipe exactly as the brew page shows it no longer resets a running,
+  paused or finished brew to idle; before, any save of the open recipe
+  did, even one that changed nothing. A save that changes the recipe still
+  resets it.
 
 ## Phases
 

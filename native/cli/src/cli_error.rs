@@ -1,6 +1,6 @@
 use std::{fmt, io};
 
-use coffee_timer_core::brew::BrewError;
+use coffee_timer_core::brew::{BrewError, SaveRatioError};
 use coffee_timer_core::editor::{DeleteError, EditError, SaveError};
 use coffee_timer_core::model::ModelError;
 use coffee_timer_core::ports::StoreError;
@@ -12,6 +12,7 @@ pub enum CliError {
     Store(StoreError),
     Model(ModelError),
     Brew(BrewError),
+    SaveRatio(SaveRatioError),
     Edit(EditError),
     /// A rejected save, with the draft's field errors (none unless a field
     /// is invalid).
@@ -29,6 +30,7 @@ impl fmt::Display for CliError {
             Self::Store(e) => e.fmt(f),
             Self::Model(e) => e.fmt(f),
             Self::Brew(e) => e.fmt(f),
+            Self::SaveRatio(e) => e.fmt(f),
             Self::Edit(e) => e.fmt(f),
             Self::Save { error, fields } => {
                 write!(f, "{error}")?;
@@ -60,6 +62,12 @@ impl From<ModelError> for CliError {
 impl From<BrewError> for CliError {
     fn from(e: BrewError) -> Self {
         Self::Brew(e)
+    }
+}
+
+impl From<SaveRatioError> for CliError {
+    fn from(e: SaveRatioError) -> Self {
+        Self::SaveRatio(e)
     }
 }
 

@@ -512,8 +512,10 @@ class _TimerFace extends StatelessWidget {
   }
 }
 
-/// Less water, the ratio, more water; then the dose it makes and the way
-/// back to the recipe's own ratio.
+/// Less water, the ratio, more water; then the dose it makes, the way
+/// back to the recipe's own ratio and, while adjusted, saving it to the
+/// recipe. Saving closes the sheet: the page then shows the saved recipe,
+/// or a snackbar says why it could not be saved.
 class _RatioSheet extends StatelessWidget {
   const _RatioSheet({required this.recipe, required this.colors});
 
@@ -574,6 +576,19 @@ class _RatioSheet extends StatelessWidget {
               style: TextButton.styleFrom(foregroundColor: colors.accent),
               child: const Text("Back to the recipe's ratio"),
             ),
+            if (adjusted)
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  const SaveBrewRatio().sendSignalToRust();
+                },
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.accent,
+                  foregroundColor: colors.paper,
+                ),
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Save to recipe'),
+              ),
           ],
         ),
       ),

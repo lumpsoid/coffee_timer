@@ -44,6 +44,10 @@ again.
   operations. A recipe holds its `CoffeeDose` and `WaterAmount`; a step
   holds an optional `WaterAmount`, the water it pours. A blank step name is
   saved as `Step N`. The step pours need not add up to the recipe's water.
+  `Recipe::with_water_scaled_to(grams)` gives the recipe a new total water
+  with every pour scaled by `PourScale` (what a brew at that water shows);
+  an amount outside `WaterAmount`'s bounds is a `WaterScaleError` (`Water`
+  or `Pour { position }`). `RecipeStep::pouring` replaces a step's pour.
 - **`PourScale`** is the one rounding rule for step pours in a brew whose
   water differs from the recipe's: it scales the running totals by brew
   water over recipe water, half up to a gram, and each `Pour` is the
@@ -139,7 +143,9 @@ Test:
 
 - `BrewController` owns `BrewState` and runs the timer state machine. It
   provides `open`, `start`, `tick`, `pause`, `resume`, `reset`, `leave`,
-  `adjust_ratio` and `on_catalog_change`. `with_cues(CuePolicy)` builds
+  `adjust_ratio`, `save_ratio` (the adjusted ratio saved to the recipe
+  through `&mut RecipeCatalog`, returning the `CatalogChange`) and
+  `on_catalog_change`. `with_cues(CuePolicy)` builds
   one with a non-default pre-alert.
 - `CuePolicy` is the pre-alert rule as named config: the lead in seconds
   (`DEFAULT_PRE_ALERT_LEAD_SECONDS` = 3, 0 = off) and its buzz
@@ -164,6 +170,8 @@ Test:
 - `Effect` is a platform command. `BrewNotice` is the content of the brew
   notification.
 - `BrewError` is a rejected start, pause, resume or ratio change.
+  `SaveRatioError` is a rejected ratio save: `NoRecipe`, `NotAdjusted`,
+  `OutOfRange(WaterScaleError)` or `Store`.
 
 Test:
 [`brew_controller_test.rs`](../native/core/tests/brew_controller_test.rs),
@@ -251,7 +259,7 @@ A second head on core and store. It proves that core needs no rinf. It
 decides nothing: core produces every label, status and error text.
 
 - [`args.rs`](../native/cli/src/args.rs) defines the clap arguments: `list`,
-  `show`, `new`, `duplicate`, `delete`, `brew` and `settings`, plus the global `--db`.
+  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `delete`, `brew` and `settings`, plus the global `--db`.
 - [`lib.rs`](../native/cli/src/lib.rs) provides `Controllers::boot` (build
   and load), `run` (dispatch one command) and `default_db_path`.
 - [`commands.rs`](../native/cli/src/commands.rs) has one function per
@@ -298,7 +306,7 @@ makes no business decisions.
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
-| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
+| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
 

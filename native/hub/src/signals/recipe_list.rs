@@ -35,9 +35,10 @@ pub enum RecipeListUpdate {
         id: String,
         undo_notice: Option<String>,
     },
-    /// A `RemoveRecipe` or `UndoRemoveRecipe` failed; the list is unchanged.
-    /// A one-shot notice for a snackbar (`Failed to delete recipe: …`,
-    /// `Nothing to undo`), not list state.
+    /// A `RemoveRecipe`, `UndoRemoveRecipe` or `SaveBrewRatio` failed; the
+    /// list is unchanged. A one-shot notice for a snackbar (`Failed to
+    /// delete recipe: …`, `Nothing to undo`, `Can't save this ratio: …`),
+    /// not list state.
     Failed { message: String },
 }
 

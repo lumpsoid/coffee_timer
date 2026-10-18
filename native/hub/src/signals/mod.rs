@@ -14,7 +14,7 @@ pub use boot::{Boot, BootFailed};
 pub use brew::{
     AdjustBrewRatio, BrewFinished, BrewRatioChange, BrewRatioSetting, BrewReady, BrewRecipe,
     BrewStep, BrewStepStatus, BrewTimer, BrewUpdate, LeaveBrew, OpenBrew, PauseBrew,
-    PlatformEffect, ResetBrew, ResumeBrew, StartBrew,
+    PlatformEffect, ResetBrew, ResumeBrew, SaveBrewRatio, StartBrew,
 };
 pub use editor::{
     AddStep, AddStepButton, CloseEditor, DeleteRecipe, DuplicateRecipe, EditRecipe, EditorDraft,

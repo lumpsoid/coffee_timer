@@ -25,12 +25,15 @@ pub fn list(catalog: &RecipeCatalog, out: &mut impl Write) -> Result<(), CliErro
 }
 
 /// Opens the recipe, then presses the brew page's more-water (positive) or
-/// less-water (negative) button `ratio_steps` times.
+/// less-water (negative) button `ratio_steps` times. With `save`, then
+/// saves that ratio to the recipe ("Save to recipe") and passes the change
+/// on before showing the page.
 pub fn show(
     id: &str,
     ratio_steps: i32,
+    save: bool,
     brew: &mut BrewController,
-    catalog: &RecipeCatalog,
+    catalog: &mut RecipeCatalog,
     out: &mut impl Write,
 ) -> Result<(), CliError> {
     let effects = brew.open(&RecipeId::try_parse(id)?, catalog);
@@ -42,6 +45,10 @@ pub fn show(
     };
     for _ in 0..ratio_steps.unsigned_abs() {
         brew.adjust_ratio(change)?;
+    }
+    if save {
+        let change = brew.save_ratio(catalog)?;
+        pass_on(&change, brew, catalog, out)?;
     }
     render::brew_page(out, brew.state())?;
     Ok(())

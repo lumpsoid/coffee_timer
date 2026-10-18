@@ -163,9 +163,10 @@ pub enum RecipeListUpdate {
 }
 ```
 
-`Failed` is a one-shot notice, not state: a list delete (`RemoveRecipe`)
-or an undo (`UndoRemoveRecipe`) failed, the list is unchanged, and Dart
-shows `message` (core's `DeleteError` or `RestoreError` text) as a snackbar
+`Failed` is a one-shot notice, not state: a list delete (`RemoveRecipe`),
+an undo (`UndoRemoveRecipe`) or a ratio save (`SaveBrewRatio`) failed, the
+list is unchanged, and Dart shows `message` (core's `DeleteError`,
+`RestoreError` or `SaveRatioError` text) as a snackbar
 each time one arrives. `Removed`'s `undo_notice` is one-shot the same way:
 present when core offers to undo that removal, shown once as a snackbar
 with an Undo.

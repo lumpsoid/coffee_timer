@@ -42,7 +42,13 @@ to.
   The coffee, water and ratio are the recipe's stored grams.
   Tap the coffee/water/ratio figures to change the ratio for this brew in
   steps of 0.5. The coffee stays the same and the water follows. Leaving the
-  page goes back to the recipe's own ratio.
+  page goes back to the recipe's own ratio. While the ratio is changed,
+  **Save to recipe** in the ratio sheet makes it the recipe's own: the
+  recipe keeps its coffee and takes the water and step pours shown, the
+  list shows the new water, and a running, paused or done brew carries on
+  where it is. A recipe holds at most 2000 g of water, and each pour 1–2000
+  g; a ratio that would go past that is not saved, and a snackbar says why
+  (`Can't save this ratio: 2050 g of water is outside 1–2000 g`).
   Each step that pours water shows its grams in the step list, and while it
   runs or is paused the dial reads the scale total to pour up to, such as
   `Pour to 150g` (this step's pour plus every earlier one). An adjusted
@@ -128,6 +134,7 @@ with no Flutter:
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db list
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show espresso-uuid
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --ratio-steps -2   # 1:16
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --ratio-steps 3 --save  # 1:18, saved
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
     --coffee 15 --water 250 --step Bloom=30@50 --step Pour=120@200
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast
@@ -157,6 +164,10 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   `resume` lines with their effects.
 - `list` and `show` print each recipe's coffee and water grams; `show` also
   prints the ratio and each step's pour (scaled with `--ratio-steps`).
+  `show --ratio-steps N --save` saves that ratio to the recipe, as "Save to
+  recipe" does: it prints `upserted <id>`, then the page at the recipe's
+  new own ratio. A ratio the recipe cannot hold is an error and saves
+  nothing.
   `brew` prints a pouring step's target next to its countdown, then the
   next step, as in `00:30 Bloom (Pour to 50g)  Next: Pour · 2:00 · 200g`.
 - `new --coffee GRAMS --water GRAMS` sets the dose (1–200 g and

@@ -1,5 +1,6 @@
 //! Catalog ↔ recipe list signals.
 
+use coffee_timer_core::brew::SaveRatioError;
 use coffee_timer_core::catalog::{self, CatalogChange, RecipeCatalog, RemovedRecipe, RestoreError};
 use coffee_timer_core::editor::DeleteError;
 use coffee_timer_core::model::{self, BrewMetrics, LabelStyle, Recipe};
@@ -39,6 +40,14 @@ impl RecipeListUpdate {
 
 impl From<RestoreError> for RecipeListUpdate {
     fn from(error: RestoreError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<SaveRatioError> for RecipeListUpdate {
+    fn from(error: SaveRatioError) -> Self {
         Self::Failed {
             message: error.to_string(),
         }

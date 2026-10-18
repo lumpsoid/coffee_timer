@@ -1,8 +1,8 @@
 //! The hub task: owns every controller, turns each Dart signal into one
 //! controller action, and sends the feature's state after it. One task, so
 //! actions run one at a time. It decides nothing: errors are logged and the
-//! state re-sent, except a failed list delete or undo, which goes to Dart as
-//! the one-shot `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
+//! state re-sent, except a failed list delete, undo or ratio save, which goes
+//! to Dart as the one-shot `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
 //! unconditionally.
 
 use std::error::Error;
@@ -23,9 +23,9 @@ use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, DuplicateRecipe,
     EditRecipe, EditorReady, EditorUpdate, LeaveBrew, MoveStep, NewDraft, OpenBrew, PauseBrew,
     PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew,
-    ResumeBrew, SaveRecipe, SetAccent, SetRecipeCoffee, SetRecipeDescription, SetRecipeName,
-    SetRecipeWater, SetStepDuration, SetStepName, SetStepWater, SetTheme, SettingsReady,
-    SettingsUpdate, StartBrew, UndoRemoveRecipe,
+    ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetRecipeCoffee, SetRecipeDescription,
+    SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName, SetStepWater, SetTheme,
+    SettingsReady, SettingsUpdate, StartBrew, UndoRemoveRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -69,6 +69,7 @@ pub async fn run(mut c: Controllers) {
     let resume_brew = ResumeBrew::get_dart_signal_receiver();
     let leave_brew = LeaveBrew::get_dart_signal_receiver();
     let adjust_brew_ratio = AdjustBrewRatio::get_dart_signal_receiver();
+    let save_brew_ratio = SaveBrewRatio::get_dart_signal_receiver();
     let editor_ready = EditorReady::get_dart_signal_receiver();
     let new_draft = NewDraft::get_dart_signal_receiver();
     let edit_recipe = EditRecipe::get_dart_signal_receiver();
@@ -145,6 +146,8 @@ pub async fn run(mut c: Controllers) {
                 report(c.brew.adjust_ratio(pack.message.change.into()));
                 show_brew(&c.brew, &[]);
             }
+            // `pass_on` sends the brew view, or it is unchanged.
+            Some(_) = save_brew_ratio.recv() => save_ratio(&mut c),
             Some(_) = leave_brew.recv() => {
                 let effects = c.brew.leave();
                 show_brew(&c.brew, &effects);
@@ -260,6 +263,15 @@ fn delete(c: &mut Controllers) -> Result<(), DeleteError> {
     Ok(())
 }
 
+/// Saves the brew's adjusted ratio to its recipe. A refusal or a store
+/// failure goes to the list as core's error, for a snackbar.
+fn save_ratio(c: &mut Controllers) {
+    match c.brew.save_ratio(&mut c.catalog) {
+        Ok(change) => pass_on(&change, &mut c.brew, &c.catalog),
+        Err(error) => RecipeListUpdate::from(error).send_signal_to_dart(),
+    }
+}
+
 /// Deletes a listed recipe. A store failure goes to the list as core's
 /// delete error, for a snackbar.
 fn remove(c: &mut Controllers, recipe_id: &str) -> Result<(), ModelError> {
@@ -333,7 +345,7 @@ fn show_settings(settings: &SettingsController) {
 
 /// The value, or none after logging the error. Anything the GUI must show
 /// is already in the feature's state (the editor's notice), or, for a
-/// failed list delete or undo, sent as the one-shot `RecipeListUpdate::Failed`.
+/// failed list delete, undo or ratio save, sent as the one-shot `RecipeListUpdate::Failed`.
 fn report<T>(result: Result<T, impl Display>) -> Option<T> {
     result.map_err(|error| debug_print!("{error}")).ok()
 }

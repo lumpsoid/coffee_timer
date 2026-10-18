@@ -92,6 +92,67 @@ fn show_with_ratio_steps_moves_the_water_for_that_showing() -> TestResult {
 }
 
 #[test]
+fn show_with_save_persists_the_adjusted_water_and_pours() -> TestResult {
+    let mut session = Session::new()?;
+    let out = session.run(&["show", "pourover-uuid", "--ratio-steps", "3", "--save"])?;
+    assert_eq!(
+        out,
+        "\
+upserted pourover-uuid
+pourover-uuid  Pour Over
+Light and clean
+Coffee: 15g  Water: 270g  Ratio: 1:18  Time: 3:10
+  1. Grind  40s  pending
+  2. Bloom  30s  54g  pending
+  3. Pour  120s  216g  pending
+"
+    );
+    let reopened = session.reopened()?.run(&["show", "pourover-uuid"])?;
+    assert!(
+        reopened.contains("Coffee: 15g  Water: 270g  Ratio: 1:18  Time"),
+        "{reopened}"
+    );
+    assert!(
+        reopened.contains("  2. Bloom  30s  54g  pending\n"),
+        "{reopened}"
+    );
+    assert!(
+        reopened.contains("  3. Pour  120s  216g  pending\n"),
+        "{reopened}"
+    );
+    Ok(())
+}
+
+#[test]
+fn show_with_save_past_what_a_recipe_holds_is_an_error() -> TestResult {
+    let mut session = Session::new()?;
+    // The seeds fit even at 1:30, so: 100 g of coffee to 1950 g (1:19.5),
+    // two steps up is 1:20.5, 2050 g.
+    session.run(&["new", "Batch", "--coffee", "100", "--water", "1950"])?;
+    let error = session
+        .run(&["show", "r1", "--ratio-steps", "2", "--save"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(
+        error,
+        "Can't save this ratio: 2050 g of water is outside 1–2000 g"
+    );
+    let list = session.reopened()?.run(&["list"])?;
+    assert!(list.contains("Water: 1950 g"), "{list}");
+    Ok(())
+}
+
+#[test]
+fn show_with_save_needs_ratio_steps() -> TestResult {
+    let error = Session::new()?
+        .run(&["show", "pourover-uuid", "--save"])
+        .err()
+        .ok_or("expected an error")?;
+    assert!(error.contains("--ratio-steps"), "{error}");
+    Ok(())
+}
+
+#[test]
 fn show_of_an_unknown_id_is_the_empty_page() -> TestResult {
     assert_eq!(Session::new()?.run(&["show", "nope"])?, "Empty recipe\n");
     Ok(())

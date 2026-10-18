@@ -70,23 +70,25 @@ actions are the exception. They clear the previous notice whatever they do.
 - **The shared controller** `RecipeCatalog` enters as an action argument.
   `BrewController::open`, `BrewController::on_catalog_change`,
   `EditorController::edit` and `EditorController::duplicate` take
-  `&RecipeCatalog`. `EditorController::save`
-  and `EditorController::delete` take `&mut RecipeCatalog`. Every
+  `&RecipeCatalog`. `EditorController::save`,
+  `EditorController::delete` and `BrewController::save_ratio` take
+  `&mut RecipeCatalog`. Every
   cross-feature dependency therefore appears in a signature, and the borrow
   checker proves who reads and who writes. Nothing uses `Rc<RefCell>` or
   `Arc<Mutex>` around controllers.
 
 No coordinator object exists. A flow belongs to the controller of the
-feature that starts it. The editor saves through the catalog, and the
-catalog writes through its store before it updates its state.
+feature that starts it. The editor saves through the catalog, and so does
+the brew page's "Save to recipe"; the catalog writes through its store
+before it updates its state.
 
 ## The `CatalogChange` flow
 
 [`CatalogChange`](../native/core/src/catalog/catalog_change.rs) is
 `Upserted(id)` or `Removed(id)`. `RecipeCatalog::upsert` and
 `RecipeCatalog::remove` return it only after the store has written the
-change. `EditorController::save` and `EditorController::delete` pass it
-through. `RecipeCatalog::load` returns `Result<(), StoreError>` and no
+change. `EditorController::save`, `EditorController::delete` and
+`BrewController::save_ratio` pass it through. `RecipeCatalog::load` returns `Result<(), StoreError>` and no
 change. It is boot-only.
 
 Each shell passes every change on unconditionally, with one `pass_on`
@@ -102,14 +104,35 @@ function:
   then calls `brew.on_catalog_change` and prints its effects.
 
 `BrewController::on_catalog_change` ignores a change to any recipe that is
-not open. If the change hits the open recipe, the controller reopens it from
+not open, and one that leaves the open recipe exactly as the page shows
+it. If the change hits the open recipe, the controller reopens it from
 the catalog. An edit shows the new version, idle, and stops a running or
 paused brew.
 A delete shows "Empty recipe".
 
-Four intents produce a change: the editor's save, the editor's delete, the
-list's `RemoveRecipe`, and `UndoRemoveRecipe`. `RemoveRecipe` calls
-`RecipeCatalog::remove` directly, without opening a draft.
+Five intents produce a change: the editor's save, the editor's delete, the
+list's `RemoveRecipe`, `UndoRemoveRecipe`, and the brew page's
+`SaveBrewRatio`. `RemoveRecipe` calls `RecipeCatalog::remove` directly,
+without opening a draft.
+
+**Saving the brew's ratio.** The flow belongs to the brew page, which
+starts it, so `BrewController::save_ratio(&mut catalog)` owns it, as
+`EditorController::save` owns the editor's: no new ordering owner, and the
+hub only passes the change on. The controller takes its adjusted ratio's
+water (`BrewRatio::water_grams` of the coffee, the figure the page shows),
+builds the recipe with `Recipe::with_water_scaled_to`, whose step pours
+come from the same `PourScale` the page shows, so what was shown is what
+is saved, and upserts it. Only after the write does it replace its own
+view with the saved recipe at its own ratio, keeping the timer's place
+(`BrewState::map_view`): the steps and their times are unchanged, so a
+running, paused or finished brew carries on. The returned `Upserted`
+goes through `pass_on` like any change; the list gets the new row, and
+`on_catalog_change` finds the page already showing that recipe and does
+nothing. A water over 2000 g or a scaled pour outside 1–2000 g is
+`SaveRatioError::OutOfRange`, and nothing changes. With under 10 g of
+coffee the whole grams saved can give the recipe a slightly different
+ratio label than the adjusted one showed (3 g at 1:15.5 is 47 g of water,
+`1:15.7`); the grams are what is kept.
 
 **Undoing a delete.** Both deletes go through `RecipeCatalog::remove`,
 which keeps the removed recipe, whole, with its index, as a
@@ -227,7 +250,8 @@ clock. Time arrives as `tick()`, one call per second while
   follows, and so does every step's pour (scaled by `PourScale`). It
   returns no effects and leaves a running or paused timer alone. `open`
   and `leave` drop the adjustment. An edit to the open recipe keeps it,
-  applied to the edited recipe's coffee. Every recipe has coffee
+  applied to the edited recipe's coffee. `save_ratio` makes it the
+  recipe's own (see [the catalog-change flow](#the-catalogchange-flow)). Every recipe has coffee
   (`CoffeeDose` is at least 1 g), so every recipe has a ratio to change.
 - Every accepted start increments a run number, held in
   [`RunningStep`](../native/core/src/brew/running_step.rs). Each tick and
@@ -321,12 +345,17 @@ feature's state as usual. The user sees an error only in these cases:
   field errors (`Enter a recipe name`, `Enter seconds`, `0–5999 seconds`)
   are already on the draft.
 - **`RecipeListUpdate::Failed { message }`.** This is a one-shot notice when
-  a list `RemoveRecipe` fails in the store, or an `UndoRemoveRecipe` fails.
-  The message is core's `DeleteError::Store` text, `Failed to delete
-  recipe: …`, or its `RestoreError` text, `Nothing to undo` or `Failed to
-  restore recipe: …`. The list is
+  a list `RemoveRecipe` fails in the store, an `UndoRemoveRecipe` fails,
+  or a `SaveBrewRatio` is refused or fails. The message is core's
+  `DeleteError::Store` text, `Failed to delete recipe: …`, its
+  `RestoreError` text, `Nothing to undo` or `Failed to restore recipe: …`,
+  or its `SaveRatioError` text, `Can't save this ratio: 2050 g of water is
+  outside 1–2000 g` or `Failed to save recipe: …`. The list is
   unchanged. `RecipeListHolder` forwards the message on its `failures`
-  stream, and the list page shows a snackbar for each one.
+  stream, and the list page shows a snackbar for each one. The snackbar
+  goes through the app's one `ScaffoldMessenger`, so it shows on the brew
+  page too, which closes its ratio sheet when Save is tapped so the
+  snackbar is not hidden under it.
 - **`BootFailed`.** See [Startup](#startup-and-shutdown).
 
 Everything else is only logged. That covers an out-of-range `StartBrew`, an

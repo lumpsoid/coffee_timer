@@ -48,6 +48,12 @@ pub enum BrewRatioChange {
     Recipe,
 }
 
+/// Make the brew's adjusted ratio the open recipe's own: save the water
+/// and step pours shown. A refusal (too much water, a pour out of range) or
+/// a store failure comes back as `RecipeListUpdate::Failed`.
+#[derive(Deserialize, DartSignal)]
+pub struct SaveBrewRatio;
+
 /// The brew page closed.
 #[derive(Deserialize, DartSignal)]
 pub struct LeaveBrew;

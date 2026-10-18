@@ -38,6 +38,11 @@ impl RecipeStep {
         }
     }
 
+    /// The same step pouring `water` instead; none pours nothing.
+    pub fn pouring(self, water: Option<WaterAmount>) -> Self {
+        Self { water, ..self }
+    }
+
     pub fn id(&self) -> &StepId {
         &self.id
     }

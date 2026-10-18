@@ -1,5 +1,6 @@
 use crate::brew::{
     BrewError, BrewNotice, BrewState, BrewView, CuePolicy, Effect, RatioChange, RunningStep,
+    SaveRatioError,
 };
 use crate::catalog::{CatalogChange, RecipeCatalog};
 use crate::model::{BrewMetrics, BrewRatio, RecipeId};
@@ -66,6 +67,30 @@ impl BrewController {
         };
         self.set_ratio(adjusted);
         Ok(())
+    }
+
+    /// Makes the adjusted ratio the open recipe's own: saves the recipe
+    /// with the water shown and every step's pour as shown (scaled by
+    /// [`crate::model::PourScale`]), coffee kept, through `catalog`. The
+    /// page then shows the saved recipe at its own ratio, and a running,
+    /// paused or finished brew keeps its place: the steps and their times
+    /// are the same, only the water and pours change. The returned change is for the
+    /// shell to pass on; [`BrewController::on_catalog_change`] finds the
+    /// page already showing it. On `Err` nothing changes.
+    pub fn save_ratio(
+        &mut self,
+        catalog: &mut RecipeCatalog,
+    ) -> Result<CatalogChange, SaveRatioError> {
+        let view = self.state.view().ok_or(SaveRatioError::NoRecipe)?;
+        let ratio = view.ratio().adjusted().ok_or(SaveRatioError::NotAdjusted)?;
+        let recipe = view.recipe().clone();
+        let water = ratio.water_grams(recipe.coffee());
+        let saved = recipe.with_water_scaled_to(water)?;
+        let change = catalog.upsert(saved.clone())?;
+        let metrics = self.metrics;
+        self.state =
+            std::mem::take(&mut self.state).map_view(|_| BrewView::of(saved, &metrics, None));
+        Ok(change)
     }
 
     /// Runs the open recipe from step `from` (0 for the whole recipe),
@@ -186,14 +211,20 @@ impl BrewController {
     /// Follows a persisted catalog change. A change to the open recipe
     /// reopens it from `catalog`: an edit shows the new version, idle (a
     /// running brew stops, a finished one clears), keeping an adjusted ratio; a delete shows "Empty
-    /// recipe". Other recipes' changes do nothing.
+    /// recipe". Other recipes' changes do nothing, and so does one that
+    /// leaves the open recipe as the page already shows it (a saved ratio,
+    /// or a save that changed nothing).
     pub fn on_catalog_change(
         &mut self,
         change: &CatalogChange,
         catalog: &RecipeCatalog,
     ) -> Vec<Effect> {
         let (CatalogChange::Upserted(id) | CatalogChange::Removed(id)) = change;
-        if !self.state.shows(id) {
+        let unchanged = self
+            .state
+            .view()
+            .is_some_and(|view| catalog.get(id) == Some(view.recipe()));
+        if !self.state.shows(id) || unchanged {
             return Vec::new();
         }
         let adjusted = self.state.view().and_then(|view| view.ratio().adjusted());
