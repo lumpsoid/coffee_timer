@@ -87,8 +87,11 @@ to.
   are saved as typed. Preset buttons add "Add coffee", "Add water", "Wait"
   or blank steps, each with a blank pour. Drag a step by its handle to
   reorder it; it keeps its text, pour and errors, and the `Step N name`
-  labels follow the new order. Field errors appear from the first save
-  attempt onward.
+  labels follow the new order. Quick buttons under each step's duration
+  (−15, −5, +5, +15 seconds) move it from what its `MM:SS` shows (text
+  that is not a number counts as 0), within 0–5999 s; the field then
+  shows the new seconds, valid again. Field errors appear from the first
+  save attempt onward.
 - **Settings.** Sets the theme (light, dark or system) and one of ten accent
   colours, and the brew's cues: the step sound on or off, vibration on or
   off (step boundaries, the pre-alert and the finish buzz), and the
@@ -227,6 +230,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
 - There is no undo command. The removed recipe is held in memory only, and
   each CLI run is one command, so nothing is left to undo by the next run;
   core's `catalog_test.rs` covers delete → undo instead.
+- There is no duration-nudge option: `--step` types a step's seconds
+  directly. Core's `editor_controller_test.rs` covers the editor's
+  −15/−5/+5/+15 buttons.
 
 ## Contents
 

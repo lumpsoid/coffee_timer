@@ -178,6 +178,7 @@ class _EditorPageState extends State<EditorPage> {
                   key: ValueKey(step.id),
                   step: step,
                   index: index,
+                  nudges: draft.durationNudgeButtons,
                 );
               },
               // The order changes only when Rust sends it back.
@@ -324,14 +325,22 @@ class _EditorPageState extends State<EditorPage> {
 
 /// One step's name, duration and pour inputs, keyed by its row id so its fields
 /// keep their row's text as rows come, go and move. Its drag handle starts a
-/// move.
+/// move; its quick buttons nudge the duration.
 class _StepCard extends StatelessWidget {
-  const _StepCard({required this.step, required this.index, super.key});
+  const _StepCard({
+    required this.step,
+    required this.index,
+    required this.nudges,
+    super.key,
+  });
 
   final EditorStep step;
 
   /// The card's position in the list, for the drag handle.
   final int index;
+
+  /// The quick duration buttons, in order.
+  final List<DurationNudgeButton> nudges;
 
   @override
   Widget build(BuildContext context) {
@@ -376,18 +385,58 @@ class _StepCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  child: TextFormField(
-                    initialValue: step.durationText,
-                    decoration: InputDecoration(
-                      labelText: 'Duration (seconds)',
-                      helperText: 'MM:SS — ${step.durationLabel}',
-                      errorText: step.durationError,
-                    ),
-                    keyboardType: TextInputType.number,
-                    onChanged: (raw) => SetStepDuration(
-                      row: step.id,
-                      raw: raw,
-                    ).sendSignalToRust(),
+                  child: Column(
+                    children: [
+                      TextFormField(
+                        // A new revision is text Rust replaced (a nudge):
+                        // a fresh field starts from it. Typing keeps the
+                        // revision, so the field keeps its own text.
+                        key: ValueKey(step.durationRevision),
+                        initialValue: step.durationText,
+                        decoration: InputDecoration(
+                          labelText: 'Duration (seconds)',
+                          helperText: 'MM:SS — ${step.durationLabel}',
+                          errorText: step.durationError,
+                        ),
+                        keyboardType: TextInputType.number,
+                        onChanged: (raw) => SetStepDuration(
+                          row: step.id,
+                          raw: raw,
+                        ).sendSignalToRust(),
+                      ),
+                      const SizedBox(height: 4),
+                      // The buttons share the field's width, and a label
+                      // too wide for its share shrinks rather than overflow.
+                      Row(
+                        children: [
+                          for (final button in nudges)
+                            Expanded(
+                              child: Tooltip(
+                                message: button.description,
+                                child: TextButton(
+                                  style: TextButton.styleFrom(
+                                    minimumSize: const Size(0, 32),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 2,
+                                    ),
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  onPressed: () => NudgeStepDuration(
+                                    row: step.id,
+                                    nudge: button.nudge,
+                                  ).sendSignalToRust(),
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: Text(button.label),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(width: 12),

@@ -58,6 +58,14 @@ pub struct SetStepDuration {
     pub raw: String,
 }
 
+/// A step card's quick duration button was pressed. `row` is an
+/// `EditorStep::id`.
+#[derive(Deserialize, DartSignal)]
+pub struct NudgeStepDuration {
+    pub row: String,
+    pub nudge: DurationNudgeChoice,
+}
+
 /// The grams the step pours, as typed; blank is no pour. `row` is an
 /// `EditorStep::id`.
 #[derive(Deserialize, DartSignal)]
@@ -131,6 +139,8 @@ pub struct EditorDraft {
     pub steps: Vec<EditorStep>,
     /// The add-step buttons, in order.
     pub add_step_buttons: Vec<AddStepButton>,
+    /// The quick duration buttons every step card shows, in order.
+    pub duration_nudge_buttons: Vec<DurationNudgeButton>,
     /// A store failure on save or delete (`Failed to save recipe: …`), for a
     /// snackbar. Set only by the action that failed; every update after the
     /// next action has none.
@@ -141,7 +151,7 @@ pub struct EditorDraft {
 #[derive(Serialize, SignalPiece)]
 pub struct EditorStep {
     /// Row key: send it back in `SetStepName`, `SetStepDuration`,
-    /// `SetStepWater`, `RemoveStep`, `MoveStep`.
+    /// `NudgeStepDuration`, `SetStepWater`, `RemoveStep`, `MoveStep`.
     pub id: String,
     /// `Step N name`.
     pub name_label: String,
@@ -151,6 +161,9 @@ pub struct EditorStep {
     pub duration_label: String,
     /// `Enter seconds` or `0–5999 seconds`, once a save was attempted.
     pub duration_error: Option<String>,
+    /// Moves on when Rust replaced `duration_text` (a nudge), never while
+    /// it is typed: key the duration field by it so it reloads the text.
+    pub duration_revision: u32,
     /// The grams poured as typed; blank is no pour.
     pub water_text: String,
     /// `Enter grams` or `1–2000 g`, once a save was attempted.
@@ -170,4 +183,22 @@ pub enum StepPresetChoice {
     AddWater,
     Wait,
     Blank,
+}
+
+/// One quick duration button: `−15`, `−5`, `+5`, `+15`.
+#[derive(Serialize, SignalPiece)]
+pub struct DurationNudgeButton {
+    pub nudge: DurationNudgeChoice,
+    pub label: String,
+    /// For screen readers and the tooltip, `Add 5 seconds`.
+    pub description: String,
+}
+
+/// Which quick duration button was pressed.
+#[derive(Serialize, Deserialize, SignalPiece, Clone, Copy)]
+pub enum DurationNudgeChoice {
+    MinusLarge,
+    MinusSmall,
+    PlusSmall,
+    PlusLarge,
 }

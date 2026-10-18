@@ -46,6 +46,11 @@ impl StepDuration {
         Self(u32::try_from(bounded).unwrap_or(Self::MAX_STEP_SECONDS))
     }
 
+    /// `delta` seconds more (less, if negative), clamped into range.
+    pub fn nudged(self, delta: i64) -> Self {
+        Self::clamped(i64::from(self.0).saturating_add(delta))
+    }
+
     pub fn seconds(self) -> u32 {
         self.0
     }

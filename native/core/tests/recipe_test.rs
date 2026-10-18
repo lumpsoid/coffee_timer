@@ -226,6 +226,22 @@ fn step_duration_clamped_never_leaves_the_range() {
 }
 
 #[test]
+fn step_duration_nudged_stays_in_range() {
+    assert_eq!(StepDuration::clamped(30).nudged(15).seconds(), 45);
+    assert_eq!(StepDuration::clamped(30).nudged(-5).seconds(), 25);
+    assert_eq!(StepDuration::clamped(3).nudged(-5), StepDuration::ZERO);
+    assert_eq!(
+        StepDuration::clamped(5995).nudged(15).seconds(),
+        StepDuration::MAX_STEP_SECONDS
+    );
+    assert_eq!(
+        StepDuration::clamped(5999).nudged(i64::MAX).seconds(),
+        StepDuration::MAX_STEP_SECONDS
+    );
+    assert_eq!(StepDuration::ZERO.nudged(i64::MIN), StepDuration::ZERO);
+}
+
+#[test]
 fn step_duration_mmss_zero_pads_both_parts() {
     assert_eq!(StepDuration::clamped(0).mmss(), "00:00");
     assert_eq!(StepDuration::clamped(65).mmss(), "01:05");

@@ -21,8 +21,13 @@ void main() {
       ..apply(RecipeListUpdateSnapshot(recipes: [summary('r1')]));
   });
 
-  /// A home page with the editor pushed over it.
+  /// A home page with the editor pushed over it, on a phone-sized screen
+  /// (411 × 891), so a card that overflows a phone's width fails the test.
   Future<void> pumpEditor(WidgetTester tester) async {
+    tester.view
+      ..physicalSize = const Size(1080, 2340)
+      ..devicePixelRatio = 2.625;
+    addTearDown(tester.view.reset);
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -114,12 +119,14 @@ void main() {
               durationText: 'x',
               durationLabel: '00:00',
               durationError: 'Enter seconds',
+              durationRevision: 0,
               waterText: '0',
               waterError: '1–2000 g',
             ),
           ],
           pourHint: 'Step pours add up to 0 g of 250 g',
           addStepButtons: [],
+          durationNudgeButtons: [],
         ),
       ),
     );
@@ -145,6 +152,7 @@ void main() {
       name: name,
       durationText: '0',
       durationLabel: '00:00',
+      durationRevision: 0,
       waterText: '',
     );
     FormFieldState<String> nameField(String id) => tester.state(
@@ -188,6 +196,67 @@ void main() {
       tester.getTopLeft(find.byKey(const ValueKey('s2'))).dy,
       lessThan(tester.getTopLeft(find.byKey(const ValueKey('s1'))).dy),
     );
+  });
+
+  testWidgets('renders the duration nudge buttons from state, in order', (
+    tester,
+  ) async {
+    await pumpEditor(tester);
+    editor.apply(EditorUpdateOpen(draft: draft()));
+    await tester.pump();
+
+    final labels = tester
+        .widgetList<Text>(
+          find.descendant(
+            of: find.byType(Tooltip),
+            matching: find.byType(Text),
+          ),
+        )
+        .map((text) => text.data);
+    expect(labels, ['−15', '−5', '+5', '+15']);
+    expect(find.byTooltip('Add 15 seconds'), findsOneWidget);
+  });
+
+  testWidgets('a nudged duration from Rust replaces the field text, typing '
+      'does not', (tester) async {
+    EditorStep step(String text, int revision) => EditorStep(
+      id: 's1',
+      nameLabel: 'Step 1 name',
+      name: 'Bloom',
+      durationText: text,
+      durationLabel: '00:00',
+      durationRevision: revision,
+      waterText: '',
+    );
+    Finder durationField() =>
+        find.widgetWithText(TextFormField, 'Duration (seconds)');
+    String? durationValue() =>
+        tester.state<FormFieldState<String>>(durationField()).value;
+
+    await pumpEditor(tester);
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('30', 0)])),
+    );
+    await tester.pump();
+    expect(durationValue(), '30');
+
+    // Typing (as the field's own change, so nothing is sent): Rust echoes
+    // the text at the same revision; the field keeps what it holds, even
+    // when an echo lags behind the keystrokes.
+    tester.state<FormFieldState<String>>(durationField()).didChange('305');
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('30', 0)])),
+    );
+    await tester.pump();
+    expect(durationValue(), '305');
+
+    // A nudge: new text at a new revision.
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('320', 1)])),
+    );
+    await tester.pump();
+    expect(durationValue(), '320');
+    expect(find.text('320'), findsOneWidget);
   });
 
   testWidgets('pops when Rust answers its opening with Closed', (

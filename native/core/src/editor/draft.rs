@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
-use crate::editor::{DraftMode, EditError, EditorStepRow, StepPreset};
+use crate::editor::{DraftMode, DurationNudge, EditError, EditorStepRow, StepPreset};
 use crate::model::{
     BrewMetrics, CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, StepId, WaterAmount,
 };
@@ -123,6 +123,15 @@ impl Draft {
 
     pub(crate) fn set_step_duration(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.step_mut(row)?.set_duration(raw);
+        Ok(())
+    }
+
+    pub(crate) fn nudge_step_duration(
+        &mut self,
+        row: &StepId,
+        nudge: DurationNudge,
+    ) -> Result<(), EditError> {
+        self.step_mut(row)?.nudge_duration(nudge.delta_seconds());
         Ok(())
     }
 
@@ -288,6 +297,7 @@ impl Draft {
                 duration_text: step.duration().raw().to_owned(),
                 duration_label: step.live_duration().mmss(),
                 duration_error: self.shown(step.duration().error()),
+                duration_revision: step.duration_revision(),
                 water_text: step.water().raw().to_owned(),
                 water_error: self.shown(step.water().error()),
             })

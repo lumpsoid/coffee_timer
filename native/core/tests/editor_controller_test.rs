@@ -5,8 +5,8 @@
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::{
-    DeleteError, Draft, DraftMode, EditError, EditorController, EditorState, EditorStepRow,
-    SaveError, StepPreset,
+    DeleteError, Draft, DraftMode, DurationNudge, EditError, EditorController, EditorState,
+    EditorStepRow, SaveError, StepPreset,
 };
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
@@ -163,6 +163,7 @@ fn new_draft_starts_with_one_blank_step_and_no_name() -> TestResult {
             duration_text: "0".to_owned(),
             duration_label: "00:00".to_owned(),
             duration_error: None,
+            duration_revision: 0,
             water_text: String::new(),
             water_error: None,
         }]
@@ -192,6 +193,7 @@ fn edit_prefills_from_the_stored_recipe() -> TestResult {
             duration_text: "30".to_owned(),
             duration_label: "00:30".to_owned(),
             duration_error: None,
+            duration_revision: 0,
             water_text: String::new(),
             water_error: None,
         }]
@@ -247,6 +249,10 @@ fn actions_without_a_draft_are_errors() -> TestResult {
     assert_eq!(editor.set_water("36"), Err(EditError::NoDraft));
     assert_eq!(editor.set_step_name(&s1, "x"), Err(EditError::NoDraft));
     assert_eq!(editor.set_step_duration(&s1, "1"), Err(EditError::NoDraft));
+    assert_eq!(
+        editor.nudge_step_duration(&s1, DurationNudge::PlusSmall),
+        Err(EditError::NoDraft)
+    );
     assert_eq!(editor.add_step(StepPreset::Wait), Err(EditError::NoDraft));
     assert_eq!(editor.remove_step(&s1), Err(EditError::NoDraft));
     assert_eq!(editor.save(&mut catalog), Err(SaveError::NoDraft));
@@ -643,6 +649,7 @@ fn removing_the_last_row_leaves_one_blank_row() -> TestResult {
             duration_text: "0".to_owned(),
             duration_label: "00:00".to_owned(),
             duration_error: None,
+            duration_revision: 0,
             water_text: String::new(),
             water_error: None,
         }]
@@ -669,6 +676,10 @@ fn unknown_row_is_an_error_and_changes_nothing() -> TestResult {
     assert_eq!(editor.remove_step(&missing), unknown);
     assert_eq!(editor.set_step_name(&missing, "x"), unknown);
     assert_eq!(editor.set_step_duration(&missing, "1"), unknown);
+    assert_eq!(
+        editor.nudge_step_duration(&missing, DurationNudge::PlusLarge),
+        unknown
+    );
     assert_eq!(editor.state(), &before);
     Ok(())
 }
@@ -680,6 +691,142 @@ fn edits_address_a_row_not_a_position() -> TestResult {
     editor.remove_step(&sid("s1")?)?;
     editor.set_step_duration(&sid("s2")?, "12")?;
     assert_eq!(row(&editor, "s2")?.duration_text, "12");
+    Ok(())
+}
+
+// Nudging durations
+
+#[test]
+fn nudge_buttons_are_minus_15_minus_5_plus_5_plus_15() {
+    let buttons: Vec<_> = DurationNudge::ALL
+        .into_iter()
+        .map(|nudge| {
+            (
+                nudge.delta_seconds(),
+                nudge.button_label(),
+                nudge.description(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        buttons,
+        [
+            (-15, "−15".to_owned(), "Subtract 15 seconds".to_owned()),
+            (-5, "−5".to_owned(), "Subtract 5 seconds".to_owned()),
+            (5, "+5".to_owned(), "Add 5 seconds".to_owned()),
+            (15, "+15".to_owned(), "Add 15 seconds".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn nudge_moves_the_duration_up_and_down() -> TestResult {
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    editor.set_step_duration(&s1, "30")?;
+    editor.nudge_step_duration(&s1, DurationNudge::PlusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "45");
+    editor.nudge_step_duration(&s1, DurationNudge::PlusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "50");
+    editor.nudge_step_duration(&s1, DurationNudge::MinusSmall)?;
+    editor.nudge_step_duration(&s1, DurationNudge::MinusLarge)?;
+    let shown = row(&editor, "s1")?;
+    assert_eq!(shown.duration_text, "30");
+    assert_eq!(shown.duration_label, "00:30");
+    Ok(())
+}
+
+#[test]
+fn nudge_clamps_at_both_bounds() -> TestResult {
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    editor.set_step_duration(&s1, "10")?;
+    editor.nudge_step_duration(&s1, DurationNudge::MinusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "0");
+    editor.nudge_step_duration(&s1, DurationNudge::MinusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "0");
+
+    editor.set_step_duration(&s1, "5990")?;
+    editor.nudge_step_duration(&s1, DurationNudge::PlusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "5999");
+    editor.nudge_step_duration(&s1, DurationNudge::PlusSmall)?;
+    let shown = row(&editor, "s1")?;
+    assert_eq!(shown.duration_text, "5999");
+    assert_eq!(shown.duration_label, "99:59");
+    Ok(())
+}
+
+#[test]
+fn nudge_starts_from_what_the_label_shows_for_invalid_text() -> TestResult {
+    // Not a number reads as 0 (label `00:00`); an out-of-range number as
+    // its bound (label `99:59`). The nudge leaves valid text.
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    for (text, nudge, expected) in [
+        ("abc", DurationNudge::PlusSmall, "5"),
+        ("", DurationNudge::PlusLarge, "15"),
+        ("   ", DurationNudge::MinusSmall, "0"),
+        ("1.5", DurationNudge::PlusSmall, "5"),
+        ("-20", DurationNudge::PlusSmall, "5"),
+        ("7000", DurationNudge::MinusSmall, "5994"),
+        (" 40 ", DurationNudge::PlusSmall, "45"),
+    ] {
+        editor.set_step_duration(&s1, text)?;
+        editor.nudge_step_duration(&s1, nudge)?;
+        assert_eq!(row(&editor, "s1")?.duration_text, expected, "{text:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn nudge_clears_the_rows_duration_error() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    editor.set_name("Nudged")?;
+    editor.set_step_duration(&s1, "abc")?;
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert_eq!(
+        row(&editor, "s1")?.duration_error.as_deref(),
+        Some(ENTER_SECONDS)
+    );
+
+    editor.nudge_step_duration(&s1, DurationNudge::PlusLarge)?;
+    assert_eq!(row(&editor, "s1")?.duration_error, None);
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("r1")?).ok_or("not saved")?;
+    assert_eq!(saved_steps(saved), [("s1", "Step 1", 15)]);
+    Ok(())
+}
+
+#[test]
+fn nudge_updates_the_total() -> TestResult {
+    let mut editor = new_draft();
+    editor.set_step_duration(&sid("s1")?, "60")?;
+    let s2 = editor.add_step(StepPreset::Wait)?;
+    editor.set_step_duration(&s2, "30")?;
+    editor.nudge_step_duration(&s2, DurationNudge::PlusLarge)?;
+    assert_eq!(draft(&editor)?.total_label(), "1:45");
+    Ok(())
+}
+
+#[test]
+fn nudge_moves_only_that_rows_revision() -> TestResult {
+    // Typing keeps the revision, so the field keeps its own text; a nudge
+    // moves it on, so the field reloads the new text.
+    let mut editor = new_draft();
+    let s1 = sid("s1")?;
+    let s2 = editor.add_step(StepPreset::Blank)?;
+    editor.set_step_duration(&s1, "30")?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 0);
+    editor.nudge_step_duration(&s1, DurationNudge::PlusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 1);
+    editor.set_step_duration(&s1, "40")?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 1);
+    editor.nudge_step_duration(&s1, DurationNudge::MinusSmall)?;
+    assert_eq!(row(&editor, "s1")?.duration_revision, 2);
+    assert_eq!(row(&editor, "s2")?.duration_revision, 0);
+    assert_eq!(row(&editor, s2.as_str())?.duration_text, "0");
     Ok(())
 }
 

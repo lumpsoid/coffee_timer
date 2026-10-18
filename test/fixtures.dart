@@ -44,6 +44,7 @@ EditorDraft draft({
       name: 'Bloom',
       durationText: '30',
       durationLabel: '00:30',
+      durationRevision: 0,
       waterText: '',
     ),
   ],
@@ -52,6 +53,28 @@ EditorDraft draft({
     AddStepButton(preset: StepPresetChoice.addWater, label: 'Add water'),
     AddStepButton(preset: StepPresetChoice.wait, label: 'Wait'),
     AddStepButton(preset: StepPresetChoice.blank, label: 'Add Step'),
+  ],
+  durationNudgeButtons: const [
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.minusLarge,
+      label: '−15',
+      description: 'Subtract 15 seconds',
+    ),
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.minusSmall,
+      label: '−5',
+      description: 'Subtract 5 seconds',
+    ),
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.plusSmall,
+      label: '+5',
+      description: 'Add 5 seconds',
+    ),
+    DurationNudgeButton(
+      nudge: DurationNudgeChoice.plusLarge,
+      label: '+15',
+      description: 'Add 15 seconds',
+    ),
   ],
   notice: notice,
 );

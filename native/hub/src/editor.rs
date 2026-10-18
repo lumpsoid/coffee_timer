@@ -1,8 +1,11 @@
 //! Editor state ↔ editor signals.
 
-use coffee_timer_core::editor::{Draft, EditorState, EditorStepRow, StepPreset};
+use coffee_timer_core::editor::{Draft, DurationNudge, EditorState, EditorStepRow, StepPreset};
 
-use crate::signals::{AddStepButton, EditorDraft, EditorStep, EditorUpdate, StepPresetChoice};
+use crate::signals::{
+    AddStepButton, DurationNudgeButton, DurationNudgeChoice, EditorDraft, EditorStep, EditorUpdate,
+    StepPresetChoice,
+};
 
 impl From<&EditorState> for EditorUpdate {
     fn from(state: &EditorState) -> Self {
@@ -38,6 +41,14 @@ impl From<&Draft> for EditorDraft {
                     label: preset.button_label().to_owned(),
                 })
                 .collect(),
+            duration_nudge_buttons: DurationNudge::ALL
+                .into_iter()
+                .map(|nudge| DurationNudgeButton {
+                    nudge: nudge.into(),
+                    label: nudge.button_label(),
+                    description: nudge.description(),
+                })
+                .collect(),
             notice: draft.notice().map(str::to_owned),
         }
     }
@@ -52,6 +63,7 @@ impl From<EditorStepRow> for EditorStep {
             duration_text: row.duration_text,
             duration_label: row.duration_label,
             duration_error: row.duration_error,
+            duration_revision: row.duration_revision,
             water_text: row.water_text,
             water_error: row.water_error,
         }
@@ -76,6 +88,28 @@ impl From<StepPresetChoice> for StepPreset {
             StepPresetChoice::AddWater => Self::AddWater,
             StepPresetChoice::Wait => Self::Wait,
             StepPresetChoice::Blank => Self::Blank,
+        }
+    }
+}
+
+impl From<DurationNudge> for DurationNudgeChoice {
+    fn from(nudge: DurationNudge) -> Self {
+        match nudge {
+            DurationNudge::MinusLarge => Self::MinusLarge,
+            DurationNudge::MinusSmall => Self::MinusSmall,
+            DurationNudge::PlusSmall => Self::PlusSmall,
+            DurationNudge::PlusLarge => Self::PlusLarge,
+        }
+    }
+}
+
+impl From<DurationNudgeChoice> for DurationNudge {
+    fn from(choice: DurationNudgeChoice) -> Self {
+        match choice {
+            DurationNudgeChoice::MinusLarge => Self::MinusLarge,
+            DurationNudgeChoice::MinusSmall => Self::MinusSmall,
+            DurationNudgeChoice::PlusSmall => Self::PlusSmall,
+            DurationNudgeChoice::PlusLarge => Self::PlusLarge,
         }
     }
 }

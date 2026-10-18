@@ -1,5 +1,7 @@
 use crate::catalog::{CatalogChange, RecipeCatalog};
-use crate::editor::{DeleteError, Draft, EditError, EditorState, SaveError, StepPreset};
+use crate::editor::{
+    DeleteError, Draft, DurationNudge, EditError, EditorState, SaveError, StepPreset,
+};
 use crate::model::{BrewMetrics, RecipeId, StepId};
 use crate::ports::IdGen;
 use crate::transfer::{ImportError, RecipeDocument, RecipeImport};
@@ -92,6 +94,19 @@ impl EditorController {
 
     pub fn set_step_duration(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_step_duration(row, raw)
+    }
+
+    /// A step card's quick button: moves the row's duration by the nudge's
+    /// seconds, from what its `MM:SS` label shows (text that is not a number
+    /// counts as `0`), clamped to `0..=5999`. The duration text becomes the
+    /// new seconds, so the row's duration error clears and the total
+    /// follows; the row's `duration_revision` moves on.
+    pub fn nudge_step_duration(
+        &mut self,
+        row: &StepId,
+        nudge: DurationNudge,
+    ) -> Result<(), EditError> {
+        self.draft_mut()?.nudge_step_duration(row, nudge)
     }
 
     /// The grams the step pours, as typed; blank is no pour.

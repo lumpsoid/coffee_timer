@@ -23,10 +23,10 @@ use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, DuplicateRecipe,
     EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes, LeaveBrew, MoveStep,
-    NewDraft, OpenBrew, PauseBrew, PinRecipe, PlatformEffect, RecipeListReady, RecipeListUpdate,
-    RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent,
-    SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater, SetSound,
-    SetStepDuration, SetStepName, SetStepWater, SetTheme, SetVibration, SettingsReady,
+    NewDraft, NudgeStepDuration, OpenBrew, PauseBrew, PinRecipe, PlatformEffect, RecipeListReady,
+    RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe,
+    SetAccent, SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater,
+    SetSound, SetStepDuration, SetStepName, SetStepWater, SetTheme, SetVibration, SettingsReady,
     SettingsUpdate, StartBrew, UndoRemoveRecipe, UnpinRecipe,
 };
 
@@ -86,6 +86,7 @@ pub async fn run(mut c: Controllers) {
     let set_recipe_water = SetRecipeWater::get_dart_signal_receiver();
     let set_step_name = SetStepName::get_dart_signal_receiver();
     let set_step_duration = SetStepDuration::get_dart_signal_receiver();
+    let nudge_step_duration = NudgeStepDuration::get_dart_signal_receiver();
     let set_step_water = SetStepWater::get_dart_signal_receiver();
     let add_step = AddStep::get_dart_signal_receiver();
     let remove_step = RemoveStep::get_dart_signal_receiver();
@@ -213,6 +214,11 @@ pub async fn run(mut c: Controllers) {
             Some(pack) = set_step_duration.recv() => {
                 let SetStepDuration { row, raw } = pack.message;
                 report(on_row(&row, |row| c.editor.set_step_duration(row, &raw)));
+                show_editor(&c.editor);
+            }
+            Some(pack) = nudge_step_duration.recv() => {
+                let NudgeStepDuration { row, nudge } = pack.message;
+                report(on_row(&row, |row| c.editor.nudge_step_duration(row, nudge.into())));
                 show_editor(&c.editor);
             }
             Some(pack) = set_step_water.recv() => {

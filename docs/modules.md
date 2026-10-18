@@ -35,7 +35,8 @@ again.
   `MAX_GENERATED_CHARS` (60). Typed names have no upper bound.
 - **`StepDuration`** is a step's length, `0..=5999` seconds. It has two entry
   points: strict parsing for user input and lenient clamping for storage and
-  live labels. It also produces the `MM:SS` and `Ns` labels.
+  live labels, and `nudged(delta)`, which moves it and clamps into range.
+  It also produces the `MM:SS` and `Ns` labels.
 - **`CoffeeDose`** (`1..=200` g) and **`WaterAmount`** (`1..=2000` g) are a
   recipe's stored coffee and total water. Like `StepDuration`, each has
   strict text parsing (`Enter grams`, `1–200 g` / `1–2000 g`) and lenient
@@ -253,7 +254,10 @@ which runs the timer tick by tick.
   `set_step_water`), `add_step`
   (which returns the new row's `StepId`), `remove_step`, `move_step(row, to)`
   (`to` is the 0-based index the row ends at; past the last row is
-  `EditError::StepPositionOutOfRange`), `save`, `delete` and `close`.
+  `EditError::StepPositionOutOfRange`), `nudge_step_duration(row, nudge)`
+  (moves the row's duration from its lenient reading, the one its `MM:SS`
+  label shows, and replaces its text with the new seconds), `save`,
+  `delete` and `close`.
 - `Draft` is the whole editor view: the raw text of each field (name,
   description, coffee and water grams, a new draft starting at 15 g to
   250 g), at least one
@@ -262,9 +266,13 @@ which runs the timer tick by tick.
   store-failure notice. The private `Field<T>` keeps the
   typed text and its parse result together.
 - `EditorStepRow` is one step card: name, duration and pour text, with
-  their labels and errors.
+  their labels and errors, and a `duration_revision` that moves on only
+  when core replaces the duration text (a nudge), never while it is typed.
 - `StepPreset` covers the add-step buttons: "Add coffee", "Add water",
   "Wait" and blank.
+- `DurationNudge` covers a step card's quick duration buttons: −15, −5,
+  +5 and +15 seconds (`SMALL_SECONDS` 5, `LARGE_SECONDS` 15), with their
+  labels and screen-reader descriptions.
 - `DraftMode` says whether the draft is new or existing.
 - The error types are `EditError`, `SaveError` and `DeleteError`.
 
@@ -386,7 +394,7 @@ makes no business decisions.
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
-| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
+| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial
@@ -425,7 +433,11 @@ The GUI renders, sends intents, and performs effects. It holds no business
   `SliverReorderableList`: a drop sends `MoveStep` (row id and final index,
   from `onReorderItem`) and the order changes only when Rust's draft comes
   back. The list re-creates a moved card, whose fields start from the text
-  Rust holds for that row.
+  Rust holds for that row. Each card renders the draft's
+  `durationNudgeButtons` under its duration field, each sending
+  `NudgeStepDuration`; the duration field is keyed by the row's
+  `durationRevision`, so a nudged value (a new revision) re-creates it
+  from Rust's text while typing (same revision) keeps the field's own.
 - **[`widgets/`](../lib/widgets)** has the display widgets. Recipes are
   drawn as printed labels: `LabelColors` maps the `RecipeLabel` to colours
   (dimmed in dark theme), `LabelPaperPainter` paints the paper, texture,

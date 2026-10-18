@@ -9,6 +9,8 @@ pub(crate) struct DraftStep {
     id: StepId,
     name: String,
     duration: Field<StepDuration>,
+    /// Counts the times the duration text was replaced rather than typed.
+    duration_revision: u32,
     /// Grams poured in the step; blank is no pour.
     water: Field<Option<WaterAmount>>,
 }
@@ -24,6 +26,7 @@ impl DraftStep {
             id,
             name: name.to_owned(),
             duration: Field::parse(Self::NEW_DURATION_TEXT, StepDuration::try_parse_text),
+            duration_revision: 0,
             water: Field::parse("", WaterAmount::try_parse_optional_text),
         }
     }
@@ -37,6 +40,7 @@ impl DraftStep {
                 &step.duration().seconds().to_string(),
                 StepDuration::try_parse_text,
             ),
+            duration_revision: 0,
             water: Field::parse(
                 &step
                     .water()
@@ -57,6 +61,17 @@ impl DraftStep {
 
     pub(crate) fn set_duration(&mut self, raw: &str) {
         self.duration = Field::parse(raw, StepDuration::try_parse_text);
+    }
+
+    /// Moves the duration by `delta` seconds from what its label shows
+    /// (the lenient reading: text that is not a number counts as `0`, an
+    /// out-of-range number as its bound), clamped into range. The text
+    /// becomes the new value in seconds, so it is valid again, and the
+    /// revision moves on so the field shows the new text.
+    pub(crate) fn nudge_duration(&mut self, delta: i64) {
+        let nudged = self.live_duration().nudged(delta);
+        self.set_duration(&nudged.seconds().to_string());
+        self.duration_revision = self.duration_revision.wrapping_add(1);
     }
 
     pub(crate) fn set_water(&mut self, raw: &str) {
@@ -92,6 +107,10 @@ impl DraftStep {
 
     pub(crate) fn duration(&self) -> &Field<StepDuration> {
         &self.duration
+    }
+
+    pub(crate) fn duration_revision(&self) -> u32 {
+        self.duration_revision
     }
 
     pub(crate) fn water(&self) -> &Field<Option<WaterAmount>> {
