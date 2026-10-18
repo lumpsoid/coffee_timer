@@ -17,9 +17,10 @@ import 'package:flutter/services.dart';
 /// The brew page: the open recipe printed on its own label, its timer dial
 /// and its method. Once
 /// subscribed it opens [recipeId] ([OpenBrew]) and shows the brew states
-/// that follow. Tapping the dial starts, pauses or resumes the brew, and the
-/// Reset button under it (shown while a brew runs or is paused) stops it;
-/// long-pressing a step starts from it. Leaving the page tells Rust
+/// that follow. Tapping the dial starts, pauses or resumes the brew, or,
+/// once it is done, brews again; the Reset button under it (shown while a
+/// brew runs, is paused or is done) goes back to idle; long-pressing a step
+/// starts from it. Leaving the page tells Rust
 /// ([LeaveBrew]).
 class BrewPage extends StatefulWidget {
   const BrewPage({
@@ -94,7 +95,8 @@ class _BrewPageState extends State<BrewPage> {
           builder: (_, _) => switch (widget.brew.state) {
             BrewUpdateIdle(:final recipe) ||
             BrewUpdateRunning(:final recipe) ||
-            BrewUpdatePaused(:final recipe) => _RatioSheet(
+            BrewUpdatePaused(:final recipe) ||
+            BrewUpdateFinished(:final recipe) => _RatioSheet(
               recipe: recipe,
               colors: colors,
             ),
@@ -123,12 +125,21 @@ class _BrewPageState extends State<BrewPage> {
         BrewUpdateIdle(:final recipe) => _page(
           recipe,
           null,
+          resettable: false,
           onDial: () => _start(0),
           face: (colors) => _IdleFace(recipe: recipe, colors: colors),
+        ),
+        BrewUpdateFinished(:final recipe, :final finished) => _page(
+          recipe,
+          null,
+          resettable: true,
+          onDial: () => _start(0),
+          face: (colors) => _DoneFace(finished: finished, colors: colors),
         ),
         BrewUpdateRunning(:final recipe, :final timer) => _page(
           recipe,
           timer,
+          resettable: true,
           onDial: () => const PauseBrew().sendSignalToRust(),
           face: (colors) =>
               _TimerFace(timer: timer, colors: colors, paused: false),
@@ -136,6 +147,7 @@ class _BrewPageState extends State<BrewPage> {
         BrewUpdatePaused(:final recipe, :final timer) => _page(
           recipe,
           timer,
+          resettable: true,
           onDial: () => const ResumeBrew().sendSignalToRust(),
           face: (colors) =>
               _TimerFace(timer: timer, colors: colors, paused: true),
@@ -152,10 +164,12 @@ class _BrewPageState extends State<BrewPage> {
   }
 
   /// The open recipe, printed on its own label paper; [timer] is null
-  /// while idle. Tapping the dial calls [onDial]; [face] is its centre.
+  /// while idle or done. Tapping the dial calls [onDial]; [face] is its
+  /// centre. The Reset button shows when [resettable].
   Widget _page(
     BrewRecipe recipe,
     BrewTimer? timer, {
+    required bool resettable,
     required VoidCallback onDial,
     required Widget Function(LabelColors colors) face,
   }) {
@@ -252,7 +266,7 @@ class _BrewPageState extends State<BrewPage> {
                 // a brew starts.
                 SizedBox(
                   height: 44,
-                  child: timer == null
+                  child: !resettable
                       ? null
                       : TextButton.icon(
                           onPressed: () => const ResetBrew().sendSignalToRust(),
@@ -344,6 +358,50 @@ class _IdleFace extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               'TAP TO BREW',
+              style: _caption(colors, size: 11).copyWith(color: colors.accent),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// The dial's centre once the brew is done: how long it brewed, what the
+/// scale should read if any step poured, and that a tap brews again.
+class _DoneFace extends StatelessWidget {
+  const _DoneFace({required this.finished, required this.colors});
+
+  final BrewFinished finished;
+  final LabelColors colors;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('DONE', style: _caption(colors)),
+        const SizedBox(height: 4),
+        Text(finished.totalLabel, style: _bigFigure(colors)),
+        if (finished.pouredLabel case final poured?)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(
+              // Not upper-cased like the captions: `g` is a unit.
+              poured,
+              style: _caption(colors, size: 12).copyWith(
+                color: colors.accent,
+              ),
+            ),
+          ),
+        const SizedBox(height: 6),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.replay, size: 14, color: colors.accent),
+            const SizedBox(width: 4),
+            Text(
+              'TAP TO BREW AGAIN',
               style: _caption(colors, size: 11).copyWith(color: colors.accent),
             ),
           ],

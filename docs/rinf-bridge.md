@@ -78,7 +78,8 @@ Two ways in, one rule for choosing:
   depend on rinf.
 - No controller reads the clock: the timer counts the ticks it is given.
 - An `Effect` is a decision already made, for the shell to carry out:
-  `PlayStepSound`, `Vibrate { ms }`, `KeepScreenOn(bool)`,
+  `PlayStepSound`, `Vibrate { ms }`, `VibratePattern { pattern_ms }`,
+  `KeepScreenOn(bool)`,
   `ShowBrewNotification(BrewNotice)`, `HideBrewNotification`.
 - A `CatalogChange` (`Upserted` / `Removed`) is already persisted when it is
   returned. The shell passes it on unconditionally: send it as a list diff,
@@ -173,7 +174,7 @@ One type means one Dart stream, so a snapshot and the diffs after it
 arrive in order. Splitting them across signal types gives up that ordering.
 
 Platform effects go on their own signal, `PlatformEffect` (an enum:
-`PlayStepSound`, `Vibrate`, `KeepScreenOn { on }`,
+`PlayStepSound`, `Vibrate`, `VibratePattern`, `KeepScreenOn { on }`,
 `ShowBrewNotification { title, next }`, `HideBrewNotification`). They are
 commands, not state: Dart performs them and keeps nothing.
 

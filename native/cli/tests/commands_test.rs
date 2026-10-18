@@ -241,9 +241,10 @@ tick 3   00:01 B  |  1:done 2:done 3:current
 [vibrate 100ms]
 [sound]
 [notify B · 00:01]
-tick 4   idle 0:03  |  1:pending 2:pending 3:pending
+tick 4   done 0:03  |  1:done 2:done 3:done
 [screen off]
-[vibrate 100ms]
+[vibrate pattern 0/400/200/400ms]
+[sound]
 [notify off]
 "
     );
@@ -282,9 +283,10 @@ tick 3   00:01 B  |  1:done 2:current
 [vibrate 100ms]
 [sound]
 [notify B · 00:01]
-tick 4   idle 0:04  |  1:pending 2:pending
+tick 4   done 0:04  |  1:done 2:done
 [screen off]
-[vibrate 100ms]
+[vibrate pattern 0/400/200/400ms]
+[sound]
 [notify off]
 "
     );
@@ -300,11 +302,11 @@ fn brew_from_a_later_step_starts_there() -> TestResult {
         Some("start    00:25 Brew  |  1:done 2:current")
     );
     // Start and each running tick add a notification line; the end adds
-    // three effect lines.
-    assert_eq!(lines.len(), 3 + 24 * 2 + 4);
+    // four effect lines. The run brewed only the step it started from.
+    assert_eq!(lines.len(), 3 + 24 * 2 + 5);
     assert_eq!(
-        lines.get(lines.len() - 4).copied(),
-        Some("tick 25  idle 0:55  |  1:pending 2:pending")
+        lines.get(lines.len() - 5).copied(),
+        Some("tick 25  done 0:25  |  1:done 2:done")
     );
     Ok(())
 }
@@ -319,6 +321,11 @@ fn brew_prints_the_pour_to_target_of_each_pouring_step() -> TestResult {
     );
     assert!(
         lines.contains(&"tick 30  02:00 Pour (Pour to 250g)  |  1:done 2:done 3:current"),
+        "{out}"
+    );
+    // Done: the steps brewed and what the scale reads now.
+    assert!(
+        lines.contains(&"tick 150 done 2:30 (Poured to 250g)  |  1:done 2:done 3:done"),
         "{out}"
     );
     Ok(())

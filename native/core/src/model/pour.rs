@@ -32,4 +32,9 @@ impl Pour {
     pub fn to_label(self) -> String {
         format!("Pour to {}g", self.to_grams)
     }
+
+    /// The scale reading once the whole brew has poured, `Poured to 300g`.
+    pub fn poured_to_label(self) -> String {
+        format!("Poured to {}g", self.to_grams)
+    }
 }

@@ -2,9 +2,13 @@ use crate::brew::{BrewError, BrewNotice, BrewState, BrewView, Effect, RatioChang
 use crate::catalog::{CatalogChange, RecipeCatalog};
 use crate::model::{BrewMetrics, BrewRatio, RecipeId};
 
-/// Buzz length at each step boundary and at the end (legacy
-/// `vibrate_leaf.dart`: `Vibration.vibrate(duration: 100)`).
+/// Buzz length at each step boundary (legacy `vibrate_leaf.dart`:
+/// `Vibration.vibrate(duration: 100)`).
 const VIBRATE_MS: u32 = 100;
+
+/// The end of a brew: two long buzzes, so it does not feel like one more
+/// step boundary. Pause and buzz lengths in ms, starting with a pause.
+const FINISHED_PATTERN_MS: [u32; 4] = [0, 400, 200, 400];
 
 /// Owner of the brew page: which recipe is open and where its timer is.
 ///
@@ -54,7 +58,7 @@ impl BrewController {
     }
 
     /// Runs the open recipe from step `from` (0 for the whole recipe),
-    /// restarting a brew already running or paused, as a new run
+    /// restarting a brew already running, paused or finished, as a new run
     /// ([`RunningStep::run`]). Shows the brew notification. On `Err` nothing
     /// changes.
     pub fn start(&mut self, from: usize) -> Result<Vec<Effect>, BrewError> {
@@ -104,9 +108,9 @@ impl BrewController {
     }
 
     /// One second passes and the brew notification follows. At zero the brew
-    /// moves to the next step (vibrate, sound) or, after the last step, ends
-    /// (screen-on off, vibrate, no sound, notification gone). A no-op unless
-    /// running (paused included).
+    /// moves to the next step (vibrate, sound) or, after the last step,
+    /// finishes (screen-on off, the finish buzz pattern, sound, notification
+    /// gone). A no-op unless running (paused and finished included).
     pub fn tick(&mut self) -> Vec<Effect> {
         let (view, step) = match std::mem::take(&mut self.state) {
             BrewState::Running(view, step) => (view, step),
@@ -119,30 +123,37 @@ impl BrewController {
         if !step.remaining().is_zero() {
             return vec![self.keep_running(view, step)];
         }
-        match view.step(step.run(), step.index() + 1) {
+        match view.next_step(&step) {
             Some(next) => vec![
                 Effect::Vibrate { ms: VIBRATE_MS },
                 Effect::PlayStepSound,
                 self.keep_running(view, next),
             ],
             None => {
-                self.state = BrewState::Idle(view);
+                let finished = view.finished(step.first(), &self.metrics);
+                self.state = BrewState::Finished(view, finished);
                 // The notification goes last: hiding it lets the platform
-                // stop keeping the app awake.
+                // stop keeping the app awake, after the buzz and sound.
                 vec![
                     Effect::KeepScreenOn(false),
-                    Effect::Vibrate { ms: VIBRATE_MS },
+                    Effect::VibratePattern {
+                        pattern_ms: FINISHED_PATTERN_MS.to_vec(),
+                    },
+                    Effect::PlayStepSound,
                     Effect::HideBrewNotification,
                 ]
             }
         }
     }
 
-    /// Stops a running or paused brew; the recipe stays open, idle.
+    /// Stops a running or paused brew, or clears a finished one; the recipe
+    /// stays open, idle.
     pub fn reset(&mut self) -> Vec<Effect> {
         let effects = self.stop_silently();
         self.state = match std::mem::take(&mut self.state) {
-            BrewState::Running(view, _) | BrewState::Paused(view, _) => BrewState::Idle(view),
+            BrewState::Running(view, _)
+            | BrewState::Paused(view, _)
+            | BrewState::Finished(view, _) => BrewState::Idle(view),
             other => other,
         };
         effects
@@ -157,7 +168,7 @@ impl BrewController {
 
     /// Follows a persisted catalog change. A change to the open recipe
     /// reopens it from `catalog`: an edit shows the new version, idle (a
-    /// running brew stops), keeping an adjusted ratio; a delete shows "Empty
+    /// running brew stops, a finished one clears), keeping an adjusted ratio; a delete shows "Empty
     /// recipe". Other recipes' changes do nothing.
     pub fn on_catalog_change(
         &mut self,
@@ -193,14 +204,15 @@ impl BrewController {
     }
 
     /// What stopping the current brew takes, without vibration or sound. A
-    /// paused brew already let the screen sleep.
+    /// paused brew already let the screen sleep; a finished one let go of
+    /// both.
     fn stop_silently(&self) -> Vec<Effect> {
         match self.state {
             BrewState::Running(..) => {
                 vec![Effect::KeepScreenOn(false), Effect::HideBrewNotification]
             }
             BrewState::Paused(..) => vec![Effect::HideBrewNotification],
-            BrewState::Empty | BrewState::Idle(_) => Vec::new(),
+            BrewState::Empty | BrewState::Idle(_) | BrewState::Finished(..) => Vec::new(),
         }
     }
 }

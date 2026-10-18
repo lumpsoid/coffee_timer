@@ -24,9 +24,14 @@ to.
 - **Brew page.** Shows the recipe printed on its own coffee-bag label (the
   same look as its list card), a timer dial and the steps. Tap the dial to
   start the brew from step 1. Tap it while it runs to pause, and again to
-  resume where it left off. The Reset button under the dial, shown while a
-  brew runs or is paused, stops it. Long-press a step to start from that
-  step, paused or not. The dial sweeps through the current step, and its
+  resume where it left off. When the last step ends the dial reads `DONE`
+  with the time brewed (and `Poured to 250g`, the scale's final reading,
+  if any step pours), every step is marked done, the phone buzzes twice
+  and plays the sound, the screen may sleep again and the brew
+  notification goes away. Tap the dial then to brew again. The Reset
+  button under the dial, shown while a brew runs, is paused or is done,
+  goes back to idle. Long-press a step to start from that step, paused,
+  done or not. The dial sweeps through the current step, and its
   outer track and the step list mark each step done, current, paused or
   pending. While paused the sweep stops and fades, the countdown fades, the
   screen may sleep again, and the brew notification reads `Paused`.
@@ -129,7 +134,10 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   `~/.local/share/coffee_timer/coffee_timer.db`, then `./coffee_timer.db`.
 - `brew` ticks once per second until the last step ends, and prints the
   countdown, each step's status and the effects (`[vibrate 100ms]`,
-  `[sound]`, `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`).
+  `[vibrate pattern 0/400/200/400ms]`, `[sound]`,
+  `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`). Its last
+  tick line is the done line: the time brewed, and the scale's final
+  reading if any step pours, as in `done 2:30 (Poured to 250g)`.
   `--fast` skips the waits.
   `--from N` starts at a 0-based step. `--pause-at N` pauses after tick
   `N` (ignored if the brew has ended by then) and `--pause-for S` stays

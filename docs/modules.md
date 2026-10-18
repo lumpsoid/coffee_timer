@@ -139,14 +139,16 @@ Test:
   provides `open`, `start`, `tick`, `pause`, `resume`, `reset`, `leave`,
   `adjust_ratio` and `on_catalog_change`.
 - `BrewState` is `Empty`, `Idle(BrewView)`, `Running(BrewView,
-  RunningStep)` or `Paused(BrewView, RunningStep)`.
+  RunningStep)`, `Paused(BrewView, RunningStep)` or `Finished(BrewView,
+  FinishedBrew)`. `FinishedBrew` is the time the last run brewed;
+  `BrewView::poured_label` is the scale's final reading.
 - `BrewView` is the open recipe with its labels, its `LabelStyle` (the
   brew page wears the list card's label), `Step N of M` positions, and each
   step's `Pour` at the water shown (`pour_to_label(index)`). Its
   `RatioSetting` is `Recipe` or `Adjusted`; `RatioChange` is
   one press of the page's ratio controls.
 - `RunningStep` is the current (or paused) step, the time left, the run
-  number, and the dial's sweep.
+  number, the step the run started from, and the dial's sweep.
 - `StepRow` and `StepStatus` (`Done` / `Current` / `Paused` / `Pending`) describe the
   step list. Each row also carries its arc on the dial's step track, as
   fractions of the whole brew, and its pour label if it pours.
@@ -284,7 +286,7 @@ makes no business decisions.
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
-| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused`), `PlatformEffect` |
+| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
 

@@ -1,14 +1,14 @@
 //! Brew state and effects → brew signals.
 
 use coffee_timer_core::brew::{
-    BrewNotice, BrewState, BrewView, Effect, RatioChange, RatioSetting, RunningStep, StepRow,
-    StepStatus,
+    BrewNotice, BrewState, BrewView, Effect, FinishedBrew, RatioChange, RatioSetting, RunningStep,
+    StepRow, StepStatus,
 };
 use coffee_timer_core::model::StepDuration;
 
 use crate::signals::{
-    BrewRatioChange, BrewRatioSetting, BrewRecipe, BrewStep, BrewStepStatus, BrewTimer, BrewUpdate,
-    PlatformEffect,
+    BrewFinished, BrewRatioChange, BrewRatioSetting, BrewRecipe, BrewStep, BrewStepStatus,
+    BrewTimer, BrewUpdate, PlatformEffect,
 };
 
 impl From<&BrewState> for BrewUpdate {
@@ -29,7 +29,18 @@ impl From<&BrewState> for BrewUpdate {
                 recipe: recipe(view, steps()),
                 timer: timer(view, step),
             },
+            BrewState::Finished(view, done) => Self::Finished {
+                recipe: recipe(view, steps()),
+                finished: finished(view, done),
+            },
         }
+    }
+}
+
+fn finished(view: &BrewView, finished: &FinishedBrew) -> BrewFinished {
+    BrewFinished {
+        total_label: finished.total_label().to_owned(),
+        poured_label: view.poured_label(),
     }
 }
 
@@ -111,6 +122,7 @@ impl From<Effect> for PlatformEffect {
         match effect {
             Effect::PlayStepSound => Self::PlayStepSound,
             Effect::Vibrate { ms } => Self::Vibrate { ms },
+            Effect::VibratePattern { pattern_ms } => Self::VibratePattern { pattern_ms },
             Effect::KeepScreenOn(on) => Self::KeepScreenOn { on },
             Effect::ShowBrewNotification(BrewNotice { title, next }) => {
                 Self::ShowBrewNotification { title, next }
@@ -264,6 +276,22 @@ mod tests {
         assert_eq!(timer.run, 1);
         assert_eq!(timer.step_index, 0);
         assert_eq!(timer.remaining_label, "00:29");
+        Ok(())
+    }
+
+    #[test]
+    fn finished_marks_every_step_done_and_carries_the_total() -> TestResult {
+        let mut brew = opened()?;
+        let _effects = brew.start(0)?;
+        for _ in 0..31 {
+            let _effects = brew.tick();
+        }
+        let BrewUpdate::Finished { recipe, finished } = BrewUpdate::from(brew.state()) else {
+            return Err("not finished".into());
+        };
+        assert_eq!(statuses(&recipe), ["done", "done"]);
+        assert_eq!(finished.total_label, "0:30");
+        assert_eq!(finished.poured_label, None, "no step pours");
         Ok(())
     }
 }

@@ -93,7 +93,8 @@ Effects are one-shot instructions: `Vibrate { ms }`, `PlayStepSound`,
 
 Kept: start from step 0 or a chosen step; one tick per second; at a step
 boundary vibrate + sound + next step; after the last step screen-on off,
-ended, vibrate, no sound; reset turns screen-on off; leaving resets silently.
+ended, vibrate, no sound (since changed deliberately: see **Done** under
+the deliberate changes); reset turns screen-on off; leaving resets silently.
 
 Fixed / changed:
 
@@ -208,6 +209,21 @@ Deliberate changes to behavior the port had kept.
   the whole recipe at its old place; the dialogs now ask only
   `Delete "V60"?`. Only the last removal can be undone, and it is held in
   memory, not stored.
+- **Done.** Legacy (and the port) went back to idle after the last step,
+  so an ended brew looked like one never started, and it ended with the
+  same single 100 ms buzz as a step boundary, with no sound. The brew now
+  ends in `BrewState::Finished`: the dial reads `DONE`, the time the run
+  brewed (from the step it started at; the recipe's total for a full brew)
+  and, when any step pours, the scale's final reading (`Poured to 250g`,
+  at the ratio shown); every step is marked done. Finishing returns
+  screen-on off, a double long buzz (`VibratePattern [0, 400, 200, 400]`),
+  the step sound, then the notification hidden (last, so the platform keeps
+  the app awake for the buzz and sound). Tapping the dial while done brews
+  again from step 1, in one tap, as it does while idle; the Reset button
+  (shown while done) goes back to idle; long-pressing a step starts there.
+  A ratio change keeps a finished brew finished, as it keeps idle idle;
+  an edit to the open recipe shows the new version idle, and a delete
+  shows "Empty recipe", with no effects, exactly as while idle.
 
 ## Phases
 

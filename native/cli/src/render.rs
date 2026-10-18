@@ -59,8 +59,9 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
 }
 
 /// One line of the timer: the countdown and step while running or paused,
-/// with its "pour to" target if it pours, the total while idle; then every
-/// step's status.
+/// with its "pour to" target if it pours, the total while idle, the time
+/// brewed (and the scale's final reading, if any step pours) once done;
+/// then every step's status.
 pub fn timer_line(state: &BrewState) -> String {
     let pour_to = |view: &BrewView, step: &RunningStep| {
         view.pour_to_label(step.index())
@@ -81,6 +82,12 @@ pub fn timer_line(state: &BrewState) -> String {
             step.name(),
             pour_to(view, step)
         ),
+        BrewState::Finished(view, finished) => format!(
+            "done {}{}",
+            finished.total_label(),
+            view.poured_label()
+                .map_or_else(String::new, |poured| format!(" ({poured})"))
+        ),
     };
     format!("{timer}  |  {}", statuses(&state.step_rows()))
 }
@@ -89,6 +96,10 @@ pub fn effects(out: &mut impl Write, effects: &[Effect]) -> io::Result<()> {
     for effect in effects {
         match effect {
             Effect::Vibrate { ms } => writeln!(out, "[vibrate {ms}ms]")?,
+            Effect::VibratePattern { pattern_ms } => {
+                let pattern: Vec<String> = pattern_ms.iter().map(u32::to_string).collect();
+                writeln!(out, "[vibrate pattern {}ms]", pattern.join("/"))?;
+            }
             Effect::PlayStepSound => writeln!(out, "[sound]")?,
             Effect::KeepScreenOn(true) => writeln!(out, "[screen on]")?,
             Effect::KeepScreenOn(false) => writeln!(out, "[screen off]")?,

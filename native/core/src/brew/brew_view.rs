@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use crate::brew::{RatioSetting, RunningStep, StepRow, StepStatus};
+use crate::brew::{FinishedBrew, RatioSetting, RunningStep, StepRow, StepStatus};
 use crate::model::{BrewMetrics, BrewRatio, LabelStyle, Pour, PourScale, Recipe, RecipeId};
 
 /// The open recipe as the brew page shows it. Built once per recipe version
@@ -55,7 +55,26 @@ impl BrewView {
     /// number `run`; none past the end.
     pub(crate) fn step(&self, run: u64, index: usize) -> Option<RunningStep> {
         let step = self.recipe.steps().get(index)?;
-        Some(RunningStep::begin(run, index, step.clone()))
+        Some(RunningStep::begin(run, index, index, step.clone()))
+    }
+
+    /// The step after `step`, in the same run; none after the last.
+    pub(crate) fn next_step(&self, step: &RunningStep) -> Option<RunningStep> {
+        let index = step.index() + 1;
+        let next = self.recipe.steps().get(index)?;
+        Some(RunningStep::begin(
+            step.run(),
+            step.first(),
+            index,
+            next.clone(),
+        ))
+    }
+
+    /// How a run that started at step `first` ended: the steps it brewed,
+    /// timed by `metrics`.
+    pub(crate) fn finished(&self, first: usize, metrics: &BrewMetrics) -> FinishedBrew {
+        let brewed = self.recipe.steps().iter().skip(first);
+        FinishedBrew::new(metrics.duration_label_of(brewed.map(|step| step.duration())))
     }
 
     /// The name of the step at `index`; none past the end.
@@ -69,7 +88,7 @@ impl BrewView {
 
     /// Every step with its status: before the `current` index done, at it
     /// the given status (`Current`, or `Paused`), after it pending. With no
-    /// current step, all pending.
+    /// current step, all pending; with one past the last step, all done.
     ///
     /// Each step also gets its share of the whole brew, laid end to end from
     /// 0 to 1, for the dial's step track. A brew of 0-second steps shares it
@@ -114,6 +133,16 @@ impl BrewView {
     /// a step that pours nothing, or past the end.
     pub fn pour_to_label(&self, index: usize) -> Option<String> {
         self.pours.get(index).copied().flatten().map(Pour::to_label)
+    }
+
+    /// What the scale reads once every step has poured, `Poured to 300g`,
+    /// at the water shown; none for a recipe whose steps pour nothing.
+    pub fn poured_label(&self) -> Option<String> {
+        self.pours
+            .iter()
+            .rev()
+            .find_map(|pour| *pour)
+            .map(Pour::poured_to_label)
     }
 
     /// Where step `index` sits in the brew, `Step 2 of 3`.

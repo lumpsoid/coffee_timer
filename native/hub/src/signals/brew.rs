@@ -70,6 +70,22 @@ pub enum BrewUpdate {
         recipe: BrewRecipe,
         timer: BrewTimer,
     },
+    /// The last step ran out; every step's status is `Done`. Stopped like
+    /// `Idle`: a `StartBrew` brews again, a `ResetBrew` goes back to idle.
+    Finished {
+        recipe: BrewRecipe,
+        finished: BrewFinished,
+    },
+}
+
+/// How the last run ended.
+#[derive(Serialize, SignalPiece)]
+pub struct BrewFinished {
+    /// How long the run brewed, `M:SS`.
+    pub total_label: String,
+    /// What the scale should read now, `Poured to 300g`; none when no step
+    /// pours.
+    pub poured_label: Option<String>,
 }
 
 /// The open recipe with each step's status.
@@ -158,6 +174,10 @@ pub enum PlatformEffect {
     PlayStepSound,
     Vibrate {
         ms: u32,
+    },
+    /// Alternating pause and buzz lengths in ms, starting with a pause.
+    VibratePattern {
+        pattern_ms: Vec<u32>,
     },
     KeepScreenOn {
         on: bool,

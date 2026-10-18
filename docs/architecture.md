@@ -36,7 +36,7 @@ and not on each other. Dart sees only the generated signal classes.
 |---|---|---|
 | [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>`, plus the last `RemovedRecipe` | the recipe list and its persistence, and the one removal that can be undone (shared) |
 | [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme and accent, and their persistence |
-| [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` | the open recipe and its timer |
+| [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` / `Finished(view, finished)` | the open recipe and its timer |
 | [`EditorController`](../native/core/src/editor/editor_controller.rs) | [`EditorState`](../native/core/src/editor/editor_state.rs): `Closed` / `Open(Draft)` | one draft, new or of an existing recipe |
 
 An action takes plain values and mutates the state. It returns only what
@@ -131,13 +131,14 @@ and changes nothing.
 ## Effects
 
 An [`Effect`](../native/core/src/brew/effect.rs) is a platform command that
-a controller has already decided on: `Vibrate { ms }`, `PlayStepSound`,
-`KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
+a controller has already decided on: `Vibrate { ms }`,
+`VibratePattern { pattern_ms }` (pause and buzz lengths, starting with a
+pause), `PlayStepSound`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
 `HideBrewNotification`. Only `BrewController` returns effects. The hub maps
 each effect to a `PlatformEffect` signal and sends it after the brew view.
 Dart's [`PlatformEffectPerformer`](../lib/effects/platform_effect_performer.dart)
 makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`,
-`[sound]`, `[screen on]`, `[screen off]`, `[notify Bloom · 00:35 | Next:
+`[vibrate pattern 0/400/200/400ms]`, `[sound]`, `[screen on]`, `[screen off]`, `[notify Bloom · 00:35 | Next:
 Pour]` and `[notify off]`.
 
 **The brew notification.** A
@@ -167,7 +168,7 @@ clock. Time arrives as `tick()`, one call per second while
 - `start(from)` begins step `from` with its full duration and returns
   `KeepScreenOn(true)` + `ShowBrewNotification`. If no recipe is open, or `from` is out of range, it
   returns `Err(BrewError)` and changes nothing. Starting while a brew is
-  running or paused restarts it, as a new run.
+  running, paused or finished restarts it, as a new run.
 - `pause()` holds a running brew on its step with the time it has left
   (`Paused`) and returns `KeepScreenOn(false)` + the `Paused`
   notification. The screen may sleep: nothing on it moves until resumed,
@@ -180,12 +181,23 @@ clock. Time arrives as `tick()`, one call per second while
 - `tick()` takes one second off the current step, and never goes below zero.
   Every tick that leaves the brew running returns `ShowBrewNotification`
   last. When a step reaches zero, the next step begins and the tick returns
-  `Vibrate` + `PlayStepSound` before it. After the last step, the brew goes
-  back to `Idle` and the tick returns `KeepScreenOn(false)` + `Vibrate` +
-  `HideBrewNotification`, with no sound. The hide comes last, so the app is
-  still kept awake for the final buzz. A 0-second step shows `00:00` for one
-  tick.
-- `reset()` stops the brew and keeps the recipe open. `leave()` stops the
+  `Vibrate` + `PlayStepSound` before it. After the last step, the brew is
+  `Finished` and the tick returns `KeepScreenOn(false)` +
+  `VibratePattern [0, 400, 200, 400]` (two long buzzes, unlike a step
+  boundary) + `PlayStepSound` + `HideBrewNotification`. The hide comes
+  last, so the app is still kept awake for the final buzz and sound. A
+  0-second step shows `00:00` for one tick.
+- `Finished(view, finished)` marks every step done. `FinishedBrew` holds
+  the time the run brewed, `M:SS`: the steps from the one it started at
+  (`RunningStep::first`) to the last, summed by `BrewMetrics`.
+  `BrewView::poured_label` is the scale's final reading, `Poured to 250g`,
+  at the ratio shown, or none when no step pours. A finished brew is
+  stopped like an idle one: `tick()` does nothing, `pause()`/`resume()`
+  are `Err`, `adjust_ratio` keeps it finished at the new ratio, and a
+  catalog change to its recipe reopens it idle (or empty) with no effects.
+  The GUI's dial tap starts a new brew from step 1, as it does while idle.
+- `reset()` stops the brew (or clears a finished one) and keeps the recipe
+  open, idle. `leave()` stops the
   brew and empties the page. `open(id)` stops any running brew. All three
   return `KeepScreenOn(false)` + `HideBrewNotification` when a brew was
   running, only `HideBrewNotification` when it was paused (the screen

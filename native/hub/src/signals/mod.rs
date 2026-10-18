@@ -12,9 +12,9 @@ mod settings;
 
 pub use boot::{Boot, BootFailed};
 pub use brew::{
-    AdjustBrewRatio, BrewRatioChange, BrewRatioSetting, BrewReady, BrewRecipe, BrewStep,
-    BrewStepStatus, BrewTimer, BrewUpdate, LeaveBrew, OpenBrew, PauseBrew, PlatformEffect,
-    ResetBrew, ResumeBrew, StartBrew,
+    AdjustBrewRatio, BrewFinished, BrewRatioChange, BrewRatioSetting, BrewReady, BrewRecipe,
+    BrewStep, BrewStepStatus, BrewTimer, BrewUpdate, LeaveBrew, OpenBrew, PauseBrew,
+    PlatformEffect, ResetBrew, ResumeBrew, StartBrew,
 };
 pub use editor::{
     AddStep, AddStepButton, CloseEditor, DeleteRecipe, EditRecipe, EditorDraft, EditorReady,
