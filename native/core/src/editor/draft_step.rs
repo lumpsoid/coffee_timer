@@ -46,6 +46,11 @@ impl DraftStep {
         }
     }
 
+    /// Gives the row a new key: a copied step must not share its source's.
+    pub(crate) fn renew_id(&mut self, id: StepId) {
+        self.id = id;
+    }
+
     pub(crate) fn set_name(&mut self, raw: &str) {
         raw.clone_into(&mut self.name);
     }

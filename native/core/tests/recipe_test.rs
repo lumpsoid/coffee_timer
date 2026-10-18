@@ -98,6 +98,41 @@ fn recipe_name_untitled_fallback_is_a_valid_name() {
 }
 
 #[test]
+fn recipe_name_copy_of_adds_the_copy_suffix() -> TestResult {
+    assert_eq!(RecipeName::try_parse("V60")?.copy_of().as_str(), "V60 copy");
+    assert_eq!(
+        RecipeName::try_parse("V60 copy")?.copy_of().as_str(),
+        "V60 copy copy"
+    );
+    Ok(())
+}
+
+#[test]
+fn recipe_name_copy_of_a_name_at_the_bound_cuts_the_base_not_the_suffix() -> TestResult {
+    let max = RecipeName::MAX_GENERATED_CHARS;
+    let fits = "a".repeat(max - " copy".len());
+    assert_eq!(
+        RecipeName::try_parse(&fits)?.copy_of().as_str(),
+        format!("{fits} copy")
+    );
+    let long = "b".repeat(max + 10);
+    let copy = RecipeName::try_parse(&long)?.copy_of();
+    assert_eq!(copy.as_str().chars().count(), max);
+    assert_eq!(copy.as_str(), format!("{} copy", "b".repeat(max - 5)));
+    Ok(())
+}
+
+#[test]
+fn recipe_name_copy_of_counts_characters_and_drops_a_space_left_by_the_cut() -> TestResult {
+    let max = RecipeName::MAX_GENERATED_CHARS;
+    // The cut falls right after a space: the base keeps no trailing space.
+    let spaced = format!("{} tail", "é".repeat(max - 6));
+    let copy = RecipeName::try_parse(&spaced)?.copy_of();
+    assert_eq!(copy.as_str(), format!("{} copy", "é".repeat(max - 6)));
+    Ok(())
+}
+
+#[test]
 fn recipe_name_from_storage_trims_and_falls_back_to_untitled() {
     assert_eq!(RecipeName::from_storage("  V60  ").as_str(), "V60");
     assert_eq!(RecipeName::from_storage("   "), RecipeName::untitled());

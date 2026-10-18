@@ -20,12 +20,12 @@ use rinf::{DartSignal, RustSignal, debug_print};
 use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::signals::{
-    AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, EditRecipe,
-    EditorReady, EditorUpdate, LeaveBrew, MoveStep, NewDraft, OpenBrew, PauseBrew, PlatformEffect,
-    RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveRecipe,
-    SetAccent, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater,
-    SetStepDuration, SetStepName, SetStepWater, SetTheme, SettingsReady, SettingsUpdate, StartBrew,
-    UndoRemoveRecipe,
+    AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, DuplicateRecipe,
+    EditRecipe, EditorReady, EditorUpdate, LeaveBrew, MoveStep, NewDraft, OpenBrew, PauseBrew,
+    PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew,
+    ResumeBrew, SaveRecipe, SetAccent, SetRecipeCoffee, SetRecipeDescription, SetRecipeName,
+    SetRecipeWater, SetStepDuration, SetStepName, SetStepWater, SetTheme, SettingsReady,
+    SettingsUpdate, StartBrew, UndoRemoveRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -72,6 +72,7 @@ pub async fn run(mut c: Controllers) {
     let editor_ready = EditorReady::get_dart_signal_receiver();
     let new_draft = NewDraft::get_dart_signal_receiver();
     let edit_recipe = EditRecipe::get_dart_signal_receiver();
+    let duplicate_recipe = DuplicateRecipe::get_dart_signal_receiver();
     let set_recipe_name = SetRecipeName::get_dart_signal_receiver();
     let set_recipe_description = SetRecipeDescription::get_dart_signal_receiver();
     let set_recipe_coffee = SetRecipeCoffee::get_dart_signal_receiver();
@@ -157,6 +158,10 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = edit_recipe.recv() => {
                 report(edit(&mut c.editor, &c.catalog, &pack.message.recipe_id));
+                show_editor(&c.editor);
+            }
+            Some(pack) = duplicate_recipe.recv() => {
+                report(duplicate(&mut c.editor, &c.catalog, &pack.message.recipe_id));
                 show_editor(&c.editor);
             }
             Some(pack) = set_recipe_name.recv() => {
@@ -289,6 +294,15 @@ fn edit(
     recipe_id: &str,
 ) -> Result<(), Box<dyn Error>> {
     editor.edit(&RecipeId::try_parse(recipe_id)?, catalog)?;
+    Ok(())
+}
+
+fn duplicate(
+    editor: &mut EditorController,
+    catalog: &RecipeCatalog,
+    recipe_id: &str,
+) -> Result<(), Box<dyn Error>> {
+    editor.duplicate(&RecipeId::try_parse(recipe_id)?, catalog)?;
     Ok(())
 }
 

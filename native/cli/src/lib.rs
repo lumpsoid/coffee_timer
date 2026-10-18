@@ -62,6 +62,14 @@ pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Resu
         Command::Delete { id } => {
             commands::delete(id, &mut c.editor, &mut c.catalog, &mut c.brew, out)
         }
+        Command::Duplicate { id, name } => commands::duplicate(
+            id,
+            name.as_deref(),
+            &mut c.editor,
+            &mut c.catalog,
+            &mut c.brew,
+            out,
+        ),
         Command::Brew {
             id,
             from,

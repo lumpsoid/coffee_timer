@@ -13,7 +13,7 @@ import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:flutter/material.dart';
 
 /// The home page: every recipe, opening its brew page on tap and offering
-/// edit / delete on long press. A delete, here or in the editor, shows a
+/// edit / duplicate / delete on long press. A delete, here or in the editor, shows a
 /// snackbar with an Undo when Rust offers one; a failed delete or undo shows
 /// as a snackbar too.
 class RecipeListPage extends StatefulWidget {
@@ -104,6 +104,12 @@ class _RecipeListPageState extends State<RecipeListPage> {
     );
   }
 
+  void _openDuplicate(BuildContext context, RecipeSummary recipe) {
+    Navigator.of(context).push(
+      EditorPage.duplicate(recipe.id, editor: editor, recipes: recipes),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,6 +169,14 @@ class _RecipeListPageState extends State<RecipeListPage> {
                   onTap: () {
                     Navigator.of(ctx).pop();
                     _openEdit(context, recipe);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.copy),
+                  title: const Text('Duplicate'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    _openDuplicate(context, recipe);
                   },
                 ),
                 ListTile(

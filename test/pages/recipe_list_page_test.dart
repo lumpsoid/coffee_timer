@@ -40,6 +40,18 @@ void main() {
     expect(find.byType(RecipeSummaryTile), findsNWidgets(2));
   });
 
+  testWidgets('a long press offers edit, duplicate and delete', (
+    tester,
+  ) async {
+    await pumpList(tester);
+    await tester.longPress(find.byType(RecipeSummaryTile));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Edit'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Duplicate'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Delete'), findsOneWidget);
+    expect(find.widgetWithText(ListTile, 'Cancel'), findsOneWidget);
+  });
+
   testWidgets('offers an undo for a removal, then lets it go', (
     tester,
   ) async {

@@ -29,7 +29,9 @@ again.
 
 - **Ids and names:** `RecipeId` and `StepId` are non-empty and can be built
   from a `u128` as UUID text. `RecipeName` is trimmed and non-blank, with a
-  lenient `from_storage` that maps blank to `Untitled`.
+  lenient `from_storage` that maps blank to `Untitled`, and `copy_of`
+  (`V60 copy`), which cuts the base name so the copy stays within
+  `MAX_GENERATED_CHARS` (60). Typed names have no upper bound.
 - **`StepDuration`** is a step's length, `0..=5999` seconds. It has two entry
   points: strict parsing for user input and lenient clamping for storage and
   live labels. It also produces the `MM:SS` and `Ns` labels.
@@ -172,7 +174,9 @@ which runs the timer tick by tick.
 [`native/core/src/editor`](../native/core/src/editor)
 
 - `EditorController` owns `EditorState` (`Closed` / `Open(Draft)`) and an
-  `IdGen`. It provides `new_draft`, `edit`, the field setters (including
+  `IdGen`. It provides `new_draft`, `edit`, `duplicate` (a new draft
+  copied from a catalog recipe: `<name> copy`, a fresh recipe id and fresh
+  step ids; an unknown id is `EditError::UnknownRecipe`), the field setters (including
   `set_step_water`), `add_step`
   (which returns the new row's `StepId`), `remove_step`, `move_step(row, to)`
   (`to` is the 0-based index the row ends at; past the last row is
@@ -247,12 +251,13 @@ A second head on core and store. It proves that core needs no rinf. It
 decides nothing: core produces every label, status and error text.
 
 - [`args.rs`](../native/cli/src/args.rs) defines the clap arguments: `list`,
-  `show`, `new`, `delete`, `brew` and `settings`, plus the global `--db`.
+  `show`, `new`, `duplicate`, `delete`, `brew` and `settings`, plus the global `--db`.
 - [`lib.rs`](../native/cli/src/lib.rs) provides `Controllers::boot` (build
   and load), `run` (dispatch one command) and `default_db_path`.
 - [`commands.rs`](../native/cli/src/commands.rs) has one function per
   command, plus `pass_on` for catalog changes. `new` fills a draft as the
-  editor page would. `delete` goes through the editor.
+  editor page would. `duplicate` opens the editor's copy, sets `--name`
+  if given, and saves. `delete` goes through the editor.
 - [`render.rs`](../native/cli/src/render.rs) lays out state, effects and
   field errors as text.
 - [`cli_error.rs`](../native/cli/src/cli_error.rs) wraps core's errors, and
@@ -294,7 +299,7 @@ makes no business decisions.
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
-| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
+| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial
@@ -354,8 +359,8 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
   notification on identical updates.
 - [`effects/`](../test/effects) tests one plugin call per effect, order, and
   that a failure does not block later effects.
-- [`pages/`](../test/pages) tests the list page's snackbars (failures and
-  the undo offer) and the editor
+- [`pages/`](../test/pages) tests the list page's long-press menu and
+  snackbars (failures and the undo offer) and the editor
   page: open, field errors, pop on `Closed`, notices, and the delete dialog.
 - [`widgets/`](../test/widgets) tests the display widgets, including the
   ring's restart key.

@@ -15,6 +15,13 @@ pub struct EditRecipe {
     pub recipe_id: String,
 }
 
+/// Open a draft of a new recipe copied from the stored recipe with this
+/// id: `<name> copy`, fresh ids, nothing saved until `SaveRecipe`.
+#[derive(Deserialize, DartSignal)]
+pub struct DuplicateRecipe {
+    pub recipe_id: String,
+}
+
 #[derive(Deserialize, DartSignal)]
 pub struct SetRecipeName {
     pub raw: String,

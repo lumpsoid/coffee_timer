@@ -220,6 +220,73 @@ fn delete_of_an_unknown_id_is_the_editor_error() -> TestResult {
 }
 
 #[test]
+fn duplicate_saves_a_copy_at_the_end_and_it_persists() -> TestResult {
+    let mut session = Session::new()?;
+    assert_eq!(
+        session.run(&["duplicate", "pourover-uuid"])?,
+        "upserted r1\n"
+    );
+    let mut reopened = session.reopened()?;
+    assert_eq!(
+        reopened.run(&["list"])?,
+        format!(
+            "{SEED_LIST}r1  Pour Over copy  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean\n"
+        )
+    );
+    assert_eq!(
+        reopened.run(&["show", "r1"])?,
+        "\
+r1  Pour Over copy
+Light and clean
+Coffee: 15g  Water: 250g  Ratio: 1:16.7  Time: 3:10
+  1. Grind  40s  pending
+  2. Bloom  30s  50g  pending
+  3. Pour  120s  200g  pending
+"
+    );
+    Ok(())
+}
+
+#[test]
+fn duplicate_with_a_name_saves_the_copy_under_it() -> TestResult {
+    let mut session = Session::new()?;
+    assert_eq!(
+        session.run(&["duplicate", "espresso-uuid", "--name", " Ristretto "])?,
+        "upserted r1\n"
+    );
+    assert!(
+        session
+            .run(&["list"])?
+            .ends_with("r1  Ristretto  Coffee: 18 g  Water: 36 g  Time: 0:55  Strong coffee\n")
+    );
+    Ok(())
+}
+
+#[test]
+fn duplicate_with_a_blank_name_prints_the_field_error_and_saves_nothing() -> TestResult {
+    let mut session = Session::new()?;
+    let error = session
+        .run(&["duplicate", "espresso-uuid", "--name", " "])
+        .err()
+        .ok_or("expected an error")?;
+    assert!(error.contains("Enter a recipe name"), "{error}");
+    assert_eq!(session.reopened()?.run(&["list"])?, SEED_LIST);
+    Ok(())
+}
+
+#[test]
+fn duplicate_of_an_unknown_id_is_the_editor_error() -> TestResult {
+    let mut session = Session::new()?;
+    let error = session
+        .run(&["duplicate", "nope"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(error, "No recipe with id nope");
+    assert_eq!(session.reopened()?.run(&["list"])?, SEED_LIST);
+    Ok(())
+}
+
+#[test]
 fn fast_brew_prints_every_tick_and_effect() -> TestResult {
     let mut session = Session::new()?;
     session.run(&[

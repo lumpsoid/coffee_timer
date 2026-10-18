@@ -46,6 +46,23 @@ impl EditorController {
         Ok(())
     }
 
+    /// Opens a draft of a new recipe copied from the recipe with `id`
+    /// (see [`Draft`]'s copy: `<name> copy`, fresh ids). Replaces any open
+    /// draft. Nothing is saved until [`EditorController::save`], which
+    /// appends it; closing leaves the catalog as it was. An id the catalog
+    /// does not hold is an error and changes nothing.
+    pub fn duplicate(&mut self, id: &RecipeId, catalog: &RecipeCatalog) -> Result<(), EditError> {
+        let recipe = catalog
+            .get(id)
+            .ok_or_else(|| EditError::UnknownRecipe(id.clone()))?;
+        self.state = EditorState::Open(Box::new(Draft::copy_of(
+            recipe,
+            self.ids.as_mut(),
+            &self.metrics,
+        )));
+        Ok(())
+    }
+
     pub fn set_name(&mut self, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_name(raw);
         Ok(())

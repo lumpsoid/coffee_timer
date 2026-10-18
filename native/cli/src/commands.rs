@@ -110,6 +110,28 @@ pub fn delete(
     pass_on(&change, brew, catalog, out)
 }
 
+/// Opens a copy of the recipe in the editor, as the list's Duplicate
+/// does, types `name` over the copy's name if given, and saves it. The
+/// change line names the copy's new id.
+pub fn duplicate(
+    id: &str,
+    name: Option<&str>,
+    editor: &mut EditorController,
+    catalog: &mut RecipeCatalog,
+    brew: &mut BrewController,
+    out: &mut impl Write,
+) -> Result<(), CliError> {
+    editor.duplicate(&RecipeId::try_parse(id)?, catalog)?;
+    if let Some(name) = name {
+        editor.set_name(name)?;
+    }
+    let change = editor.save(catalog).map_err(|error| CliError::Save {
+        error,
+        fields: render::field_errors(editor.state()),
+    })?;
+    pass_on(&change, brew, catalog, out)
+}
+
 /// When `brew` pauses: after tick `at`, for `seconds` waits, during which
 /// it does not tick (as the app's shell does not).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

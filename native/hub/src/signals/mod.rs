@@ -17,10 +17,10 @@ pub use brew::{
     PlatformEffect, ResetBrew, ResumeBrew, StartBrew,
 };
 pub use editor::{
-    AddStep, AddStepButton, CloseEditor, DeleteRecipe, EditRecipe, EditorDraft, EditorReady,
-    EditorStep, EditorUpdate, MoveStep, NewDraft, RemoveStep, SaveRecipe, SetRecipeCoffee,
-    SetRecipeDescription, SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName,
-    SetStepWater, StepPresetChoice,
+    AddStep, AddStepButton, CloseEditor, DeleteRecipe, DuplicateRecipe, EditRecipe, EditorDraft,
+    EditorReady, EditorStep, EditorUpdate, MoveStep, NewDraft, RemoveStep, SaveRecipe,
+    SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater, SetStepDuration,
+    SetStepName, SetStepWater, StepPresetChoice,
 };
 pub use recipe_list::{
     LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListReady, RecipeListUpdate,

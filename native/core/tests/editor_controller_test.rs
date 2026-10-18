@@ -1176,3 +1176,164 @@ fn create_edit_then_delete_a_recipe() -> TestResult {
     assert!(is_closed(&editor));
     Ok(())
 }
+
+// Duplicate
+
+/// `pour-over` "Pour Over", "bright", 15 g to 250 g: Bloom 30s pouring
+/// 50 g, Pour 120s pouring 200 g.
+fn pour_over() -> Result<Recipe, ModelError> {
+    Ok(Recipe::new(
+        rid("pour-over")?,
+        RecipeName::try_parse("Pour Over")?,
+        "bright".to_owned(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+        vec![
+            RecipeStep::new(
+                sid("bloom")?,
+                "Bloom".to_owned(),
+                StepDuration::try_parse(30)?,
+                Some(WaterAmount::try_parse(50)?),
+            ),
+            RecipeStep::new(
+                sid("pour")?,
+                "Pour".to_owned(),
+                StepDuration::try_parse(120)?,
+                Some(WaterAmount::try_parse(200)?),
+            ),
+        ],
+    ))
+}
+
+/// An editor with a copy of `id` from `catalog` open.
+fn duplicating(
+    id: &str,
+    catalog: &RecipeCatalog,
+) -> Result<EditorController, Box<dyn std::error::Error>> {
+    let mut editor = editor();
+    editor.duplicate(&rid(id)?, catalog)?;
+    Ok(editor)
+}
+
+#[test]
+fn duplicate_opens_a_new_draft_with_fresh_ids() -> TestResult {
+    let catalog = catalog(vec![espresso()?, pour_over()?])?;
+    let editor = duplicating("pour-over", &catalog)?;
+    let draft = draft(&editor)?;
+    assert_eq!(draft.id().as_str(), "r1");
+    assert_eq!(draft.mode(), DraftMode::New);
+    assert_eq!(draft.title(), "New Recipe");
+    assert!(!draft.can_delete());
+    assert_eq!(row_ids(&editor)?, ["s1", "s2"]);
+    Ok(())
+}
+
+#[test]
+fn duplicate_copies_every_field_and_names_it_a_copy() -> TestResult {
+    let catalog = catalog(vec![pour_over()?])?;
+    let editor = duplicating("pour-over", &catalog)?;
+    let draft = draft(&editor)?;
+    assert_eq!(draft.name(), "Pour Over copy");
+    assert_eq!(draft.description(), "bright");
+    assert_eq!(draft.coffee(), "15");
+    assert_eq!(draft.water(), "250");
+    let steps: Vec<_> = rows(&editor)?
+        .into_iter()
+        .map(|r| (r.name, r.duration_text, r.water_text))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            ("Bloom".to_owned(), "30".to_owned(), "50".to_owned()),
+            ("Pour".to_owned(), "120".to_owned(), "200".to_owned()),
+        ]
+    );
+    assert_eq!(draft.total_label(), "2:30");
+    assert_eq!(draft.notice(), None);
+    Ok(())
+}
+
+#[test]
+fn duplicate_of_a_long_name_keeps_the_copy_within_the_bound() -> TestResult {
+    let long = "x".repeat(RecipeName::MAX_GENERATED_CHARS);
+    let recipe = pour_over()?.renamed(RecipeName::try_parse(&long)?);
+    let catalog = catalog(vec![recipe])?;
+    let editor = duplicating("pour-over", &catalog)?;
+    assert_eq!(
+        draft(&editor)?.name(),
+        RecipeName::try_parse(&long)?.copy_of().as_str()
+    );
+    assert_eq!(
+        draft(&editor)?.name().chars().count(),
+        RecipeName::MAX_GENERATED_CHARS
+    );
+    Ok(())
+}
+
+#[test]
+fn duplicate_of_an_unknown_id_is_an_error_and_changes_nothing() -> TestResult {
+    let catalog = catalog(vec![pour_over()?])?;
+    let mut editor = editor();
+    assert_eq!(
+        editor.duplicate(&rid("nope")?, &catalog),
+        Err(EditError::UnknownRecipe(rid("nope")?))
+    );
+    assert!(is_closed(&editor));
+    let mut open = editing("pour-over", &catalog)?;
+    let before = open.state().clone();
+    assert!(open.duplicate(&rid("nope")?, &catalog).is_err());
+    assert_eq!(open.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn saving_a_duplicate_appends_it_and_leaves_the_source() -> TestResult {
+    let mut catalog = catalog(vec![pour_over()?, espresso()?])?;
+    let mut editor = duplicating("pour-over", &catalog)?;
+    assert_eq!(
+        editor.save(&mut catalog)?,
+        CatalogChange::Upserted(rid("r1")?)
+    );
+    assert!(is_closed(&editor));
+    let ids: Vec<_> = catalog.state().iter().map(|r| r.id().as_str()).collect();
+    assert_eq!(ids, ["pour-over", "espresso", "r1"]);
+    assert_eq!(catalog.get(&rid("pour-over")?), Some(&pour_over()?));
+    let copy = catalog.get(&rid("r1")?).ok_or("copy not saved")?;
+    assert_eq!(copy.name().as_str(), "Pour Over copy");
+    assert_eq!(copy.description(), "bright");
+    assert_eq!(copy.coffee().grams(), 15);
+    assert_eq!(copy.water().grams(), 250);
+    assert_eq!(
+        saved_steps(copy),
+        [("s1", "Bloom", 30), ("s2", "Pour", 120)]
+    );
+    let pours: Vec<_> = copy
+        .steps()
+        .iter()
+        .map(|s| s.water().map(WaterAmount::grams))
+        .collect();
+    assert_eq!(pours, [Some(50), Some(200)]);
+    Ok(())
+}
+
+#[test]
+fn a_renamed_duplicate_saves_under_the_typed_name() -> TestResult {
+    let mut catalog = catalog(vec![pour_over()?])?;
+    let mut editor = duplicating("pour-over", &catalog)?;
+    editor.set_name("Iced pour over")?;
+    editor.save(&mut catalog)?;
+    let copy = catalog.get(&rid("r1")?).ok_or("copy not saved")?;
+    assert_eq!(copy.name().as_str(), "Iced pour over");
+    Ok(())
+}
+
+#[test]
+fn closing_a_duplicate_leaves_the_catalog_unchanged() -> TestResult {
+    let catalog = catalog(vec![pour_over()?, espresso()?])?;
+    let before = catalog.state().to_vec();
+    let mut editor = duplicating("pour-over", &catalog)?;
+    editor.close();
+    assert!(is_closed(&editor));
+    assert_eq!(catalog.state(), before.as_slice());
+    Ok(())
+}

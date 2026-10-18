@@ -42,6 +42,16 @@ pub enum Command {
         /// Recipe id, as printed by `list`.
         id: String,
     },
+    /// Copy a recipe, as the list's Duplicate does, and save the copy at
+    /// the end of the list: same description, coffee, water and steps, new
+    /// ids, named "<name> copy" unless --name is given.
+    Duplicate {
+        /// Recipe id, as printed by `list`.
+        id: String,
+        /// Name the copy this instead of "<name> copy".
+        #[arg(long, value_name = "NAME")]
+        name: Option<String>,
+    },
     /// Brew a recipe: one tick per second until the last step ends, printing
     /// the countdown, step statuses and effects.
     Brew {

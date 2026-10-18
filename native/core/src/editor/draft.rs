@@ -75,6 +75,21 @@ impl Draft {
         draft
     }
 
+    /// A new recipe seeded from `recipe`: its description, coffee, water
+    /// and steps (names, durations, pours), named `<name> copy`, with a
+    /// fresh recipe id and a fresh id for every step row. Nothing is in the
+    /// catalog until it is saved, so it reads and saves as a new recipe.
+    pub(crate) fn copy_of(recipe: &Recipe, ids: &mut dyn IdGen, metrics: &BrewMetrics) -> Self {
+        let mut draft = Self::of(recipe, ids, metrics);
+        draft.id = ids.recipe_id();
+        draft.mode = DraftMode::New;
+        draft.set_name(recipe.name().copy_of().as_str());
+        for step in &mut draft.steps {
+            step.renew_id(ids.step_id());
+        }
+        draft
+    }
+
     /// Shows `failure` until the next action: a save or delete the store
     /// rejected (legacy snackbar `Failed to save recipe: …`).
     pub(crate) fn notify(&mut self, failure: &impl fmt::Display) {

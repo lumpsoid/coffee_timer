@@ -68,8 +68,9 @@ actions are the exception. They clear the previous notice whatever they do.
   [`core/src/fakes`](../native/core/src/fakes), which are compiled only for
   tests and under the `test-fakes` feature.
 - **The shared controller** `RecipeCatalog` enters as an action argument.
-  `BrewController::open`, `BrewController::on_catalog_change` and
-  `EditorController::edit` take `&RecipeCatalog`. `EditorController::save`
+  `BrewController::open`, `BrewController::on_catalog_change`,
+  `EditorController::edit` and `EditorController::duplicate` take
+  `&RecipeCatalog`. `EditorController::save`
   and `EditorController::delete` take `&mut RecipeCatalog`. Every
   cross-feature dependency therefore appears in a signature, and the borrow
   checker proves who reads and who writes. Nothing uses `Rc<RefCell>` or
@@ -329,7 +330,10 @@ feature's state as usual. The user sees an error only in these cases:
 - **`BootFailed`.** See [Startup](#startup-and-shutdown).
 
 Everything else is only logged. That covers an out-of-range `StartBrew`, an
-unknown row id, a settings write that fails (the settings stay unchanged),
+unknown row id, an `EditRecipe` or `DuplicateRecipe` whose recipe the
+catalog does not hold (`No recipe with id …`; the editor stays as it was,
+normally closed, so the page that sent it pops on the `Closed` answer),
+a settings write that fails (the settings stay unchanged),
 an empty recipe id, and an intent sent with no draft open. The CLI prints
 the core error text instead and exits non-zero.
 
@@ -351,7 +355,8 @@ the core error text instead and exits non-zero.
   call is logged and does not block the next effect.
 - **Pages** ([`lib/pages`](../lib/pages)) read holders and send intents. A
   page that opens something sends the opening intent itself (`OpenBrew`,
-  `NewDraft` or `EditRecipe`), then shows only states that arrive after it,
+  `NewDraft`, `EditRecipe` or `DuplicateRecipe`, which carries only the
+  source id: Rust loads the recipe from the catalog), then shows only states that arrive after it,
   never one left over from earlier. Leaving the brew page sends `LeaveBrew`.
   The editor page pops when Rust sends `EditorUpdate::Closed`, which happens
   after a save, after a delete, or in answer to `CloseEditor` on back.

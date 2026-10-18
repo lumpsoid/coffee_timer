@@ -6,9 +6,9 @@ import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:flutter/material.dart';
 
 /// The recipe editor. Once subscribed it sends its opening intent ([open]:
-/// [NewDraft] or [EditRecipe]) and shows the drafts that follow. Every
-/// keystroke, button and step drag is an intent; labels, errors, the total
-/// and the step order come back in the draft.
+/// [NewDraft], [EditRecipe] or [DuplicateRecipe]) and shows the drafts that
+/// follow. Every keystroke, button and step drag is an intent; labels,
+/// errors, the total and the step order come back in the draft.
 ///
 /// The page pops when Rust sends `Closed` (after a save or delete, or in
 /// answer to [CloseEditor] when the user backs out), so Rust decides when
@@ -50,6 +50,20 @@ class EditorPage extends StatefulWidget {
       editor: editor,
       recipes: recipes,
       open: () => EditRecipe(recipeId: recipeId).sendSignalToRust(),
+    ),
+  );
+
+  /// The editor on a new draft copied from the saved recipe with
+  /// [recipeId]; Rust loads the recipe and names the copy.
+  static MaterialPageRoute<void> duplicate(
+    String recipeId, {
+    required EditorHolder editor,
+    required RecipeListHolder recipes,
+  }) => MaterialPageRoute(
+    builder: (_) => EditorPage(
+      editor: editor,
+      recipes: recipes,
+      open: () => DuplicateRecipe(recipeId: recipeId).sendSignalToRust(),
     ),
   );
 

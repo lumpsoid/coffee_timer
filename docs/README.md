@@ -16,7 +16,11 @@ to.
   (the coffee and water are the recipe's own stored grams),
   each drawn as a coffee-bag label. Short brews get a dark roast label, long
   ones a light crema label, and each recipe has its own paper texture.
-  Tap a recipe to brew it. Long-press it to edit or delete it. The `+` button
+  Tap a recipe to brew it. Long-press it to edit, duplicate or delete it.
+  Duplicate opens the editor on a new recipe copied from it (description,
+  coffee, water, and every step with its time and pour), named `V60 copy`;
+  nothing is saved until **Save**, which adds it at the end of the list,
+  and backing out leaves the list as it was. The `+` button
   creates a recipe. After a delete, from the list or the editor, a
   `Deleted V60` snackbar offers **Undo** for a few seconds; it puts the
   whole recipe back where it was. Only the last delete can be undone, and
@@ -128,6 +132,7 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
     --coffee 15 --water 250 --step Bloom=30@50 --step Pour=120@200
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew espresso-uuid --pause-at 10 --pause-for 5
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db duplicate pourover-uuid --name "Iced"
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings theme dark
@@ -159,6 +164,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
 - `--step NAME=SECONDS[@GRAMS]` splits at the last `=`, then the seconds at
   an `@`; `@GRAMS` is the water the step pours. A blank name is saved as
   `Step N`.
+- `duplicate <id> [--name NAME]` saves a copy at once, at the end of the
+  list, and prints `upserted <new id>`. Without `--name` it is named
+  `<name> copy`.
 - Use `--help` on any command for its options.
 - There is no undo command. The removed recipe is held in memory only, and
   each CLI run is one command, so nothing is left to undo by the next run;
