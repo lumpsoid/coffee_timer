@@ -200,4 +200,8 @@ pub enum PlatformEffect {
         next: Option<String>,
     },
     HideBrewNotification,
+    /// Put `text` on the clipboard: an exported recipe document.
+    CopyToClipboard {
+        text: String,
+    },
 }

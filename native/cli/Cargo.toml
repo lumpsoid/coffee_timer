@@ -13,3 +13,4 @@ coffee_timer_store = { path = "../store" }
 
 [dev-dependencies]
 coffee_timer_core = { path = "../core", features = ["test-fakes"] }
+tempfile = "3.27.0"

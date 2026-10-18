@@ -6,6 +6,7 @@ use coffee_timer_core::catalog::{
 };
 use coffee_timer_core::editor::DeleteError;
 use coffee_timer_core::model::{self, BrewMetrics, LabelStyle, Recipe};
+use coffee_timer_core::transfer::{ExportError, ImportError};
 
 use crate::signals::{
     LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListUpdate, RecipeSummary, StainCorner,
@@ -62,6 +63,22 @@ impl From<PinError> for RecipeListUpdate {
 
 impl From<SaveRatioError> for RecipeListUpdate {
     fn from(error: SaveRatioError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ExportError> for RecipeListUpdate {
+    fn from(error: ExportError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<ImportError> for RecipeListUpdate {
+    fn from(error: ImportError) -> Self {
         Self::Failed {
             message: error.to_string(),
         }

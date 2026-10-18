@@ -38,8 +38,8 @@ impl FakeRecipeStore {
         }
     }
 
-    /// Every `upsert`, `insert_at`, `set_pin` and `remove` returns `Err` and
-    /// stores nothing.
+    /// Every `upsert`, `append_all`, `insert_at`, `set_pin` and `remove`
+    /// returns `Err` and stores nothing.
     pub fn failing_writes(self) -> Self {
         Self {
             fail_writes: true,
@@ -93,6 +93,12 @@ impl RecipeStore for FakeRecipeStore {
             Some(slot) => *slot = recipe.clone(),
             None => self.recipes.push(recipe.clone()),
         }
+        Ok(())
+    }
+
+    fn append_all(&mut self, recipes: &[Recipe]) -> Result<(), StoreError> {
+        self.check_write()?;
+        self.recipes.extend_from_slice(recipes);
         Ok(())
     }
 

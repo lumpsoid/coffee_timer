@@ -9,3 +9,4 @@ pub mod fakes;
 pub mod model;
 pub mod ports;
 pub mod settings;
+pub mod transfer;

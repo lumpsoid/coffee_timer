@@ -3,6 +3,7 @@
 //! in-memory store and read what it printed.
 
 use std::io::Write;
+use std::path::Path;
 
 use coffee_timer_core::brew::{BrewController, RatioChange};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
@@ -153,6 +154,51 @@ pub fn duplicate(
         fields: render::field_errors(editor.state()),
     })?;
     pass_on(&change, brew, catalog, out)
+}
+
+/// Writes the recipes `ids` names (every recipe, in list order, for none)
+/// as a recipe document: to `file` if given, saying so, else to `out`.
+pub fn export(
+    ids: &[String],
+    file: Option<&Path>,
+    catalog: &RecipeCatalog,
+    out: &mut impl Write,
+) -> Result<(), CliError> {
+    let ids = ids
+        .iter()
+        .map(|id| RecipeId::try_parse(id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let export = catalog.export(&ids)?;
+    match file {
+        Some(file) => {
+            std::fs::write(file, format!("{}\n", export.json()))?;
+            writeln!(
+                out,
+                "Exported {} to {}",
+                export.count_label(),
+                file.display()
+            )?;
+        }
+        None => writeln!(out, "{}", export.json())?,
+    }
+    Ok(())
+}
+
+/// Adds every recipe in the document `text` as a new recipe, passes each
+/// change on (its line names the new id), then prints the import's notice.
+pub fn import(
+    text: &str,
+    editor: &mut EditorController,
+    catalog: &mut RecipeCatalog,
+    brew: &mut BrewController,
+    out: &mut impl Write,
+) -> Result<(), CliError> {
+    let import = editor.import(text, catalog)?;
+    for change in import.changes() {
+        pass_on(change, brew, catalog, out)?;
+    }
+    writeln!(out, "{}", import.notice())?;
+    Ok(())
 }
 
 /// When `brew` pauses: after tick `at`, for `seconds` waits, during which

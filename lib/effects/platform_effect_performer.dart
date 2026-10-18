@@ -36,6 +36,9 @@ class PlatformEffectPerformer {
     PlatformEffectShowBrewNotification(:final title, :final next) =>
       _plugins.showBrewNotification(title: title, next: next),
     PlatformEffectHideBrewNotification() => _plugins.hideBrewNotification(),
+    PlatformEffectCopyToClipboard(:final text) => _plugins.copyToClipboard(
+      text,
+    ),
     _ => Future.value(),
   };
 }

@@ -15,6 +15,12 @@ class RecipeListHolder extends ChangeNotifier {
   /// Not list state: the list is unchanged.
   Stream<String> get failures => _failures.stream;
 
+  final _notices = StreamController<String>.broadcast(sync: true);
+
+  /// One message per finished export or import (`Copied 2 recipes`), for
+  /// a snackbar each. Not list state: an import's rows arrive as upserts.
+  Stream<String> get notices => _notices.stream;
+
   final _undoOffers = StreamController<UndoOffer>.broadcast(sync: true);
 
   /// One offer per removal Rust says can be undone, for a snackbar with an
@@ -45,10 +51,15 @@ class RecipeListHolder extends ChangeNotifier {
   /// row with its id, if any, and inserts it at its index (in place for an
   /// edit, moved for a pin or unpin), a removal drops the
   /// row and passes on its undo offer, if any, on [undoOffers]. A failure
-  /// leaves the list alone and goes out on [failures].
+  /// leaves the list alone and goes out on [failures], and a notice on
+  /// [notices].
   void apply(RecipeListUpdate update) {
     if (update is RecipeListUpdateFailed) {
       _failures.add(update.message);
+      return;
+    }
+    if (update is RecipeListUpdateNotice) {
+      _notices.add(update.message);
       return;
     }
     final current = _recipes ?? const <RecipeSummary>[];
@@ -90,6 +101,7 @@ class RecipeListHolder extends ChangeNotifier {
   void dispose() {
     unawaited(_subscription?.cancel());
     unawaited(_failures.close());
+    unawaited(_notices.close());
     unawaited(_undoOffers.close());
     super.dispose();
   }

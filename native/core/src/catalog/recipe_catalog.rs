@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use crate::catalog::{CatalogChange, PinError, PinnedFirst, RemovedRecipe, RestoreError};
 use crate::model::{Pin, Recipe, RecipeId};
 use crate::ports::{RecipeStore, StoreError};
+use crate::transfer::{ExportError, RecipeDocument, RecipeExport};
 
 /// Owner of the recipe list. Shared: other controllers receive it as an
 /// action argument. Every action writes through the store first; a failed
@@ -57,6 +58,36 @@ impl RecipeCatalog {
             None => self.state.push(recipe),
         }
         Ok(CatalogChange::Upserted(id))
+    }
+
+    /// Appends `recipes`, new ids all, in order and unpinned, so they list
+    /// after every recipe already there: all of them or, on `Err`, none.
+    /// One `Upserted` per recipe, in order.
+    pub fn append_all(&mut self, recipes: Vec<Recipe>) -> Result<Vec<CatalogChange>, StoreError> {
+        self.store.append_all(&recipes)?;
+        let changes = recipes
+            .iter()
+            .map(|recipe| CatalogChange::Upserted(recipe.id().clone()))
+            .collect();
+        self.state.extend(recipes);
+        Ok(changes)
+    }
+
+    /// The recipes `ids` names, in that order, as a [`RecipeDocument`]; no
+    /// ids is every recipe, in list order. An id the catalog does not hold
+    /// is [`ExportError::UnknownRecipe`], and nothing is exported.
+    pub fn export(&self, ids: &[RecipeId]) -> Result<RecipeExport, ExportError> {
+        if ids.is_empty() {
+            return RecipeDocument::encode(&self.listed());
+        }
+        let recipes = ids
+            .iter()
+            .map(|id| {
+                self.get(id)
+                    .ok_or_else(|| ExportError::UnknownRecipe(id.clone()))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        RecipeDocument::encode(&recipes)
     }
 
     /// Deletes the recipe with `id` and keeps it, with its place, as the

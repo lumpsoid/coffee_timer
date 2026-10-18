@@ -1,8 +1,9 @@
 //! The hub task: owns every controller, turns each Dart signal into one
 //! controller action, and sends the feature's state after it. One task, so
 //! actions run one at a time. It decides nothing: errors are logged and the
-//! state re-sent, except a failed list delete, undo, pin or ratio save, which goes
-//! to Dart as the one-shot `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
+//! state re-sent, except a failed list delete, undo, pin, ratio save,
+//! export or import, which goes to Dart as the one-shot
+//! `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
 //! unconditionally.
 
 use std::error::Error;
@@ -21,12 +22,12 @@ use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, DuplicateRecipe,
-    EditRecipe, EditorReady, EditorUpdate, LeaveBrew, MoveStep, NewDraft, OpenBrew, PauseBrew,
-    PinRecipe, PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep,
-    ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetPreAlert, SetRecipeCoffee,
-    SetRecipeDescription, SetRecipeName, SetRecipeWater, SetSound, SetStepDuration, SetStepName,
-    SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
-    UndoRemoveRecipe, UnpinRecipe,
+    EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes, LeaveBrew, MoveStep,
+    NewDraft, OpenBrew, PauseBrew, PinRecipe, PlatformEffect, RecipeListReady, RecipeListUpdate,
+    RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent,
+    SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater, SetSound,
+    SetStepDuration, SetStepName, SetStepWater, SetTheme, SetVibration, SettingsReady,
+    SettingsUpdate, StartBrew, UndoRemoveRecipe, UnpinRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -64,6 +65,8 @@ pub async fn run(mut c: Controllers) {
     let undo_remove_recipe = UndoRemoveRecipe::get_dart_signal_receiver();
     let pin_recipe = PinRecipe::get_dart_signal_receiver();
     let unpin_recipe = UnpinRecipe::get_dart_signal_receiver();
+    let export_recipes = ExportRecipes::get_dart_signal_receiver();
+    let import_recipes = ImportRecipes::get_dart_signal_receiver();
     let brew_ready = BrewReady::get_dart_signal_receiver();
     let open_brew = OpenBrew::get_dart_signal_receiver();
     let start_brew = StartBrew::get_dart_signal_receiver();
@@ -119,6 +122,10 @@ pub async fn run(mut c: Controllers) {
             Some(pack) = unpin_recipe.recv() => {
                 report(set_pin(&mut c, &pack.message.recipe_id, model::Pin::Unpinned));
             }
+            Some(pack) = export_recipes.recv() => {
+                report(export(&c.catalog, &pack.message.recipe_ids));
+            }
+            Some(pack) = import_recipes.recv() => import(&mut c, &pack.message.text),
 
             // Brew
             Some(_) = brew_ready.recv() => show_brew(&c.brew, &[]),
@@ -329,6 +336,48 @@ fn set_pin(c: &mut Controllers, recipe_id: &str, pin: model::Pin) -> Result<(), 
     Ok(())
 }
 
+/// Copies the recipes `recipe_ids` names (every recipe, for none) to the
+/// clipboard as a recipe document, with core's notice for a snackbar. An
+/// unknown id goes to the list as core's export error, for a snackbar.
+fn export(catalog: &RecipeCatalog, recipe_ids: &[String]) -> Result<(), ModelError> {
+    let ids = recipe_ids
+        .iter()
+        .map(|id| RecipeId::try_parse(id))
+        .collect::<Result<Vec<_>, _>>()?;
+    match catalog.export(&ids) {
+        Ok(export) => {
+            PlatformEffect::CopyToClipboard {
+                text: export.json().to_owned(),
+            }
+            .send_signal_to_dart();
+            RecipeListUpdate::Notice {
+                message: export.copied_notice(),
+            }
+            .send_signal_to_dart();
+        }
+        Err(error) => RecipeListUpdate::from(error).send_signal_to_dart(),
+    }
+    Ok(())
+}
+
+/// Imports the recipe document `text`: each new recipe is passed on like
+/// any change, then core's notice goes to the list. A refused document or
+/// a store failure goes to the list as core's import error.
+fn import(c: &mut Controllers, text: &str) {
+    match c.editor.import(text, &mut c.catalog) {
+        Ok(import) => {
+            for change in import.changes() {
+                pass_on(change, &mut c.brew, &c.catalog);
+            }
+            RecipeListUpdate::Notice {
+                message: import.notice(),
+            }
+            .send_signal_to_dart();
+        }
+        Err(error) => RecipeListUpdate::from(error).send_signal_to_dart(),
+    }
+}
+
 fn open(
     brew: &mut BrewController,
     catalog: &RecipeCatalog,
@@ -390,7 +439,8 @@ fn show_settings(settings: &SettingsController) {
 
 /// The value, or none after logging the error. Anything the GUI must show
 /// is already in the feature's state (the editor's notice), or, for a
-/// failed list delete, undo, pin or ratio save, sent as the one-shot `RecipeListUpdate::Failed`.
+/// failed list delete, undo, pin, ratio save, export or import, sent as
+/// the one-shot `RecipeListUpdate::Failed`.
 fn report<T>(result: Result<T, impl Display>) -> Option<T> {
     result.map_err(|error| debug_print!("{error}")).ok()
 }

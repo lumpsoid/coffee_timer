@@ -19,12 +19,14 @@ abstract interface class EffectPlugins {
   Future<void> showBrewNotification({required String title, String? next});
 
   Future<void> hideBrewNotification();
+
+  Future<void> copyToClipboard(String text);
 }
 
-/// [EffectPlugins] on `audioplayers`, `vibration` and `wakelock_plus`, and
-/// the app's own Android brew-notification channel (`MainActivity.kt`),
-/// which other platforms skip. The step sound is loaded once, when this is
-/// created.
+/// [EffectPlugins] on `audioplayers`, `vibration` and `wakelock_plus`,
+/// Flutter's `Clipboard`, and the app's own Android brew-notification
+/// channel (`MainActivity.kt`), which other platforms skip. The step sound
+/// is loaded once, when this is created.
 class PluginEffects implements EffectPlugins {
   PluginEffects() : _player = AudioPlayer() {
     _loaded = _load();
@@ -79,4 +81,8 @@ class PluginEffects implements EffectPlugins {
     if (!_hasBrewNotification) return;
     await _brewNotification.invokeMethod<void>('hide');
   }
+
+  @override
+  Future<void> copyToClipboard(String text) =>
+      Clipboard.setData(ClipboardData(text: text));
 }

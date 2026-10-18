@@ -41,7 +41,7 @@ void main() {
     expect(find.byType(RecipeSummaryTile), findsNWidgets(2));
   });
 
-  testWidgets('a long press offers edit, duplicate, pin and delete', (
+  testWidgets('a long press offers edit, duplicate, pin, export and delete', (
     tester,
   ) async {
     await pumpList(tester);
@@ -51,6 +51,7 @@ void main() {
     expect(find.widgetWithText(ListTile, 'Duplicate'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Pin'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Unpin'), findsNothing);
+    expect(find.widgetWithText(ListTile, 'Export'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Delete'), findsOneWidget);
     expect(find.widgetWithText(ListTile, 'Cancel'), findsOneWidget);
   });
@@ -143,5 +144,25 @@ void main() {
     messenger.hideCurrentSnackBar();
     await tester.pumpAndSettle();
     expect(find.text(message), findsNothing);
+  });
+
+  testWidgets('the app bar menu offers export all and import', (
+    tester,
+  ) async {
+    await pumpList(tester);
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    expect(find.text('Export all to clipboard'), findsOneWidget);
+    expect(find.text('Import from clipboard'), findsOneWidget);
+  });
+
+  testWidgets('shows a snackbar for each export or import notice', (
+    tester,
+  ) async {
+    await pumpList(tester);
+    recipes.apply(const RecipeListUpdateNotice(message: 'Imported 2 recipes'));
+    await tester.pump();
+    expect(find.text('Imported 2 recipes'), findsOneWidget);
+    expect(find.byType(RecipeSummaryTile), findsOneWidget);
   });
 }

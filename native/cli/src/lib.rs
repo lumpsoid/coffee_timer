@@ -7,8 +7,8 @@ pub mod cli_error;
 pub mod commands;
 pub mod render;
 
-use std::io::Write;
-use std::path::PathBuf;
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::thread;
 use std::time::Duration;
 
@@ -77,6 +77,16 @@ pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Resu
         Command::Unpin { id } => {
             commands::set_pin(id, Pin::Unpinned, &mut c.catalog, &mut c.brew, out)
         }
+        Command::Export { ids, out: file } => {
+            commands::export(ids, file.as_deref(), &c.catalog, out)
+        }
+        Command::Import { file } => commands::import(
+            &read_input(file)?,
+            &mut c.editor,
+            &mut c.catalog,
+            &mut c.brew,
+            out,
+        ),
         Command::Brew {
             id,
             from,
@@ -104,6 +114,16 @@ pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Resu
         }
         Command::Settings { action } => commands::settings(action.as_ref(), &mut c.settings, out),
     }
+}
+
+/// The text of `file`, or of stdin for `-`.
+fn read_input(file: &Path) -> io::Result<String> {
+    if file == Path::new("-") {
+        let mut text = String::new();
+        io::stdin().read_to_string(&mut text)?;
+        return Ok(text);
+    }
+    std::fs::read_to_string(file)
 }
 
 /// `$XDG_DATA_HOME/coffee_timer/coffee_timer.db`, else

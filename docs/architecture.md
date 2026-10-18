@@ -114,10 +114,35 @@ the catalog. An edit shows the new version, idle, and stops a running or
 paused brew.
 A delete shows "Empty recipe".
 
-Seven intents produce a change: the editor's save, the editor's delete, the
-list's `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe` and `UnpinRecipe`,
-and the brew page's `SaveBrewRatio`. `RemoveRecipe` calls `RecipeCatalog::remove` directly,
+Eight intents produce a change: the editor's save, the editor's delete, the
+list's `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe` and
+`ImportRecipes` (one change per imported recipe), and the brew page's
+`SaveBrewRatio`. `RemoveRecipe` calls `RecipeCatalog::remove` directly,
 without opening a draft.
+
+**Importing and exporting.** The recipe document is
+[`RecipeDocument`](../native/core/src/transfer/recipe_document.rs): pure
+encoding and decoding over strings, every imported value through its
+model type. `RecipeCatalog::export(ids)` encodes recipes it holds (every
+one, in list order, for no ids). An import is
+`EditorController::import(text, &mut catalog)`: the editor is the one
+minter of new recipes' ids, so the import uses its `IdGen` rather than a
+second one that could hand out the same ids. It decodes the whole
+document first, then mints the ids, then calls
+`RecipeCatalog::append_all`, which writes every recipe in one store
+transaction (`RecipeStore::append_all`) before it updates its state.
+So an import is all or nothing: one paste is one action with one
+message, and since the document carries no ids, a partial import fixed
+and pasted again would duplicate the recipes that got in. Each new
+recipe's `Upserted` goes through `pass_on` like any change; the list
+diff puts it at its index, after every recipe already listed, since an
+imported recipe is unpinned. The hub then sends
+`RecipeListUpdate::Notice { message: "Imported 2 recipes" }`. An export
+in the hub is `PlatformEffect::CopyToClipboard { text }` and then
+`Notice { message: "Copied 2 recipes" }`: the effect is the hub's, not a
+core `Effect`, since copying is how the GUI head delivers the text (the
+CLI writes it to stdout or a file). The clipboard is read in Dart, whose
+`ImportRecipes { text }` carries it as is.
 
 **Saving the brew's ratio.** The flow belongs to the brew page, which
 starts it, so `BrewController::save_ratio(&mut catalog)` owns it, as
@@ -182,6 +207,8 @@ a controller has already decided on: `Vibrate { ms }`,
 pause), `PlayStepSound`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
 `HideBrewNotification`. Only `BrewController` returns effects. The hub maps
 each effect to a `PlatformEffect` signal and sends it after the brew view.
+The hub also sends `PlatformEffect::CopyToClipboard { text }` itself for
+an export (see [importing and exporting](#the-catalogchange-flow)).
 Dart's [`PlatformEffectPerformer`](../lib/effects/platform_effect_performer.dart)
 makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`
 (`[vibrate 40ms]` for the pre-alert),
@@ -378,18 +405,25 @@ feature's state as usual. The user sees an error only in these cases:
   are already on the draft.
 - **`RecipeListUpdate::Failed { message }`.** This is a one-shot notice when
   a list `RemoveRecipe` fails in the store, an `UndoRemoveRecipe` fails,
-  a `PinRecipe` / `UnpinRecipe` fails, or a `SaveBrewRatio` is refused or
-  fails. The message is core's
+  a `PinRecipe` / `UnpinRecipe` fails, a `SaveBrewRatio` is refused or
+  fails, an `ExportRecipes` names an unknown recipe, or an
+  `ImportRecipes` is refused or fails. The message is core's
   `DeleteError::Store` text, `Failed to delete recipe: …`, its
   `RestoreError` text, `Nothing to undo` or `Failed to restore recipe: …`,
   its `PinError` text, `No recipe with id …` or `Failed to save the pin: …`,
-  or its `SaveRatioError` text, `Can't save this ratio: 2050 g of water is
-  outside 1–2000 g` or `Failed to save recipe: …`. The list is
+  its `SaveRatioError` text, `Can't save this ratio: 2050 g of water is
+  outside 1–2000 g` or `Failed to save recipe: …`, its `ExportError`
+  text, `No recipe with id …`, or its `ImportError` text, `Can't import:
+  Recipe 2, step 3, seconds: 0–5999 seconds` or `Failed to import
+  recipes: …`. The list is
   unchanged. `RecipeListHolder` forwards the message on its `failures`
   stream, and the list page shows a snackbar for each one. The snackbar
   goes through the app's one `ScaffoldMessenger`, so it shows on the brew
   page too, which closes its ratio sheet when Save is tapped so the
   snackbar is not hidden under it.
+- **`RecipeListUpdate::Notice { message }`** is the same kind of one-shot
+  snackbar for a finished export or import (`Copied 2 recipes`,
+  `Imported 1 recipe`), forwarded on `RecipeListHolder.notices`.
 - **`BootFailed`.** See [Startup](#startup-and-shutdown).
 
 Everything else is only logged. That covers an out-of-range `StartBrew`, an

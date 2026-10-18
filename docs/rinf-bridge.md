@@ -160,6 +160,7 @@ pub enum RecipeListUpdate {
     Upserted { recipe: RecipeSummary, index: u32 },
     Removed { id: String, undo_notice: Option<String> },
     Failed { message: String },
+    Notice { message: String },
 }
 ```
 
@@ -168,11 +169,13 @@ at `index` (list order). An edit keeps the index, and a pin or unpin moves
 it.
 
 `Failed` is a one-shot notice, not state: a list delete (`RemoveRecipe`),
-an undo (`UndoRemoveRecipe`), a pin (`PinRecipe` / `UnpinRecipe`) or a
-ratio save (`SaveBrewRatio`) failed, the list is unchanged, and Dart shows
-`message` (core's `DeleteError`, `RestoreError`, `PinError` or
-`SaveRatioError` text) as a snackbar
-each time one arrives. `Removed`'s `undo_notice` is one-shot the same way:
+an undo (`UndoRemoveRecipe`), a pin (`PinRecipe` / `UnpinRecipe`), a
+ratio save (`SaveBrewRatio`), an export (`ExportRecipes`) or an import
+(`ImportRecipes`) failed, the list is unchanged, and Dart shows
+`message` (core's `DeleteError`, `RestoreError`, `PinError`,
+`SaveRatioError`, `ExportError` or `ImportError` text) as a snackbar
+each time one arrives. `Notice { message }` is the same for an export's
+or import's success (`Copied 2 recipes`). `Removed`'s `undo_notice` is one-shot the same way:
 present when core offers to undo that removal, shown once as a snackbar
 with an Undo.
 
@@ -181,7 +184,8 @@ arrive in order. Splitting them across signal types gives up that ordering.
 
 Platform effects go on their own signal, `PlatformEffect` (an enum:
 `PlayStepSound`, `Vibrate`, `VibratePattern`, `KeepScreenOn { on }`,
-`ShowBrewNotification { title, next }`, `HideBrewNotification`). They are
+`ShowBrewNotification { title, next }`, `HideBrewNotification`,
+`CopyToClipboard { text }`). They are
 commands, not state: Dart performs them and keeps nothing.
 
 ### Snapshot handshake

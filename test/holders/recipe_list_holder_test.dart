@@ -138,4 +138,20 @@ void main() {
     expect(failures, ['Failed to delete', 'Failed to delete']);
     expect(notifications, 1);
   });
+
+  test('a notice leaves the list alone and is announced each time', () {
+    final notices = <String>[];
+    final failures = <String>[];
+    holder
+      ..apply(RecipeListUpdateSnapshot(recipes: [summary('a')]))
+      ..notices.listen(notices.add)
+      ..failures.listen(failures.add)
+      ..apply(const RecipeListUpdateNotice(message: 'Copied 1 recipe'))
+      ..apply(const RecipeListUpdateNotice(message: 'Copied 1 recipe'));
+
+    expect(ids(), ['a']);
+    expect(notices, ['Copied 1 recipe', 'Copied 1 recipe']);
+    expect(failures, isEmpty);
+    expect(notifications, 1);
+  });
 }

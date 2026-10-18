@@ -31,6 +31,25 @@ pub struct UnpinRecipe {
     pub recipe_id: String,
 }
 
+/// Export recipes as a JSON recipe document, to the clipboard: the ones
+/// with these ids, in this order (the long-press sheet's Export), or every
+/// recipe, in list order, when empty (the app bar's Export all). Rust
+/// answers with `PlatformEffect::CopyToClipboard` and a
+/// `RecipeListUpdate::Notice` (`Copied 2 recipes`), or a `Failed`.
+#[derive(Deserialize, DartSignal)]
+pub struct ExportRecipes {
+    pub recipe_ids: Vec<String>,
+}
+
+/// Import the recipe document `text`, the clipboard's text as read (empty
+/// when it holds none). Each new recipe arrives as an `Upserted` at the end
+/// of the list, then a `Notice` (`Imported 2 recipes`); an invalid document
+/// adds none and is a `Failed`.
+#[derive(Deserialize, DartSignal)]
+pub struct ImportRecipes {
+    pub text: String,
+}
+
 /// The recipe list: a snapshot, then one diff per persisted catalog change.
 /// One type, so the snapshot and the diffs after it arrive in order.
 #[derive(Serialize, RustSignal)]
@@ -50,11 +69,16 @@ pub enum RecipeListUpdate {
         id: String,
         undo_notice: Option<String>,
     },
-    /// A `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe` or
-    /// `SaveBrewRatio` failed; the list is unchanged. A one-shot notice for
-    /// a snackbar (`Failed to delete recipe: …`, `Nothing to undo`, `Failed
-    /// to save the pin: …`, `Can't save this ratio: …`), not list state.
+    /// A `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`,
+    /// `SaveBrewRatio`, `ExportRecipes` or `ImportRecipes` failed; the list
+    /// is unchanged. A one-shot notice for a snackbar (`Failed to delete
+    /// recipe: …`, `Nothing to undo`, `Failed to save the pin: …`, `Can't
+    /// save this ratio: …`, `Can't import: …`), not list state.
     Failed { message: String },
+    /// An `ExportRecipes` or `ImportRecipes` succeeded: a one-shot notice
+    /// for a snackbar (`Copied 2 recipes`, `Imported 1 recipe`), not list
+    /// state.
+    Notice { message: String },
 }
 
 /// One row of the recipe list. Labels are values only (`20 g`, `100 g`,

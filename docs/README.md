@@ -17,7 +17,7 @@ to.
   each drawn as a coffee-bag label. Short brews get a dark roast label, long
   ones a light crema label, and each recipe has its own paper texture.
   Tap a recipe to brew it. Long-press it to edit, duplicate, pin (or
-  unpin) or delete it. Pinned recipes are listed first, in the order they
+  unpin), export or delete it. Pinned recipes are listed first, in the order they
   had among themselves, then the rest; a small pin in the label's top-left
   corner marks them. Unpinning puts a recipe back where it stood among the
   unpinned. Editing a pinned recipe keeps it pinned; a duplicate or a new
@@ -30,6 +30,20 @@ to.
   `Deleted V60` snackbar offers **Undo** for a few seconds; it puts the
   whole recipe back where it was, pinned if it was. Only the last delete can be undone, and
   a restart forgets it.
+- **Import and export.** Export (long-press) copies one recipe to the
+  clipboard as a JSON recipe document, and the app bar's menu has
+  **Export all to clipboard** (every recipe, in list order); a snackbar
+  says `Copied 2 recipes`. **Import from clipboard** reads such a
+  document and adds each recipe as a new one, unpinned, at the end of
+  the list (`Imported 2 recipes`). The document is
+  `{"format": "coffee-timer-recipes", "version": 1, "recipes": [{"name",
+  "description", "coffee_grams", "water_grams", "steps": [{"name",
+  "seconds", "water_grams"?}]}]}`: what a recipe brews, without its ids
+  or pin. An import is all or nothing: a value the editor would refuse
+  (`Recipe 2, step 3, seconds: 0–5999 seconds`), a recipe with no steps,
+  malformed JSON, another format or a version other than 1 adds none and
+  shows why. A blank step name imports as `Step N`; fields the document
+  does not know are ignored.
 - **Brew page.** Shows the recipe printed on its own coffee-bag label (the
   same look as its list card), a timer dial and the steps. Tap the dial to
   start the brew from step 1. Tap it while it runs to pause, and again to
@@ -152,6 +166,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db duplicate pourover-uuid --name 
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db pin pourover-uuid
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db unpin pourover-uuid
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db export                       # every recipe, to stdout
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db export pourover-uuid --out v60.json
+cargo run -p coffee_timer_cli -- --db /tmp/other.db import v60.json           # or - for stdin
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings theme dark
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AARRGGBB / #RRGGBB
@@ -198,6 +215,14 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
 - `pin <id>` / `unpin <id>` pin or unpin a recipe, as the list's long-press
   does, and print `upserted <id>`. `list` prints in the app's order,
   pinned recipes first, each marked `[pinned]` after its name.
+- `export [<id>...] [--out FILE]` writes the recipe document of those
+  recipes, in that order, or of every recipe in list order; to stdout, or
+  to `FILE`, printing `Exported 2 recipes to FILE`. An unknown id is an
+  error and writes nothing.
+- `import FILE` (`-` reads stdin) adds the document's recipes, new ids
+  and unpinned, at the end of the list. It prints `upserted <new id>` per
+  recipe, then `Imported 2 recipes`; an invalid document is an error and
+  adds none.
 - Use `--help` on any command for its options.
 - There is no undo command. The removed recipe is held in memory only, and
   each CLI run is one command, so nothing is left to undo by the next run;

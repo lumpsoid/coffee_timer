@@ -68,6 +68,23 @@ pub enum Command {
         /// Recipe id, as printed by `list`.
         id: String,
     },
+    /// Write recipes as a JSON recipe document (no ids, no pins), as the
+    /// app's Export copies them.
+    Export {
+        /// Recipe ids, as printed by `list`, in the order to write them.
+        /// None: every recipe, in list order.
+        ids: Vec<String>,
+        /// Write the document to this file instead of stdout.
+        #[arg(long, value_name = "FILE")]
+        out: Option<PathBuf>,
+    },
+    /// Add every recipe in a JSON recipe document as a new, unpinned
+    /// recipe at the end of the list, and print the new ids. All or
+    /// nothing: an invalid document adds none.
+    Import {
+        /// The document's file, or `-` for stdin.
+        file: PathBuf,
+    },
     /// Brew a recipe: one tick per second until the last step ends, printing
     /// the countdown, step statuses and effects.
     Brew {

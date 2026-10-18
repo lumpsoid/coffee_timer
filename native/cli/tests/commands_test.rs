@@ -755,3 +755,98 @@ fn brew_follows_the_pre_alert_setting() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn export_prints_the_recipe_document_without_ids() -> TestResult {
+    let printed = Session::new()?.run(&["export", "espresso-uuid"])?;
+    assert!(
+        printed.starts_with("{\n  \"format\": \"coffee-timer-recipes\",\n  \"version\": 1,"),
+        "{printed}"
+    );
+    assert!(printed.contains("\"name\": \"Espresso\""), "{printed}");
+    assert!(!printed.contains("Pour Over"), "{printed}");
+    assert!(!printed.contains("uuid"), "no ids: {printed}");
+    Ok(())
+}
+
+#[test]
+fn export_of_an_unknown_id_is_the_core_error() -> TestResult {
+    let error = Session::new()?
+        .run(&["export", "espresso-uuid", "nope"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(error, "No recipe with id nope");
+    Ok(())
+}
+
+#[test]
+fn export_then_import_into_a_fresh_database_gives_the_same_recipes_unpinned() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("recipes.json");
+    let file_arg = file.to_str().ok_or("path is not UTF-8")?;
+
+    let mut source = Session::new()?;
+    source.run(&["pin", "pourover-uuid"])?;
+    assert_eq!(
+        source.run(&["export", "--out", file_arg])?,
+        format!("Exported 2 recipes to {file_arg}\n")
+    );
+
+    let mut fresh = Session::new()?;
+    fresh.run(&["delete", "espresso-uuid"])?;
+    fresh.run(&["delete", "pourover-uuid"])?;
+    assert_eq!(
+        fresh.run(&["import", file_arg])?,
+        "upserted r1\nupserted r2\nImported 2 recipes\n"
+    );
+    let mut reopened = fresh.reopened()?;
+    assert_eq!(
+        reopened.run(&["list"])?,
+        "\
+r1  Pour Over  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean
+r2  Espresso  Coffee: 18 g  Water: 36 g  Time: 0:55  Strong coffee
+"
+    );
+    assert_eq!(
+        reopened.run(&["export"])?,
+        std::fs::read_to_string(&file)?,
+        "the same recipes, steps and pours"
+    );
+    Ok(())
+}
+
+#[test]
+fn import_of_an_invalid_document_adds_nothing() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("bad.json");
+    std::fs::write(
+        &file,
+        r#"{"format":"coffee-timer-recipes","version":1,"recipes":[
+          {"name":"V60","coffee_grams":15,"water_grams":250,"steps":[{"seconds":30}]},
+          {"name":"Big","coffee_grams":500,"water_grams":250,"steps":[{"seconds":30}]}]}"#,
+    )?;
+    let mut session = Session::new()?;
+    let error = session
+        .run(&["import", file.to_str().ok_or("path is not UTF-8")?])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(error, "Can't import: Recipe 2, coffee_grams: 1–200 g");
+    assert_eq!(session.reopened()?.run(&["list"])?, SEED_LIST);
+    Ok(())
+}
+
+#[test]
+fn import_of_a_newer_version_is_refused() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let file = dir.path().join("v2.json");
+    std::fs::write(&file, r#"{"format":"coffee-timer-recipes","version":2}"#)?;
+    let error = Session::new()?
+        .run(&["import", file.to_str().ok_or("path is not UTF-8")?])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(
+        error,
+        "Can't import: Recipe document version 2 is not supported; this app reads version 1"
+    );
+    Ok(())
+}

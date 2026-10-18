@@ -16,7 +16,8 @@ For how the modules work together, see [architecture.md](architecture.md).
 
 ## native/core — `coffee_timer_core`
 
-All business rules and state. It has no dependencies. Its crate docs are in
+All business rules and state. Its only dependencies are serde and
+serde_json, for the recipe document. Its crate docs are in
 [`lib.rs`](../native/core/src/lib.rs). It has one directory per concern and
 one file per type.
 
@@ -87,8 +88,9 @@ Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
 
 This is the border with what cannot run in a test.
 
-- `RecipeStore`: `load_all`, `load_pinned`, `upsert`, `insert_at`,
-  `set_pin` and `remove`. Recipe order is part of the contract; `insert_at`
+- `RecipeStore`: `load_all`, `load_pinned`, `upsert`, `append_all`,
+  `insert_at`, `set_pin` and `remove`. `append_all` adds new recipes,
+  unpinned, at the end, all or none. Recipe order is part of the contract; `insert_at`
   puts a recipe back at a given place, with its `Pin`. A pin is stored
   beside the recipe and never moves it: `upsert` keeps a known id's pin
   and stores a new id unpinned.
@@ -143,8 +145,48 @@ dev-dependency, and the CLI and hub enable it for their tests. Test:
   has persisted.
 - `RecipeSummary` is a recipe-list row with its labels (`20 g`, `100 g`,
   `1:35`), its `LabelStyle` and its `Pin`.
+- `append_all(recipes)` appends new recipes, unpinned, all or none
+  (`RecipeStore::append_all`), with one `Upserted` each: an import.
+  `export(ids)` writes those recipes, or every one in `listed` order for
+  none, as a `RecipeDocument`; an unknown id is
+  `ExportError::UnknownRecipe`.
 
 Test: [`catalog_test.rs`](../native/core/tests/catalog_test.rs).
+
+### `transfer/`: the recipe document
+
+[`native/core/src/transfer`](../native/core/src/transfer)
+
+Pure functions over strings (serde / serde_json); the shells read and
+write the text.
+
+- `RecipeDocument` is the versioned JSON format (`FORMAT` =
+  `coffee-timer-recipes`, `VERSION` = 1). `encode(&[&Recipe])` gives a
+  `RecipeExport` (the pretty JSON, its count, `copied_notice()`: `Copied
+  2 recipes`). `decode(text)` gives `ImportedRecipe`s or the first
+  `DocumentError`: every value through its model type's strict parsing
+  (`RecipeName`, `CoffeeDose`, `WaterAmount`, `StepDuration`, a blank
+  step name as `Step N`), at least one recipe and one step per recipe.
+  The header is read first, so another format or version is refused for
+  that. Unknown fields are ignored. The wire structs are private
+  (`wire.rs`).
+- `ImportedRecipe` / `ImportedStep` are valid recipes without ids;
+  `into_recipe(&mut dyn IdGen)` mints them, only once the whole document
+  is valid.
+- `DocumentError` names where a value is wrong: `Recipe 2, step 3,
+  seconds: 0–5999 seconds`. `ImportError` is `Document` (`Can't import:
+  …`) or `Store` (`Failed to import recipes: …`); `ExportError` is
+  `UnknownRecipe` or `Encode`.
+- `RecipeImport` is the import's `Upserted` changes and its notice
+  (`Imported 2 recipes`).
+
+`EditorController::import(text, &mut catalog)` runs an import: decode,
+mint ids with the editor's `IdGen` (the one minter of new recipes' ids),
+`catalog.append_all`. All or nothing: a refused document or a failed write
+adds none and mints none, so a fixed document can be imported again
+without duplicates.
+
+Test: [`transfer_test.rs`](../native/core/tests/transfer_test.rs).
 
 ### `settings/`: user settings
 
@@ -260,7 +302,9 @@ The store implements the core's ports. It makes no decisions.
   and keeps its position.
 - **Row mapping:** [`recipe_rows.rs`](../native/store/src/recipe_rows.rs)
   loads `ORDER BY position`. An upsert keeps the recipe's position and
-  replaces its steps, and leaves `pinned` alone. `set_pin` updates only
+  replaces its steps, and leaves `pinned` alone. `append_all` inserts
+  every recipe and its steps in one transaction, so a known id rolls the
+  whole batch back. `set_pin` updates only
   `pinned`; `load_pinned` reads the pinned ids. `insert_at` moves the rows from that place on one
   position down and gives the recipe the freed one. Rows are read through core's lenient constructors
   (grams are clamped into bounds).
@@ -287,7 +331,8 @@ A second head on core and store. It proves that core needs no rinf. It
 decides nothing: core produces every label, status and error text.
 
 - [`args.rs`](../native/cli/src/args.rs) defines the clap arguments: `list`,
-  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `pin`, `unpin`, `delete`, `brew` and `settings`
+  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `pin`, `unpin`, `delete`,
+  `export` (ids, `--out`), `import` (a file or `-`), `brew` and `settings`
   (`theme`, `accent`, `sound`, `vibration`, `pre-alert`), plus the global `--db`.
   `brew` ticks with the stored settings.
 - [`lib.rs`](../native/cli/src/lib.rs) provides `Controllers::boot` (build
@@ -297,7 +342,9 @@ decides nothing: core produces every label, status and error text.
   editor page would. `duplicate` opens the editor's copy, sets `--name`
   if given, and saves. `delete` goes through the editor. `pin` / `unpin`
   call `RecipeCatalog::set_pin`; `list` prints `listed()` order and marks
-  a pinned row `[pinned]`.
+  a pinned row `[pinned]`. `export` writes `RecipeCatalog::export`'s
+  document; `import` passes the text (read in `lib.rs`, from the file or
+  stdin) to `EditorController::import` and passes each change on.
 - [`render.rs`](../native/cli/src/render.rs) lays out state, effects and
   field errors as text.
 - [`cli_error.rs`](../native/cli/src/cli_error.rs) wraps core's errors, and
@@ -337,7 +384,7 @@ makes no business decisions.
 | Feature | Dart → Rust | Rust → Dart |
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
-| recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
+| recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
@@ -362,13 +409,18 @@ The GUI renders, sends intents, and performs effects. It holds no business
   the recipe list, and calls `finalizeRust()` on exit.
 - **[`holders/`](../lib/holders)** has one `ChangeNotifier` per feature:
   `RecipeListHolder` (folds the snapshot and diffs, and exposes `failures`,
+  `notices` (an export's or import's text),
   `undoOffers` (`UndoOffer`: recipe id and notice) and `byId`), `BrewHolder`, `EditorHolder`, `SettingsHolder` (each replaces
   its state) and `BootHolder` (sends `Boot` and holds the boot failure).
 - **[`effects/`](../lib/effects)** has `PlatformEffectPerformer`, which runs
-  one plugin call per `PlatformEffect`, in order. `EffectPlugins` is the
+  one plugin call per `PlatformEffect`, in order (`CopyToClipboard` is
+  Flutter's `Clipboard.setData`). `EffectPlugins` is the
   test border, and `PluginEffects` is the production implementation.
 - **[`pages/`](../lib/pages)** has `RecipeListPage`, `BrewPage`,
-  `EditorPage` and `SettingsPage`. Each page reads holders and sends
+  `EditorPage` and `SettingsPage`. The list's long-press Export sends
+  `ExportRecipes` with the row's id, the app bar's menu sends it with
+  none (every recipe) or reads the clipboard and sends its text as
+  `ImportRecipes`. Each page reads holders and sends
   signals; none of them computes a label. The editor's steps are a
   `SliverReorderableList`: a drop sends `MoveStep` (row id and final index,
   from `onReorderItem`) and the order changes only when Rust's draft comes
@@ -401,8 +453,9 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
 - [`effects/`](../test/effects) tests one plugin call per effect, order, and
   that a failure does not block later effects.
 - [`pages/`](../test/pages) tests the list page's long-press menu (Pin or
-  Unpin by the row's `pinned`), the pin marker, and
-  snackbars (failures and the undo offer), the settings page's cue
+  Unpin by the row's `pinned`, Export), the app bar's export / import
+  menu, the pin marker, and
+  snackbars (failures, notices and the undo offer), the settings page's cue
   controls following Rust's state, and the editor
   page: open, field errors, pop on `Closed`, notices, and the delete dialog.
 - [`widgets/`](../test/widgets) tests the display widgets, including the

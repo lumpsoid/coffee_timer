@@ -2,6 +2,7 @@ use crate::catalog::{CatalogChange, RecipeCatalog};
 use crate::editor::{DeleteError, Draft, EditError, EditorState, SaveError, StepPreset};
 use crate::model::{BrewMetrics, RecipeId, StepId};
 use crate::ports::IdGen;
+use crate::transfer::{ImportError, RecipeDocument, RecipeImport};
 
 /// Owner of the recipe editor page: one draft, new or of an existing recipe.
 ///
@@ -159,6 +160,26 @@ impl EditorController {
                 Err(error)
             }
         }
+    }
+
+    /// Adds every recipe in the document `text` to `catalog` as a new
+    /// recipe, after the ones there: fresh recipe and step ids from this
+    /// controller's [`IdGen`], unpinned. All or nothing: a document with
+    /// any invalid value, or a failed write, adds none and mints no id.
+    /// The draft, open or not, is left alone.
+    ///
+    /// It lives here because the editor is the one minter of new recipes'
+    /// ids; a second `IdGen` could hand out an id the editor also does.
+    pub fn import(
+        &mut self,
+        text: &str,
+        catalog: &mut RecipeCatalog,
+    ) -> Result<RecipeImport, ImportError> {
+        let recipes = RecipeDocument::decode(text)?
+            .into_iter()
+            .map(|recipe| recipe.into_recipe(self.ids.as_mut()))
+            .collect();
+        Ok(RecipeImport::new(catalog.append_all(recipes)?))
     }
 
     /// Leaves the page without saving.

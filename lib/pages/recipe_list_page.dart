@@ -11,12 +11,15 @@ import 'package:coffee_timer/pages/settings_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// The home page: every recipe, in the order Rust lists them (pinned
 /// first), opening its brew page on tap and offering edit / duplicate /
-/// pin or unpin / delete on long press. A delete, here or in the editor, shows a
-/// snackbar with an Undo when Rust offers one; a failed delete or undo shows
-/// as a snackbar too.
+/// pin or unpin / export / delete on long press. The app bar's menu
+/// exports every recipe to the clipboard, or imports the clipboard's text:
+/// Rust copies, validates and adds. A delete, here or in the editor, shows a
+/// snackbar with an Undo when Rust offers one; a failure, and an export's
+/// or import's notice, shows as a snackbar too.
 class RecipeListPage extends StatefulWidget {
   const RecipeListPage({
     required this.recipes,
@@ -41,6 +44,7 @@ class RecipeListPage extends StatefulWidget {
 
 class _RecipeListPageState extends State<RecipeListPage> {
   late final StreamSubscription<String> _failures;
+  late final StreamSubscription<String> _notices;
   late final StreamSubscription<UndoOffer> _undoOffers;
 
   RecipeListHolder get recipes => widget.recipes;
@@ -51,11 +55,12 @@ class _RecipeListPageState extends State<RecipeListPage> {
   @override
   void initState() {
     super.initState();
-    _failures = recipes.failures.listen(_showFailure);
+    _failures = recipes.failures.listen(_showMessage);
+    _notices = recipes.notices.listen(_showMessage);
     _undoOffers = recipes.undoOffers.listen(_offerUndo);
   }
 
-  void _showFailure(String message) {
+  void _showMessage(String message) {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
@@ -83,6 +88,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
   @override
   void dispose() {
     unawaited(_failures.cancel());
+    unawaited(_notices.cancel());
     unawaited(_undoOffers.cancel());
     super.dispose();
   }
@@ -111,6 +117,13 @@ class _RecipeListPageState extends State<RecipeListPage> {
     );
   }
 
+  /// Sends the clipboard's text to Rust as it is; no text is empty text,
+  /// which Rust refuses (`Can't import: The text is empty`).
+  Future<void> _importFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    ImportRecipes(text: data?.text ?? '').sendSignalToRust();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -122,6 +135,25 @@ class _RecipeListPageState extends State<RecipeListPage> {
             onPressed: () =>
                 Navigator.of(context).push(SettingsPage.route(settings)),
             icon: const Icon(Icons.settings),
+          ),
+          PopupMenuButton<_ListAction>(
+            tooltip: 'More',
+            onSelected: (action) => switch (action) {
+              _ListAction.exportAll => const ExportRecipes(
+                recipeIds: [],
+              ).sendSignalToRust(),
+              _ListAction.import => unawaited(_importFromClipboard()),
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _ListAction.exportAll,
+                child: Text('Export all to clipboard'),
+              ),
+              PopupMenuItem(
+                value: _ListAction.import,
+                child: Text('Import from clipboard'),
+              ),
+            ],
           ),
         ],
       ),
@@ -196,6 +228,14 @@ class _RecipeListPageState extends State<RecipeListPage> {
                   },
                 ),
                 ListTile(
+                  leading: const Icon(Icons.ios_share),
+                  title: const Text('Export'),
+                  onTap: () {
+                    Navigator.of(ctx).pop();
+                    ExportRecipes(recipeIds: [recipe.id]).sendSignalToRust();
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.delete, color: Colors.red),
                   title: const Text(
                     'Delete',
@@ -249,3 +289,6 @@ class _RecipeListPageState extends State<RecipeListPage> {
     );
   }
 }
+
+/// The app bar menu's entries.
+enum _ListAction { exportAll, import }

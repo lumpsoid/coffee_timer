@@ -20,6 +20,10 @@ pub trait RecipeStore: Send {
     /// a known id keeps its pin.
     fn upsert(&mut self, recipe: &Recipe) -> Result<(), StoreError>;
 
+    /// Appends `recipes`, whose ids are not stored, in order and unpinned:
+    /// all of them or, on `Err`, none. Imports a document.
+    fn append_all(&mut self, recipes: &[Recipe]) -> Result<(), StoreError>;
+
     /// Inserts `recipe`, whose id is not stored, with `pin`, so that
     /// `load_all` returns it at `index`, before the recipe there now; an
     /// index at or past the end appends. Puts a removed recipe back in its

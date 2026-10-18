@@ -1,4 +1,4 @@
-//! `SqliteStore`: schema v4 and seed, recipe doses, step pours, recipe pins, recipe order, step replacement,
+//! `SqliteStore`: schema v4 and seed, recipe doses, step pours, recipe pins, recipe order, appending in one transaction, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
@@ -373,6 +373,38 @@ fn insert_at_the_front_or_past_the_end() -> TestResult {
         ids(&store.load_all()?),
         ["first", "espresso-uuid", "pourover-uuid", "last"]
     );
+    Ok(())
+}
+
+#[test]
+fn append_all_adds_every_recipe_unpinned_at_the_end_with_its_steps() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.set_pin(&rid("pourover-uuid")?, Pin::Pinned)?;
+    let v60 = recipe(
+        "v60",
+        "V60",
+        vec![step("v1", "Bloom", 30)?, step("v2", "Pour", 90)?],
+    )?;
+    let aero = recipe("aero", "Aeropress", vec![step("a1", "Steep", 60)?])?;
+    store.append_all(&[v60.clone(), aero.clone()])?;
+
+    let loaded = store.load_all()?;
+    assert_eq!(
+        ids(&loaded),
+        ["espresso-uuid", "pourover-uuid", "v60", "aero"]
+    );
+    assert_eq!(shape(&loaded[2..]), shape(&[v60, aero]));
+    assert_eq!(pinned_ids(&store)?, ["pourover-uuid"]);
+    Ok(())
+}
+
+#[test]
+fn append_all_with_a_known_id_appends_none() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let fresh = recipe("fresh", "V60", vec![step("f1", "Bloom", 30)?])?;
+    let known = recipe("espresso-uuid", "Again", Vec::new())?;
+    assert!(store.append_all(&[fresh, known]).is_err());
+    assert_eq!(ids(&store.load_all()?), ["espresso-uuid", "pourover-uuid"]);
     Ok(())
 }
 

@@ -1,5 +1,6 @@
-//! `RecipeCatalog`: load, upsert, remove, restore and pin write through the
-//! store first; the list is in `PinnedFirst` order.
+//! `RecipeCatalog`: load, upsert, append, remove, restore and pin write
+//! through the store first; the list is in `PinnedFirst` order. Export
+//! reads it.
 
 use coffee_timer_core::catalog::{
     CatalogChange, PinError, PinnedFirst, RecipeCatalog, RecipeSummary, RestoreError,
@@ -114,6 +115,73 @@ fn failed_upsert_leaves_state_unchanged() -> TestResult {
     assert!(catalog.upsert(recipe("c", "Aero")?).is_err());
     assert!(catalog.upsert(recipe("a", "Ristretto")?).is_err());
     assert_eq!(catalog.state(), before.as_slice());
+    Ok(())
+}
+
+// append_all
+
+#[test]
+fn append_all_adds_every_recipe_unpinned_after_the_list_and_persists() -> TestResult {
+    let a = RecipeId::try_parse("a")?;
+    let mut catalog = loaded(stored_ab()?.pinning(&a))?;
+    let changes = catalog.append_all(vec![recipe("c", "Aero")?, recipe("d", "Chemex")?])?;
+    assert_eq!(
+        changes,
+        [
+            CatalogChange::Upserted(RecipeId::try_parse("c")?),
+            CatalogChange::Upserted(RecipeId::try_parse("d")?),
+        ]
+    );
+    assert_eq!(ids(&catalog), ["a", "b", "c", "d"]);
+    assert_eq!(catalog.pin_of(&RecipeId::try_parse("c")?), Pin::Unpinned);
+    assert_eq!(catalog.index_of(&RecipeId::try_parse("d")?), Some(3));
+
+    catalog.load()?;
+    assert_eq!(ids(&catalog), ["a", "b", "c", "d"], "store has them too");
+    Ok(())
+}
+
+#[test]
+fn failed_append_all_adds_none() -> TestResult {
+    let mut catalog = loaded(stored_ab()?.failing_writes())?;
+    assert!(catalog.append_all(vec![recipe("c", "Aero")?]).is_err());
+    assert_eq!(ids(&catalog), ["a", "b"]);
+    Ok(())
+}
+
+// export
+
+#[test]
+fn export_of_no_ids_is_every_recipe_in_list_order() -> TestResult {
+    let b = RecipeId::try_parse("b")?;
+    let catalog = loaded(stored_ab()?.pinning(&b))?;
+    let export = catalog.export(&[])?;
+    assert_eq!(export.count(), 2);
+    let pour_over = export.json().find("Pour Over").ok_or("no Pour Over")?;
+    let espresso = export.json().find("Espresso").ok_or("no Espresso")?;
+    assert!(pour_over < espresso, "pinned first: {}", export.json());
+    Ok(())
+}
+
+#[test]
+fn export_of_ids_is_those_recipes_in_that_order() -> TestResult {
+    let catalog = loaded(stored_ab()?)?;
+    let export = catalog.export(&[RecipeId::try_parse("b")?])?;
+    assert_eq!(export.count(), 1);
+    assert_eq!(export.copied_notice(), "Copied 1 recipe");
+    assert!(export.json().contains("Pour Over"));
+    assert!(!export.json().contains("Espresso"));
+    Ok(())
+}
+
+#[test]
+fn export_of_an_unknown_id_exports_nothing() -> TestResult {
+    let catalog = loaded(stored_ab()?)?;
+    let error = catalog
+        .export(&[RecipeId::try_parse("a")?, RecipeId::try_parse("zz")?])
+        .err()
+        .ok_or("exported")?;
+    assert_eq!(error.to_string(), "No recipe with id zz");
     Ok(())
 }
 

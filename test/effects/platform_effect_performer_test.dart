@@ -37,6 +37,9 @@ class _FakePlugins implements EffectPlugins {
 
   @override
   Future<void> hideBrewNotification() async => calls.add('notify off');
+
+  @override
+  Future<void> copyToClipboard(String text) async => calls.add('copy $text');
 }
 
 void main() {
@@ -66,6 +69,9 @@ void main() {
       const PlatformEffectShowBrewNotification(title: 'Pour · 00:10'),
     );
     await performer.perform(const PlatformEffectHideBrewNotification());
+    await performer.perform(
+      const PlatformEffectCopyToClipboard(text: '{"version":1}'),
+    );
 
     expect(plugins.calls, [
       'sound',
@@ -76,6 +82,7 @@ void main() {
       'notify Bloom · 00:35 | Next: Pour',
       'notify Pour · 00:10 | null',
       'notify off',
+      'copy {"version":1}',
     ]);
   });
 

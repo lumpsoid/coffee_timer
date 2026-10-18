@@ -20,6 +20,10 @@ impl RecipeStore for SqliteStore {
         upsert(&mut *self.conn()?, recipe).map_err(db_error)
     }
 
+    fn append_all(&mut self, recipes: &[Recipe]) -> Result<(), StoreError> {
+        append_all(&mut *self.conn()?, recipes).map_err(db_error)
+    }
+
     fn load_pinned(&self) -> Result<Vec<RecipeId>, StoreError> {
         load_pinned(&*self.conn()?).map_err(db_error)
     }
@@ -153,6 +157,27 @@ fn upsert(conn: &mut Connection, recipe: &Recipe) -> rusqlite::Result<()> {
     )?;
     tx.execute("DELETE FROM step WHERE recipe_id = ?1", [id])?;
     insert_steps(&tx, recipe)?;
+    tx.commit()
+}
+
+/// One transaction: each recipe is appended unpinned, in order, with its
+/// steps. A known id fails the insert, and so the whole transaction.
+fn append_all(conn: &mut Connection, recipes: &[Recipe]) -> rusqlite::Result<()> {
+    let tx = conn.transaction()?;
+    for recipe in recipes {
+        tx.execute(
+            "INSERT INTO recipe (id, name, description, coffee_grams, water_grams)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![
+                recipe.id().as_str(),
+                recipe.name().as_str(),
+                recipe.description(),
+                recipe.coffee().grams(),
+                recipe.water().grams(),
+            ],
+        )?;
+        insert_steps(&tx, recipe)?;
+    }
     tx.commit()
 }
 

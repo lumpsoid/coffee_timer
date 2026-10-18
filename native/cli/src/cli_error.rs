@@ -5,6 +5,7 @@ use coffee_timer_core::catalog::PinError;
 use coffee_timer_core::editor::{DeleteError, EditError, SaveError};
 use coffee_timer_core::model::ModelError;
 use coffee_timer_core::ports::StoreError;
+use coffee_timer_core::transfer::{ExportError, ImportError};
 
 /// Why a command failed. Displays the core's own error text; the CLI adds
 /// none of its own except for I/O.
@@ -23,6 +24,8 @@ pub enum CliError {
     },
     Delete(DeleteError),
     Pin(PinError),
+    Export(ExportError),
+    Import(ImportError),
     Io(io::Error),
 }
 
@@ -43,6 +46,8 @@ impl fmt::Display for CliError {
             }
             Self::Delete(e) => e.fmt(f),
             Self::Pin(e) => e.fmt(f),
+            Self::Export(e) => e.fmt(f),
+            Self::Import(e) => e.fmt(f),
             Self::Io(e) => e.fmt(f),
         }
     }
@@ -89,6 +94,18 @@ impl From<DeleteError> for CliError {
 impl From<PinError> for CliError {
     fn from(e: PinError) -> Self {
         Self::Pin(e)
+    }
+}
+
+impl From<ExportError> for CliError {
+    fn from(e: ExportError) -> Self {
+        Self::Export(e)
+    }
+}
+
+impl From<ImportError> for CliError {
+    fn from(e: ImportError) -> Self {
+        Self::Import(e)
     }
 }
 
