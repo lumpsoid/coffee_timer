@@ -76,6 +76,11 @@ impl EditorController {
         self.draft_mut()?.set_step_duration(row, raw)
     }
 
+    /// The grams the step pours, as typed; blank is no pour.
+    pub fn set_step_water(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_step_water(row, raw)
+    }
+
     /// Appends a row named after `preset`, `0` seconds long, and returns
     /// its id: the key for editing the new row.
     pub fn add_step(&mut self, preset: StepPreset) -> Result<StepId, EditError> {

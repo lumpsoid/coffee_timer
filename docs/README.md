@@ -31,12 +31,19 @@ to.
   Tap the coffee/water/ratio figures to change the ratio for this brew in
   steps of 0.5. The coffee stays the same and the water follows. Leaving the
   page goes back to the recipe's own ratio.
+  Each step that pours water shows its grams in the step list, and while it
+  runs or is paused the dial reads the scale total to pour up to, such as
+  `Pour to 150g` (this step's pour plus every earlier one). An adjusted
+  ratio scales every pour with the water.
 - **Editor.** Edits a recipe's name, description, coffee (1–200 g) and
   water (1–2000 g), and its timed steps. A new recipe starts at 15 g to
   250 g. The total
-  and each step's `MM:SS` update live. Preset buttons add "Add coffee", "Add
-  water", "Wait" or blank steps. Field errors appear from the first save
-  attempt onward.
+  and each step's `MM:SS` update live. Each step has an optional pour in
+  grams (1–2000 g; blank pours nothing). When the step pours do not add up
+  to the recipe's water, a hint says so; it is not an error, and the two
+  are saved as typed. Preset buttons add "Add coffee", "Add water", "Wait"
+  or blank steps, each with a blank pour. Field errors appear from the
+  first save attempt onward.
 - **Settings.** Sets the theme (light, dark or system) and one of ten accent
   colours.
 
@@ -102,7 +109,7 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db list
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show espresso-uuid
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --ratio-steps -2   # 1:16
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
-    --coffee 15 --water 250 --step Bloom=30 --step Pour=120
+    --coffee 15 --water 250 --step Bloom=30@50 --step Pour=120@200
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew espresso-uuid --pause-at 10 --pause-for 5
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
@@ -124,10 +131,13 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   paused `S` seconds without ticking, then resumes; it prints `pause` and
   `resume` lines with their effects.
 - `list` and `show` print each recipe's coffee and water grams; `show` also
-  prints the ratio.
+  prints the ratio and each step's pour (scaled with `--ratio-steps`).
+  `brew` prints a pouring step's target next to its countdown, as in
+  `00:30 Bloom (Pour to 50g)`.
 - `new --coffee GRAMS --water GRAMS` sets the dose (1–200 g and
   1–2000 g). Without them the recipe gets the editor's 15 g and 250 g.
-- `--step NAME=SECONDS` splits at the last `=`. A blank name is saved as
+- `--step NAME=SECONDS[@GRAMS]` splits at the last `=`, then the seconds at
+  an `@`; `@GRAMS` is the water the step pours. A blank name is saved as
   `Step N`.
 - Use `--help` on any command for its options.
 

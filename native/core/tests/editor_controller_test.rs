@@ -39,6 +39,7 @@ fn v60() -> Result<Recipe, ModelError> {
             sid("step-1")?,
             "Bloom".to_owned(),
             StepDuration::try_parse(30)?,
+            None,
         )],
     ))
 }
@@ -162,6 +163,8 @@ fn new_draft_starts_with_one_blank_step_and_no_name() -> TestResult {
             duration_text: "0".to_owned(),
             duration_label: "00:00".to_owned(),
             duration_error: None,
+            water_text: String::new(),
+            water_error: None,
         }]
     );
     Ok(())
@@ -189,6 +192,8 @@ fn edit_prefills_from_the_stored_recipe() -> TestResult {
             duration_text: "30".to_owned(),
             duration_label: "00:30".to_owned(),
             duration_error: None,
+            water_text: String::new(),
+            water_error: None,
         }]
     );
     Ok(())
@@ -399,6 +404,120 @@ fn dose_errors_show_from_the_first_save_and_follow_the_text() -> TestResult {
     Ok(())
 }
 
+// Step pours
+
+/// The grams each step of the saved recipe `id` pours.
+fn saved_pours(
+    catalog: &RecipeCatalog,
+    id: &str,
+) -> Result<Vec<Option<u32>>, Box<dyn std::error::Error>> {
+    let saved = catalog.get(&rid(id)?).ok_or("not saved")?;
+    Ok(saved
+        .steps()
+        .iter()
+        .map(|s| s.water().map(WaterAmount::grams))
+        .collect())
+}
+
+#[test]
+fn a_new_row_pours_nothing_until_grams_are_typed() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    let water = editor.add_step(StepPreset::AddWater)?;
+    assert_eq!(row(&editor, "s2")?.name, "Add water");
+    assert_eq!(row(&editor, "s2")?.water_text, "", "left for the grams");
+    editor.set_step_water(&water, " 60 ")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_pours(&catalog, "r1")?, [None, Some(60)]);
+    Ok(())
+}
+
+#[test]
+fn edit_prefills_the_stored_pours_and_blank_clears_one() -> TestResult {
+    let poured = Recipe::new(
+        rid("recipe-1")?,
+        RecipeName::try_parse("V60")?,
+        String::new(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+        vec![RecipeStep::new(
+            sid("step-1")?,
+            "Bloom".to_owned(),
+            StepDuration::try_parse(30)?,
+            Some(WaterAmount::try_parse(50)?),
+        )],
+    );
+    let mut catalog = catalog(vec![poured])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    assert_eq!(row(&editor, "step-1")?.water_text, "50");
+    editor.set_step_water(&sid("step-1")?, "  ")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_pours(&catalog, "recipe-1")?, [None]);
+    Ok(())
+}
+
+#[test]
+fn pour_errors_show_from_the_first_save_and_follow_the_text() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_step_water(&sid("s1")?, "0")?;
+    assert_eq!(row(&editor, "s1")?.water_error, None, "hidden before save");
+
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert!(catalog.state().is_empty());
+    assert_eq!(row(&editor, "s1")?.water_error.as_deref(), Some("1–2000 g"));
+    editor.set_step_water(&sid("s1")?, "lots")?;
+    assert_eq!(
+        row(&editor, "s1")?.water_error.as_deref(),
+        Some("Enter grams")
+    );
+    editor.set_step_water(&sid("s1")?, "2000")?;
+    assert_eq!(row(&editor, "s1")?.water_error, None);
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_pours(&catalog, "r1")?, [Some(2000)]);
+    Ok(())
+}
+
+#[test]
+fn set_step_water_of_an_unknown_row_is_an_error() -> TestResult {
+    let mut editor = new_draft();
+    assert_eq!(
+        editor.set_step_water(&sid("nope")?, "50"),
+        Err(EditError::UnknownStep(sid("nope")?))
+    );
+    Ok(())
+}
+
+#[test]
+fn the_pour_hint_shows_while_step_pours_miss_the_recipes_water() -> TestResult {
+    let mut editor = new_draft();
+    assert_eq!(draft(&editor)?.pour_hint(), None, "no step pours");
+    editor.set_step_water(&sid("s1")?, "50")?;
+    assert_eq!(
+        draft(&editor)?.pour_hint().as_deref(),
+        Some("Step pours add up to 50 g of 250 g")
+    );
+    let pour = editor.add_step(StepPreset::AddWater)?;
+    editor.set_step_water(&pour, "lots")?;
+    assert_eq!(
+        draft(&editor)?.pour_hint().as_deref(),
+        Some("Step pours add up to 50 g of 250 g"),
+        "an invalid pour is left out"
+    );
+    editor.set_step_water(&pour, "200")?;
+    assert_eq!(draft(&editor)?.pour_hint(), None, "they add up");
+    editor.set_water("300")?;
+    assert_eq!(
+        draft(&editor)?.pour_hint().as_deref(),
+        Some("Step pours add up to 250 g of 300 g")
+    );
+    editor.set_water("")?;
+    assert_eq!(draft(&editor)?.pour_hint(), None, "no water to compare");
+    Ok(())
+}
+
 // Duration bounds
 
 #[test]
@@ -524,6 +643,8 @@ fn removing_the_last_row_leaves_one_blank_row() -> TestResult {
             duration_text: "0".to_owned(),
             duration_label: "00:00".to_owned(),
             duration_error: None,
+            water_text: String::new(),
+            water_error: None,
         }]
     );
     Ok(())

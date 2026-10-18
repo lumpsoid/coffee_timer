@@ -36,11 +36,18 @@ again.
 - **`CoffeeDose`** (`1..=200` g) and **`WaterAmount`** (`1..=2000` g) are a
   recipe's stored coffee and total water. Like `StepDuration`, each has
   strict text parsing (`Enter grams`, `1–200 g` / `1–2000 g`) and lenient
-  clamping for storage. `WaterAmount` is a general amount of water, so
-  other amounts (such as per step) can reuse it.
+  clamping for storage. `WaterAmount` is a general amount of water: a
+  step's pour is one too, with optional text entry (blank is no pour).
 - **`RecipeStep` and `Recipe`** are immutable and change only through named
-  operations. A recipe holds its `CoffeeDose` and `WaterAmount`. A blank
-  step name is saved as `Step N`.
+  operations. A recipe holds its `CoffeeDose` and `WaterAmount`; a step
+  holds an optional `WaterAmount`, the water it pours. A blank step name is
+  saved as `Step N`. The step pours need not add up to the recipe's water.
+- **`PourScale`** is the one rounding rule for step pours in a brew whose
+  water differs from the recipe's: it scales the running totals by brew
+  water over recipe water, half up to a gram, and each `Pour` is the
+  difference between two totals, so pours always add up to their "pour to"
+  targets. `Pour` is one step's grams and its running total, with the
+  `50g` and `Pour to 150g` labels.
 - **`BrewMetrics`** is the one home for the figures derived from a recipe:
   the ratio of its stored coffee and water (`1:5`), and the capped total
   duration with its `M:SS` label.
@@ -59,6 +66,7 @@ again.
 - **`ModelError`** carries user-facing texts that match the legacy app's.
 
 Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
+[`pour_scale_test.rs`](../native/core/tests/pour_scale_test.rs),
 [`label_style_test.rs`](../native/core/tests/label_style_test.rs) and
 [`settings_test.rs`](../native/core/tests/settings_test.rs).
 
@@ -125,14 +133,15 @@ Test:
 - `BrewState` is `Empty`, `Idle(BrewView)`, `Running(BrewView,
   RunningStep)` or `Paused(BrewView, RunningStep)`.
 - `BrewView` is the open recipe with its labels, its `LabelStyle` (the
-  brew page wears the list card's label) and `Step N of M` positions. Its
+  brew page wears the list card's label), `Step N of M` positions, and each
+  step's `Pour` at the water shown (`pour_to_label(index)`). Its
   `RatioSetting` is `Recipe` or `Adjusted`; `RatioChange` is
   one press of the page's ratio controls.
 - `RunningStep` is the current (or paused) step, the time left, the run
   number, and the dial's sweep.
 - `StepRow` and `StepStatus` (`Done` / `Current` / `Paused` / `Pending`) describe the
   step list. Each row also carries its arc on the dial's step track, as
-  fractions of the whole brew.
+  fractions of the whole brew, and its pour label if it pours.
 - `Effect` is a platform command. `BrewNotice` is the content of the brew
   notification.
 - `BrewError` is a rejected start, pause, resume or ratio change.
@@ -146,16 +155,19 @@ which runs the timer tick by tick.
 [`native/core/src/editor`](../native/core/src/editor)
 
 - `EditorController` owns `EditorState` (`Closed` / `Open(Draft)`) and an
-  `IdGen`. It provides `new_draft`, `edit`, the field setters, `add_step`
+  `IdGen`. It provides `new_draft`, `edit`, the field setters (including
+  `set_step_water`), `add_step`
   (which returns the new row's `StepId`), `remove_step`, `save`, `delete` and
   `close`.
 - `Draft` is the whole editor view: the raw text of each field (name,
   description, coffee and water grams, a new draft starting at 15 g to
   250 g), at least one
-  step row, the live total, field errors (hidden until the first save
-  attempt), and the store-failure notice. The private `Field<T>` keeps the
+  step row, the live total, the pour hint (`Step pours add up to 200 g of
+  250 g`), field errors (hidden until the first save attempt), and the
+  store-failure notice. The private `Field<T>` keeps the
   typed text and its parse result together.
-- `EditorStepRow` is one step card.
+- `EditorStepRow` is one step card: name, duration and pour text, with
+  their labels and errors.
 - `StepPreset` covers the add-step buttons: "Add coffee", "Add water",
   "Wait" and blank.
 - `DraftMode` says whether the draft is new or existing.
@@ -188,7 +200,9 @@ The store implements the core's ports. It makes no decisions.
   water per step), while a database created at v2 gives the seeds real
   doses (Espresso 18 g / 36 g, Pour Over 15 g / 250 g). A migration entry
   can carry such `fresh` SQL, run only on a database created in that
-  migration.
+  migration. v3 adds the nullable `step.water_grams` (NULL is no pour, so
+  every upgraded step pours nothing); a database created at v3 gives the
+  Pour Over seed's Bloom 50 g and Pour 200 g.
 - **Row mapping:** [`recipe_rows.rs`](../native/store/src/recipe_rows.rs)
   loads `ORDER BY position`. An upsert keeps the recipe's position and
   replaces its steps. Rows are read through core's lenient constructors
@@ -261,7 +275,7 @@ makes no business decisions.
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted` / `Removed` / `Failed`) |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused`), `PlatformEffect` |
-| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `AddStep`, `RemoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
+| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial

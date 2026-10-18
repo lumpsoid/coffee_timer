@@ -9,7 +9,8 @@ use crate::sqlite_store::{SqliteStore, db_error};
 /// Rows map to core types through the core's constructors, as legacy
 /// `sqlite_recipe_repository.dart:103-125` did: a row with a blank id is
 /// dropped, a blank name reads as `Untitled`, a duration is clamped. The
-/// coffee and water grams are clamped too.
+/// coffee and water grams are clamped too, and a step's NULL water is no
+/// pour.
 impl RecipeStore for SqliteStore {
     fn load_all(&self) -> Result<Vec<Recipe>, StoreError> {
         load_all(&*self.conn()?).map_err(db_error)
@@ -72,20 +73,27 @@ fn load_all(conn: &Connection) -> rusqlite::Result<Vec<Recipe>> {
 
 fn load_steps(conn: &Connection, recipe: &RecipeId) -> rusqlite::Result<Vec<RecipeStep>> {
     let mut statement = conn.prepare_cached(
-        "SELECT id, name, duration_seconds FROM step WHERE recipe_id = ?1 ORDER BY position",
+        "SELECT id, name, duration_seconds, water_grams FROM step
+         WHERE recipe_id = ?1 ORDER BY position",
     )?;
     let rows = statement.query_map([recipe.as_str()], |row| {
         Ok((
             row.get::<_, String>(0)?,
             row.get::<_, String>(1)?,
             row.get::<_, i64>(2)?,
+            row.get::<_, Option<i64>>(3)?,
         ))
     })?;
     let mut steps = Vec::new();
     for row in rows {
-        let (id, name, seconds) = row?;
+        let (id, name, seconds, water) = row?;
         if let Ok(id) = StepId::try_parse(&id) {
-            steps.push(RecipeStep::new(id, name, StepDuration::clamped(seconds)));
+            steps.push(RecipeStep::new(
+                id,
+                name,
+                StepDuration::clamped(seconds),
+                water.map(WaterAmount::clamped),
+            ));
         }
     }
     Ok(steps)
@@ -114,8 +122,8 @@ fn upsert(conn: &mut Connection, recipe: &Recipe) -> rusqlite::Result<()> {
     tx.execute("DELETE FROM step WHERE recipe_id = ?1", [id])?;
     {
         let mut insert = tx.prepare(
-            "INSERT INTO step (id, recipe_id, position, name, duration_seconds)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO step (id, recipe_id, position, name, duration_seconds, water_grams)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
         )?;
         for (position, step) in (0_i64..).zip(recipe.steps()) {
             insert.execute(params![
@@ -124,6 +132,7 @@ fn upsert(conn: &mut Connection, recipe: &Recipe) -> rusqlite::Result<()> {
                 position,
                 step.name(),
                 step.duration().seconds(),
+                step.water().map(WaterAmount::grams),
             ])?;
         }
     }

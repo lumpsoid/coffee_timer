@@ -1,4 +1,4 @@
-//! `SqliteStore`: schema v2 and seed, recipe doses, recipe order, step replacement,
+//! `SqliteStore`: schema v3 and seed, recipe doses, step pours, recipe order, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
@@ -80,6 +80,7 @@ fn step(id: &str, name: &str, seconds: i64) -> Outcome<RecipeStep> {
         StepId::try_parse(id)?,
         name.to_owned(),
         StepDuration::try_parse(seconds)?,
+        None,
     ))
 }
 
@@ -99,6 +100,15 @@ fn doses(recipes: &[Recipe]) -> Vec<(&str, u32, u32)> {
     recipes
         .iter()
         .map(|r| (r.id().as_str(), r.coffee().grams(), r.water().grams()))
+        .collect()
+}
+
+/// `(step id, water grams)` of every step, in catalog order.
+fn pours(recipes: &[Recipe]) -> Vec<(&str, Option<u32>)> {
+    recipes
+        .iter()
+        .flat_map(Recipe::steps)
+        .map(|s| (s.id().as_str(), s.water().map(WaterAmount::grams)))
         .collect()
 }
 
@@ -149,6 +159,55 @@ fn doses_round_trip_and_follow_an_upsert() -> TestResult {
 }
 
 #[test]
+fn fresh_database_seeds_the_pour_over_pours() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    assert_eq!(
+        pours(&store.load_all()?),
+        [
+            ("step1", None),
+            ("step2", None),
+            ("step3", None),
+            ("step4", Some(50)),
+            ("step5", Some(200)),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn step_pours_round_trip() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let bloom = RecipeStep::new(
+        StepId::try_parse("s1")?,
+        "Bloom".to_owned(),
+        StepDuration::try_parse(30)?,
+        Some(WaterAmount::try_parse(45)?),
+    );
+    store.upsert(&recipe("r1", "V60", vec![bloom, step("s2", "Wait", 60)?])?)?;
+    let loaded = store.load_all()?;
+    assert_eq!(pours(&loaded[2..]), [("s1", Some(45)), ("s2", None)]);
+    Ok(())
+}
+
+#[test]
+fn stored_pours_out_of_range_are_clamped() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    drop(SqliteStore::open(&path)?);
+    Connection::open(&path)?.execute_batch(
+        "UPDATE step SET water_grams = 0 WHERE id = 'step4';
+         UPDATE step SET water_grams = 99999 WHERE id = 'step5';",
+    )?;
+    let store = SqliteStore::open(&path)?;
+    let loaded = store.load_all()?;
+    assert_eq!(
+        pours(&loaded[1..]),
+        [("step3", None), ("step4", Some(1)), ("step5", Some(2000))]
+    );
+    Ok(())
+}
+
+#[test]
 fn stored_doses_out_of_range_are_clamped() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
@@ -166,13 +225,13 @@ fn stored_doses_out_of_range_are_clamped() -> TestResult {
 }
 
 #[test]
-fn opened_file_is_at_schema_v2() -> TestResult {
+fn opened_file_is_at_schema_v3() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
     SqliteStore::open(&path)?;
     let version: u32 =
         Connection::open(&path)?.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 2);
+    assert_eq!(version, 3);
     Ok(())
 }
 

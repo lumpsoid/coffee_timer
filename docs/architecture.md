@@ -48,9 +48,12 @@ The state objects are complete views, so the screens hold no logic. Every
 label is computed in core: `20g`, `1:35`, `MM:SS`, `Ns`, `Step N name`. Core
 also computes each step's status, the field errors, and the editor's notice.
 The coffee and water grams are stored on the recipe, as `CoffeeDose` and
+`WaterAmount`, and each step may store the water it pours, as an optional
 `WaterAmount`. [`BrewMetrics`](../native/core/src/model/brew_metrics.rs) is
 the one home for the figures derived from them and the steps: the ratio and
-the total duration.
+the total duration. [`PourScale`](../native/core/src/model/pour_scale.rs)
+is the one rounding rule for the step pours at a brew's water, and gives
+each pouring step its grams and its `Pour to 150g` running total.
 
 A failed write leaves the state unchanged and returns `Err`. Draft
 actions are the exception. They clear the previous notice whatever they do.
@@ -173,8 +176,8 @@ clock. Time arrives as `tick()`, one call per second while
 - `adjust_ratio(change)` changes the open recipe's ratio for this brew
   only: one step of 0.5 more or less water per gram of coffee, within
   `1:1..=1:30`, or back to the recipe's own. The coffee stays and the water
-  follows. It returns no effects and leaves a running or paused timer
-  alone. `open`
+  follows, and so does every step's pour (scaled by `PourScale`). It
+  returns no effects and leaves a running or paused timer alone. `open`
   and `leave` drop the adjustment. An edit to the open recipe keeps it,
   applied to the edited recipe's coffee. Every recipe has coffee
   (`CoffeeDose` is at least 1 g), so every recipe has a ratio to change.

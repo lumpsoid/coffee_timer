@@ -114,8 +114,11 @@ void main() {
               durationText: 'x',
               durationLabel: '00:00',
               durationError: 'Enter seconds',
+              waterText: '0',
+              waterError: '1–2000 g',
             ),
           ],
+          pourHint: 'Step pours add up to 0 g of 250 g',
           addStepButtons: [],
         ),
       ),
@@ -126,6 +129,8 @@ void main() {
     expect(find.text('1–200 g'), findsOneWidget);
     expect(find.text('Enter grams'), findsOneWidget);
     expect(find.text('Enter seconds'), findsOneWidget);
+    expect(find.text('1–2000 g'), findsOneWidget);
+    expect(find.text('Step pours add up to 0 g of 250 g'), findsOneWidget);
     expect(find.byTooltip('Delete'), findsNothing);
   });
 

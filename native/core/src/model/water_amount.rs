@@ -38,6 +38,16 @@ impl WaterAmount {
         Self::try_parse(grams)
     }
 
+    /// Parses an optional amount, such as a step's pour: blank (after
+    /// trimming) is none, anything else must pass
+    /// [`WaterAmount::try_parse_text`].
+    pub fn try_parse_optional_text(raw: &str) -> Result<Option<Self>, ModelError> {
+        if raw.trim().is_empty() {
+            return Ok(None);
+        }
+        Self::try_parse_text(raw).map(Some)
+    }
+
     /// Clamps `grams` into `MIN_GRAMS..=MAX_GRAMS`: bad storage never blocks
     /// the app.
     pub fn clamped(grams: i64) -> Self {

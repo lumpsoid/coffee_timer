@@ -87,29 +87,39 @@ pub struct NewRecipe {
     /// Water in grams, 1–2000. [default: the editor's, 250]
     #[arg(long, value_name = "GRAMS")]
     pub water: Option<String>,
-    /// A step as NAME=SECONDS (e.g. "Grind=30"); repeat in brew order. A
-    /// blank NAME saves as "Step N". Without any, the recipe gets one blank
-    /// 0-second step.
-    #[arg(long = "step", value_name = "NAME=SECONDS", value_parser = StepArg::parse)]
+    /// A step as NAME=SECONDS, or NAME=SECONDS@GRAMS for a step that pours
+    /// that much water (e.g. "Grind=30", "Bloom=30@50"); repeat in brew
+    /// order. A blank NAME saves as "Step N". Without any, the recipe gets
+    /// one blank 0-second step.
+    #[arg(long = "step", value_name = "NAME=SECONDS[@GRAMS]", value_parser = StepArg::parse)]
     pub steps: Vec<StepArg>,
 }
 
-/// One `--step NAME=SECONDS`, as typed. The editor validates both parts.
+/// One `--step NAME=SECONDS[@GRAMS]`, as typed. The editor validates every
+/// part.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StepArg {
     pub name: String,
     pub seconds: String,
+    /// The grams poured, if `@GRAMS` was given.
+    pub water: Option<String>,
 }
 
 impl StepArg {
-    /// Splits at the last `=`, so a name may contain `=`.
+    /// Splits at the last `=`, so a name may contain `=`; then the seconds
+    /// at an `@`, if any.
     pub fn parse(raw: &str) -> Result<Self, String> {
-        let (name, seconds) = raw
+        let (name, amounts) = raw
             .rsplit_once('=')
-            .ok_or_else(|| format!("expected NAME=SECONDS, got \"{raw}\""))?;
+            .ok_or_else(|| format!("expected NAME=SECONDS[@GRAMS], got \"{raw}\""))?;
+        let (seconds, water) = match amounts.split_once('@') {
+            Some((seconds, water)) => (seconds, Some(water.to_owned())),
+            None => (amounts, None),
+        };
         Ok(Self {
             name: name.to_owned(),
             seconds: seconds.to_owned(),
+            water,
         })
     }
 }

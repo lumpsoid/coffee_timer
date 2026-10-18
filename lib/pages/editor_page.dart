@@ -197,6 +197,17 @@ class _EditorPageState extends State<EditorPage> {
           ),
           const SizedBox(height: 20),
           Text('Total duration: ${draft.totalLabel}'),
+          if (draft.pourHint case final hint?)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                hint,
+                style: TextStyle(
+                  fontStyle: FontStyle.italic,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
           const SizedBox(height: 20),
           const Text('Steps', style: TextStyle(fontSize: 16)),
           const SizedBox(height: 8),
@@ -259,7 +270,7 @@ class _EditorPageState extends State<EditorPage> {
   }
 }
 
-/// One step's name and duration inputs, keyed by its row id so its fields
+/// One step's name, duration and pour inputs, keyed by its row id so its fields
 /// keep their text as other rows come and go.
 class _StepCard extends StatelessWidget {
   const _StepCard({required this.step, super.key});
@@ -295,18 +306,41 @@ class _StepCard extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 8),
-            TextFormField(
-              initialValue: step.durationText,
-              decoration: InputDecoration(
-                labelText: 'Duration (seconds)',
-                helperText: 'MM:SS — ${step.durationLabel}',
-                errorText: step.durationError,
-              ),
-              keyboardType: TextInputType.number,
-              onChanged: (raw) => SetStepDuration(
-                row: step.id,
-                raw: raw,
-              ).sendSignalToRust(),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    initialValue: step.durationText,
+                    decoration: InputDecoration(
+                      labelText: 'Duration (seconds)',
+                      helperText: 'MM:SS — ${step.durationLabel}',
+                      errorText: step.durationError,
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (raw) => SetStepDuration(
+                      row: step.id,
+                      raw: raw,
+                    ).sendSignalToRust(),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    initialValue: step.waterText,
+                    decoration: InputDecoration(
+                      labelText: 'Pour (g)',
+                      helperText: 'Blank: no pour',
+                      errorText: step.waterError,
+                    ),
+                    keyboardType: TextInputType.number,
+                    onChanged: (raw) => SetStepWater(
+                      row: step.id,
+                      raw: raw,
+                    ).sendSignalToRust(),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

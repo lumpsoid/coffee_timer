@@ -60,6 +60,30 @@ void main() {
       expect(find.text('2'), findsNothing);
     });
 
+    testWidgets('a pouring step shows its grams beside its duration', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _host(
+          StepListTile(
+            step: const BrewStep(
+              numberLabel: '1',
+              name: 'Bloom',
+              durationLabel: '30s',
+              pourLabel: '50g',
+              status: BrewStepStatus.pending,
+              trackStart: 0,
+              trackEnd: 1,
+            ),
+            colors: _colors,
+            onLongPress: () {},
+          ),
+        ),
+      );
+      expect(find.text('50g'), findsOneWidget);
+      expect(find.text('30s'), findsOneWidget);
+    });
+
     testWidgets('long press calls back', (tester) async {
       var pressed = 0;
       await tester.pumpWidget(

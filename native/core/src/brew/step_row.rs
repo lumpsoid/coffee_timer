@@ -8,6 +8,9 @@ pub struct StepRow {
     pub name: String,
     /// `Ns`.
     pub duration_label: String,
+    /// The water this step pours at the water shown, `50g`; none for a step
+    /// that pours nothing.
+    pub pour_label: Option<String>,
     pub status: StepStatus,
     /// Where the step starts on the dial's step track, as a fraction of the
     /// whole brew (`0.0..=1.0`).

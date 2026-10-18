@@ -73,6 +73,7 @@ impl From<StepRow> for BrewStep {
             number_label: row.number_label,
             name: row.name,
             duration_label: row.duration_label,
+            pour_label: row.pour_label,
             status: row.status.into(),
             track_start: row.track_start,
             track_end: row.track_end,
@@ -100,6 +101,7 @@ fn timer(view: &BrewView, step: &RunningStep) -> BrewTimer {
         step_name: step.name().to_owned(),
         position_label: view.position_label(step.index()),
         remaining_label: step.remaining_label(),
+        pour_to_label: view.pour_to_label(step.index()),
         sweep_seconds: step.sweep().map(StepDuration::seconds),
     }
 }
@@ -136,6 +138,7 @@ mod tests {
             StepId::try_parse(id)?,
             name.to_owned(),
             StepDuration::try_parse(seconds)?,
+            None,
         ))
     }
 

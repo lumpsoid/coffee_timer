@@ -167,6 +167,7 @@ fn summary_carries_the_stored_dose_and_the_total_time() -> TestResult {
             StepId::try_parse(id)?,
             "step".to_owned(),
             StepDuration::try_parse(seconds)?,
+            None,
         ))
     };
     let recipe = Recipe::new(

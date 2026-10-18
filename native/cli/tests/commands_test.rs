@@ -10,7 +10,7 @@ use coffee_timer_store::SqliteStore;
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
 /// A shell on a fresh seeded database: Espresso (Grind 30s, Brew 25s) and
-/// Pour Over (Grind 40s, Bloom 30s, Pour 120s).
+/// Pour Over (Grind 40s, Bloom 30s pouring 50 g, Pour 120s pouring 200 g).
 struct Session {
     store: SqliteStore,
     controllers: Controllers,
@@ -64,10 +64,18 @@ pourover-uuid  Pour Over
 Light and clean
 Coffee: 15g  Water: 250g  Ratio: 1:16.7  Time: 3:10
   1. Grind  40s  pending
-  2. Bloom  30s  pending
-  3. Pour  120s  pending
+  2. Bloom  30s  50g  pending
+  3. Pour  120s  200g  pending
 "
     );
+    Ok(())
+}
+
+#[test]
+fn show_with_ratio_steps_scales_the_step_pours() -> TestResult {
+    let more = Session::new()?.run(&["show", "pourover-uuid", "--ratio-steps", "3"])?;
+    assert!(more.contains("  2. Bloom  30s  54g  pending\n"), "{more}");
+    assert!(more.contains("  3. Pour  120s  216g  pending\n"), "{more}");
     Ok(())
 }
 
@@ -102,7 +110,7 @@ fn new_saves_a_recipe_and_it_persists() -> TestResult {
         "--water",
         "256",
         "--step",
-        "Bloom=30",
+        "Bloom=30@40",
         "--step",
         "=5",
     ])?;
@@ -120,7 +128,7 @@ fn new_saves_a_recipe_and_it_persists() -> TestResult {
 r1  V60
 clean
 Coffee: 16g  Water: 256g  Ratio: 1:16  Time: 0:35
-  1. Bloom  30s  pending
+  1. Bloom  30s  40g  pending
   2. Step 2  5s  pending
 "
     );
@@ -154,6 +162,8 @@ fn new_with_invalid_fields_prints_the_field_errors_and_saves_nothing() -> TestRe
             "Bloom=abc",
             "--step",
             "Pour=6000",
+            "--step",
+            "Wait=10@0",
         ])
         .err()
         .ok_or("expected an error")?;
@@ -165,7 +175,8 @@ Fix the highlighted fields
   Coffee \"0\": 1–200 g
   Water \"lots\": Enter grams
   Step 2 name \"Bloom\", duration \"abc\": Enter seconds
-  Step 3 name \"Pour\", duration \"6000\": 0–5999 seconds"
+  Step 3 name \"Pour\", duration \"6000\": 0–5999 seconds
+  Step 4 name \"Wait\", grams \"0\": 1–2000 g"
     );
     assert_eq!(session.reopened()?.run(&["list"])?, SEED_LIST);
     Ok(())
@@ -178,7 +189,7 @@ fn a_step_without_equals_is_an_argument_error() -> TestResult {
         .err()
         .ok_or("expected an error")?;
     assert!(
-        error.contains("expected NAME=SECONDS, got \"Bloom\""),
+        error.contains("expected NAME=SECONDS[@GRAMS], got \"Bloom\""),
         "{error}"
     );
     Ok(())
@@ -294,6 +305,21 @@ fn brew_from_a_later_step_starts_there() -> TestResult {
     assert_eq!(
         lines.get(lines.len() - 4).copied(),
         Some("tick 25  idle 0:55  |  1:pending 2:pending")
+    );
+    Ok(())
+}
+
+#[test]
+fn brew_prints_the_pour_to_target_of_each_pouring_step() -> TestResult {
+    let out = Session::new()?.run(&["brew", "pourover-uuid", "--from", "1", "--fast"])?;
+    let lines: Vec<&str> = out.lines().collect();
+    assert_eq!(
+        lines.first().copied(),
+        Some("start    00:30 Bloom (Pour to 50g)  |  1:done 2:current 3:pending")
+    );
+    assert!(
+        lines.contains(&"tick 30  02:00 Pour (Pour to 250g)  |  1:done 2:done 3:current"),
+        "{out}"
     );
     Ok(())
 }

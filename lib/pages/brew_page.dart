@@ -353,8 +353,9 @@ class _IdleFace extends StatelessWidget {
   }
 }
 
-/// The dial's centre while running or [paused]: which step, its name, and
-/// its `MM:SS` countdown, faded while paused, with what a tap does.
+/// The dial's centre while running or [paused]: which step, its name, its
+/// `MM:SS` countdown (faded while paused), the scale reading to pour to if
+/// the step pours, and what a tap does.
 class _TimerFace extends StatelessWidget {
   const _TimerFace({
     required this.timer,
@@ -395,6 +396,19 @@ class _TimerFace extends StatelessWidget {
               color: paused ? colors.ink.withValues(alpha: 0.45) : colors.ink,
             ),
           ),
+          if (timer.pourToLabel case final pourTo?)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                // Not upper-cased like the captions: `g` is a unit.
+                pourTo,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _caption(colors, size: 12).copyWith(
+                  color: colors.accent,
+                ),
+              ),
+            ),
           const SizedBox(height: 4),
           if (paused)
             Row(

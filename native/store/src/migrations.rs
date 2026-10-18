@@ -32,6 +32,11 @@ const MIGRATIONS: &[Migration] = &[
         sql: V2_RECIPE_DOSE,
         fresh: Some(V2_FRESH_SEED_DOSE),
     },
+    Migration {
+        version: 3,
+        sql: V3_STEP_WATER,
+        fresh: Some(V3_FRESH_SEED_POURS),
+    },
 ];
 
 /// v1: tables, plus the two example recipes. Seeding is part of creating the
@@ -91,6 +96,20 @@ UPDATE recipe SET coffee_grams = 18, water_grams = 36 WHERE id = 'espresso-uuid'
 UPDATE recipe SET coffee_grams = 15, water_grams = 250 WHERE id = 'pourover-uuid';
 ";
 
+/// v3: a step may store the water poured in it, in grams. NULL is a step
+/// that pours nothing, which is what every step before v3 was. The core
+/// reads the value leniently (clamped into its bounds).
+const V3_STEP_WATER: &str = "
+ALTER TABLE step ADD COLUMN water_grams INTEGER;
+";
+
+/// v3 on a new database: the seeded Pour Over pours its 250 g in a bloom
+/// and one main pour.
+const V3_FRESH_SEED_POURS: &str = "
+UPDATE step SET water_grams = 50 WHERE id = 'step4';
+UPDATE step SET water_grams = 200 WHERE id = 'step5';
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -142,10 +161,10 @@ mod tests {
     }
 
     #[test]
-    fn fresh_database_ends_at_v2() -> TestResult {
+    fn fresh_database_ends_at_v3() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 2);
+        assert_eq!(user_version(&conn)?, 3);
         Ok(())
     }
 
@@ -179,7 +198,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 1)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 2);
+        assert_eq!(user_version(&conn)?, 3);
         assert_eq!(
             doses(&conn)?,
             [
@@ -191,6 +210,41 @@ mod tests {
         Ok(())
     }
 
+    fn pours(conn: &Connection) -> rusqlite::Result<Vec<(String, Option<i64>)>> {
+        conn.prepare("SELECT id, water_grams FROM step ORDER BY id")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect()
+    }
+
+    #[test]
+    fn fresh_database_seeds_the_pour_over_pours() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        migrate(&mut conn)?;
+        assert_eq!(
+            pours(&conn)?,
+            [
+                ("step1".to_owned(), None),
+                ("step2".to_owned(), None),
+                ("step3".to_owned(), None),
+                ("step4".to_owned(), Some(50)),
+                ("step5".to_owned(), Some(200)),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn v2_steps_pour_nothing() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA_AND_SEED)?;
+        conn.execute_batch(V2_RECIPE_DOSE)?;
+        conn.pragma_update(None, "user_version", 2)?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 3);
+        assert!(pours(&conn)?.iter().all(|(_, water)| water.is_none()));
+        Ok(())
+    }
+
     #[test]
     fn migrating_twice_does_not_reseed() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
@@ -198,14 +252,14 @@ mod tests {
         migrate(&mut conn)?;
         let recipes: i64 = conn.query_row("SELECT COUNT(*) FROM recipe", [], |r| r.get(0))?;
         assert_eq!(recipes, 2);
-        assert_eq!(user_version(&conn)?, 2);
+        assert_eq!(user_version(&conn)?, 3);
         Ok(())
     }
 
     #[test]
     fn newer_database_is_refused() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 3)?;
+        conn.pragma_update(None, "user_version", 4)?;
         assert!(migrate(&mut conn).is_err());
         Ok(())
     }

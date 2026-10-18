@@ -12,6 +12,7 @@ fn step(seconds: i64) -> Result<RecipeStep, ModelError> {
         StepId::try_parse(&format!("s{seconds}"))?,
         "step".to_owned(),
         StepDuration::clamped(seconds),
+        None,
     ))
 }
 

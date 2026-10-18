@@ -50,6 +50,7 @@ fn dosed(id: &str, coffee: i64, water: i64, step_seconds: &[i64]) -> Result<Reci
                 StepId::try_parse(&format!("{id}-s{i}"))?,
                 format!("Step {}", i + 1),
                 StepDuration::try_parse(seconds)?,
+                None,
             ))
         })
         .collect::<Result<_, ModelError>>()?;
@@ -993,5 +994,102 @@ fn a_change_to_another_recipe_leaves_a_paused_brew_alone() -> TestResult {
     let change = catalog.remove(id("b")?)?;
     assert_eq!(brew.on_catalog_change(&change, &catalog), []);
     assert_eq!(brew.state(), &before);
+    Ok(())
+}
+
+// step pours
+
+/// Recipe `p`, 15 g coffee to 250 g water: Grind 5 s (no pour), Bloom 2 s
+/// pouring 50 g, Pour 3 s pouring 200 g.
+fn pour_over() -> Result<(BrewController, RecipeCatalog), Box<dyn std::error::Error>> {
+    let step = |i: usize, name: &str, seconds: i64, water: Option<i64>| {
+        Ok::<_, ModelError>(RecipeStep::new(
+            StepId::try_parse(&format!("p-s{i}"))?,
+            name.to_owned(),
+            StepDuration::try_parse(seconds)?,
+            water.map(WaterAmount::try_parse).transpose()?,
+        ))
+    };
+    let recipe = Recipe::new(
+        id("p")?,
+        RecipeName::try_parse("Pour Over")?,
+        String::new(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+        vec![
+            step(0, "Grind", 5, None)?,
+            step(1, "Bloom", 2, Some(50))?,
+            step(2, "Pour", 3, Some(200))?,
+        ],
+    );
+    let catalog = catalog(vec![recipe])?;
+    let mut brew = BrewController::new();
+    let _effects = brew.open(&id("p")?, &catalog);
+    Ok((brew, catalog))
+}
+
+fn pour_labels(brew: &BrewController) -> Vec<Option<String>> {
+    brew.state()
+        .step_rows()
+        .into_iter()
+        .map(|row| row.pour_label)
+        .collect()
+}
+
+/// The "pour to" target of the step the timer is on, running or paused.
+fn pour_to(brew: &BrewController) -> Option<String> {
+    let step = brew.state().running().or(brew.state().paused())?;
+    brew.state().view()?.pour_to_label(step.index())
+}
+
+#[test]
+fn the_step_list_shows_each_pour() -> TestResult {
+    let (brew, _catalog) = pour_over()?;
+    assert_eq!(
+        pour_labels(&brew),
+        [None, Some("50g".to_owned()), Some("200g".to_owned())]
+    );
+    Ok(())
+}
+
+#[test]
+fn the_current_step_shows_the_running_total_to_pour_to() -> TestResult {
+    let (mut brew, _catalog) = pour_over()?;
+    let _effects = brew.start(0)?;
+    assert_eq!(pour_to(&brew), None, "grinding pours nothing");
+    for _ in 0..5 {
+        let _effects = brew.tick();
+    }
+    assert_eq!(timer(&brew), running(1, "00:02"));
+    assert_eq!(pour_to(&brew).as_deref(), Some("Pour to 50g"));
+    let _effects = brew.pause()?;
+    assert_eq!(pour_to(&brew).as_deref(), Some("Pour to 50g"), "paused");
+    let _effects = brew.resume()?;
+    for _ in 0..2 {
+        let _effects = brew.tick();
+    }
+    assert_eq!(timer(&brew), running(2, "00:03"));
+    assert_eq!(pour_to(&brew).as_deref(), Some("Pour to 250g"));
+    Ok(())
+}
+
+#[test]
+fn an_adjusted_ratio_scales_the_pours_and_their_targets() -> TestResult {
+    let (mut brew, _catalog) = pour_over()?;
+    // 1:16.7 -> 1:17: 15 g of coffee to 255 g of water, every pour × 1.02.
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    let view = brew.state().view().ok_or("no view")?;
+    assert_eq!(view.water_label(), "255g");
+    assert_eq!(
+        pour_labels(&brew),
+        [None, Some("51g".to_owned()), Some("204g".to_owned())]
+    );
+    assert_eq!(view.pour_to_label(1).as_deref(), Some("Pour to 51g"));
+    assert_eq!(view.pour_to_label(2).as_deref(), Some("Pour to 255g"));
+    brew.adjust_ratio(RatioChange::Recipe)?;
+    assert_eq!(
+        pour_labels(&brew),
+        [None, Some("50g".to_owned()), Some("200g".to_owned())]
+    );
     Ok(())
 }

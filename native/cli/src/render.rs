@@ -3,7 +3,9 @@
 
 use std::io::{self, Write};
 
-use coffee_timer_core::brew::{BrewState, Effect, RatioSetting, StepRow, StepStatus};
+use coffee_timer_core::brew::{
+    BrewState, BrewView, Effect, RatioSetting, RunningStep, StepRow, StepStatus,
+};
 use coffee_timer_core::catalog::{CatalogChange, RecipeSummary};
 use coffee_timer_core::editor::EditorState;
 use coffee_timer_core::model::{AccentOption, Settings, ThemeSelection};
@@ -41,9 +43,12 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
         view.duration_label()
     )?;
     for row in state.step_rows() {
+        let pour = row
+            .pour_label
+            .map_or_else(String::new, |pour| format!("  {pour}"));
         writeln!(
             out,
-            "  {}. {}  {}  {}",
+            "  {}. {}  {}{pour}  {}",
             row.number_label,
             row.name,
             row.duration_label,
@@ -54,15 +59,28 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
 }
 
 /// One line of the timer: the countdown and step while running or paused,
-/// the total while idle; then every step's status.
+/// with its "pour to" target if it pours, the total while idle; then every
+/// step's status.
 pub fn timer_line(state: &BrewState) -> String {
+    let pour_to = |view: &BrewView, step: &RunningStep| {
+        view.pour_to_label(step.index())
+            .map_or_else(String::new, |target| format!(" ({target})"))
+    };
     let timer = match state {
         BrewState::Empty => BrewState::EMPTY_LABEL.to_owned(),
         BrewState::Idle(view) => format!("idle {}", view.duration_label()),
-        BrewState::Running(_, step) => format!("{} {}", step.remaining_label(), step.name()),
-        BrewState::Paused(_, step) => {
-            format!("paused {} {}", step.remaining_label(), step.name())
-        }
+        BrewState::Running(view, step) => format!(
+            "{} {}{}",
+            step.remaining_label(),
+            step.name(),
+            pour_to(view, step)
+        ),
+        BrewState::Paused(view, step) => format!(
+            "paused {} {}{}",
+            step.remaining_label(),
+            step.name(),
+            pour_to(view, step)
+        ),
     };
     format!("{timer}  |  {}", statuses(&state.step_rows()))
 }
@@ -121,13 +139,20 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
     let water = draft
         .water_error()
         .map(|error| format!("Water \"{}\": {error}", draft.water()));
-    let steps = draft.step_rows().into_iter().filter_map(|row| {
-        row.duration_error.map(|error| {
+    let steps = draft.step_rows().into_iter().flat_map(|row| {
+        let duration = row.duration_error.map(|error| {
             format!(
                 "{} \"{}\", duration \"{}\": {error}",
                 row.name_label, row.name, row.duration_text
             )
-        })
+        });
+        let water = row.water_error.map(|error| {
+            format!(
+                "{} \"{}\", grams \"{}\": {error}",
+                row.name_label, row.name, row.water_text
+            )
+        });
+        duration.into_iter().chain(water)
     });
     name.into_iter()
         .chain(coffee)

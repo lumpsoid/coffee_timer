@@ -39,6 +39,7 @@ EditorDraft draft({
       name: 'Bloom',
       durationText: '30',
       durationLabel: '00:30',
+      waterText: '',
     ),
   ],
   addStepButtons: const [

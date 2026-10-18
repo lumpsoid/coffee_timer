@@ -111,6 +111,11 @@ impl Draft {
         Ok(())
     }
 
+    pub(crate) fn set_step_water(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
+        self.step_mut(row)?.set_water(raw);
+        Ok(())
+    }
+
     /// Appends a row named after `preset`, `0` seconds long; returns its id.
     pub(crate) fn add_step(&mut self, preset: StepPreset, ids: &mut dyn IdGen) -> StepId {
         let id = ids.step_id();
@@ -222,6 +227,23 @@ impl Draft {
             .duration_label_of(self.steps.iter().map(DraftStep::live_duration))
     }
 
+    /// A gentle note when the typed step pours do not add up to the
+    /// recipe's water, `Step pours add up to 200 g of 250 g`. Not an error:
+    /// a recipe may leave water unpoured (a bypass) or keep the two apart.
+    /// None while no step pours, or the water field is invalid; invalid
+    /// pours are left out of the sum (their own errors cover them).
+    pub fn pour_hint(&self) -> Option<String> {
+        let water = self.water.value()?.grams();
+        let mut pours = self
+            .steps
+            .iter()
+            .filter_map(|step| step.water().value().copied().flatten())
+            .peekable();
+        pours.peek()?;
+        let poured = pours.fold(0_u32, |sum, pour| sum.saturating_add(pour.grams()));
+        (poured != water).then(|| format!("Step pours add up to {poured} g of {water} g"))
+    }
+
     /// Why the last save or delete failed in the store, for a snackbar; none
     /// after any other outcome. Invalid fields leave no notice: their errors
     /// are already on the fields.
@@ -241,6 +263,8 @@ impl Draft {
                 duration_text: step.duration().raw().to_owned(),
                 duration_label: step.live_duration().mmss(),
                 duration_error: self.shown(step.duration().error()),
+                water_text: step.water().raw().to_owned(),
+                water_error: self.shown(step.water().error()),
             })
             .collect()
     }

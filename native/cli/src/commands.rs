@@ -7,10 +7,12 @@ use std::io::Write;
 use coffee_timer_core::brew::{BrewController, RatioChange};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::editor::{EditError, EditorController, StepPreset};
-use coffee_timer_core::model::{AccentColor, AccentOption, BrewMetrics, RecipeId, ThemeSelection};
+use coffee_timer_core::model::{
+    AccentColor, AccentOption, BrewMetrics, RecipeId, StepId, ThemeSelection,
+};
 use coffee_timer_core::settings::SettingsController;
 
-use crate::args::{NewRecipe, SettingsAction};
+use crate::args::{NewRecipe, SettingsAction, StepArg};
 use crate::cli_error::CliError;
 use crate::render;
 
@@ -47,7 +49,8 @@ pub fn show(
 
 /// Fills a new draft the way the editor page would: the coffee and water
 /// fields take `--coffee` and `--water` when given, the draft's first row
-/// takes the first step, and each further step is an added row.
+/// takes the first step, and each further step is an added row. A step's
+/// `@GRAMS` goes in its grams field.
 pub fn new_recipe(
     recipe: &NewRecipe,
     editor: &mut EditorController,
@@ -72,19 +75,27 @@ pub fn new_recipe(
             .and_then(|draft| draft.step_rows().into_iter().next())
             .map(|row| row.id)
             .ok_or(EditError::NoDraft)?;
-        editor.set_step_name(&first_row, &step.name)?;
-        editor.set_step_duration(&first_row, &step.seconds)?;
+        fill_step(editor, &first_row, step)?;
     }
     for step in steps {
         let row = editor.add_step(StepPreset::Blank)?;
-        editor.set_step_name(&row, &step.name)?;
-        editor.set_step_duration(&row, &step.seconds)?;
+        fill_step(editor, &row, step)?;
     }
     let change = editor.save(catalog).map_err(|error| CliError::Save {
         error,
         fields: render::field_errors(editor.state()),
     })?;
     pass_on(&change, brew, catalog, out)
+}
+
+/// Types `step` into the draft's `row`, as the editor's step card would.
+fn fill_step(editor: &mut EditorController, row: &StepId, step: &StepArg) -> Result<(), CliError> {
+    editor.set_step_name(row, &step.name)?;
+    editor.set_step_duration(row, &step.seconds)?;
+    if let Some(water) = &step.water {
+        editor.set_step_water(row, water)?;
+    }
+    Ok(())
 }
 
 pub fn delete(

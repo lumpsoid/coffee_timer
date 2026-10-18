@@ -29,6 +29,7 @@ impl From<&Draft> for EditorDraft {
             water: draft.water().to_owned(),
             water_error: draft.water_error(),
             total_label: draft.total_label(),
+            pour_hint: draft.pour_hint(),
             steps: draft.step_rows().into_iter().map(EditorStep::from).collect(),
             add_step_buttons: StepPreset::ALL
                 .into_iter()
@@ -51,6 +52,8 @@ impl From<EditorStepRow> for EditorStep {
             duration_text: row.duration_text,
             duration_label: row.duration_label,
             duration_error: row.duration_error,
+            water_text: row.water_text,
+            water_error: row.water_error,
         }
     }
 }

@@ -16,6 +16,7 @@ fn recipe(id: &str, name: &str, step_seconds: &[i64]) -> Result<Recipe, ModelErr
                 StepId::try_parse(&format!("s{i}"))?,
                 "step".to_owned(),
                 StepDuration::clamped(s),
+                None,
             ))
         })
         .collect::<Result<_, ModelError>>()?;

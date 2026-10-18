@@ -1,5 +1,6 @@
-/// The "add step" buttons. Each adds a step row with the preset's name and a
-/// `0` second duration.
+/// The "add step" buttons. Each adds a step row with the preset's name, a
+/// `0` second duration and a blank grams field (no pour). No preset guesses
+/// an amount: an "Add water" row is left for the brewer to type its grams.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StepPreset {
     AddCoffee,

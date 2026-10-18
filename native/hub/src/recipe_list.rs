@@ -111,6 +111,7 @@ mod tests {
                 StepId::try_parse("s1")?,
                 "Add coffee".to_owned(),
                 StepDuration::try_parse(95)?,
+                None,
             )],
         ))
     }

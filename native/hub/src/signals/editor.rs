@@ -51,6 +51,14 @@ pub struct SetStepDuration {
     pub raw: String,
 }
 
+/// The grams the step pours, as typed; blank is no pour. `row` is an
+/// `EditorStep::id`.
+#[derive(Deserialize, DartSignal)]
+pub struct SetStepWater {
+    pub row: String,
+    pub raw: String,
+}
+
 #[derive(Deserialize, DartSignal)]
 pub struct AddStep {
     pub preset: StepPresetChoice,
@@ -102,6 +110,9 @@ pub struct EditorDraft {
     pub water_error: Option<String>,
     /// Live total, `M:SS`.
     pub total_label: String,
+    /// `Step pours add up to 200 g of 250 g` when the typed step pours miss
+    /// the recipe's water; a hint, not an error.
+    pub pour_hint: Option<String>,
     pub steps: Vec<EditorStep>,
     /// The add-step buttons, in order.
     pub add_step_buttons: Vec<AddStepButton>,
@@ -115,7 +126,7 @@ pub struct EditorDraft {
 #[derive(Serialize, SignalPiece)]
 pub struct EditorStep {
     /// Row key: send it back in `SetStepName`, `SetStepDuration`,
-    /// `RemoveStep`.
+    /// `SetStepWater`, `RemoveStep`.
     pub id: String,
     /// `Step N name`.
     pub name_label: String,
@@ -125,6 +136,10 @@ pub struct EditorStep {
     pub duration_label: String,
     /// `Enter seconds` or `0–5999 seconds`, once a save was attempted.
     pub duration_error: Option<String>,
+    /// The grams poured as typed; blank is no pour.
+    pub water_text: String,
+    /// `Enter grams` or `1–2000 g`, once a save was attempted.
+    pub water_error: Option<String>,
 }
 
 #[derive(Serialize, SignalPiece)]

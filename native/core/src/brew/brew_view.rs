@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 
 use crate::brew::{RatioSetting, RunningStep, StepRow, StepStatus};
-use crate::model::{BrewMetrics, BrewRatio, LabelStyle, Recipe, RecipeId};
+use crate::model::{BrewMetrics, BrewRatio, LabelStyle, Pour, PourScale, Recipe, RecipeId};
 
 /// The open recipe as the brew page shows it. Built once per recipe version
 /// and ratio; the timer's position is kept beside it in
@@ -15,11 +15,14 @@ pub struct BrewView {
     ratio: RatioSetting,
     duration_label: String,
     style: LabelStyle,
+    /// Each step's pour at the water shown, in step order.
+    pours: Vec<Option<Pour>>,
 }
 
 impl BrewView {
     /// `recipe` at the ratio `adjusted` on the brew page, or at its own
     /// ratio. An adjusted ratio equal to the recipe's is no adjustment.
+    /// The step pours follow the water ([`PourScale`]).
     pub(crate) fn of(recipe: Recipe, metrics: &BrewMetrics, adjusted: Option<BrewRatio>) -> Self {
         let coffee = recipe.coffee();
         let own = metrics.ratio(&recipe);
@@ -38,6 +41,7 @@ impl BrewView {
             ratio,
             duration_label: metrics.duration_label(&recipe),
             style: LabelStyle::of(&recipe, metrics),
+            pours: PourScale::new(recipe.water(), water).pours(recipe.steps()),
             recipe,
         }
     }
@@ -83,14 +87,16 @@ impl BrewView {
         steps
             .iter()
             .zip(weights.iter())
+            .zip(self.pours.iter())
             .enumerate()
-            .map(|(index, (step, &weight))| {
+            .map(|(index, ((step, &weight), pour))| {
                 let start = elapsed;
                 elapsed = elapsed.saturating_add(weight);
                 StepRow {
                     number_label: (index + 1).to_string(),
                     name: step.name().to_owned(),
                     duration_label: step.duration().seconds_label(),
+                    pour_label: pour.map(Pour::label),
                     status: match current.map(|(c, status)| (index.cmp(&c), status)) {
                         Some((Ordering::Less, _)) => StepStatus::Done,
                         Some((Ordering::Equal, status)) => status,
@@ -101,6 +107,13 @@ impl BrewView {
                 }
             })
             .collect()
+    }
+
+    /// What the scale should read once step `index` has poured, `Pour to
+    /// 150g`: its pour and every earlier one, at the water shown. None for
+    /// a step that pours nothing, or past the end.
+    pub fn pour_to_label(&self, index: usize) -> Option<String> {
+        self.pours.get(index).copied().flatten().map(Pour::to_label)
     }
 
     /// Where step `index` sits in the brew, `Step 2 of 3`.

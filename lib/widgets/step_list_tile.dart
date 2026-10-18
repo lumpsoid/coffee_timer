@@ -3,11 +3,11 @@ import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:flutter/material.dart';
 
 /// One line of the brew page's method: a round stamp, the step's name, a
-/// dotted leader and its duration, printed in the recipe label's [colors].
-/// The stamp follows [BrewStep.status]: a check when done, a play arrow when
-/// current, a pause sign when paused, the step's number while pending. The
-/// current line is picked out in the accent, a paused one in faded ink; done
-/// lines fade.
+/// dotted leader, the water it pours (if any) and its duration, printed in
+/// the recipe label's [colors]. The stamp follows [BrewStep.status]: a check
+/// when done, a play arrow when current, a pause sign when paused, the step's
+/// number while pending. The current line is picked out in the accent, a
+/// paused one in faded ink; done lines fade.
 class StepListTile extends StatelessWidget {
   const StepListTile({
     required this.step,
@@ -134,6 +134,21 @@ class StepListTile extends StatelessWidget {
                   ),
                 ),
               ),
+              if (step.pourLabel case final pour?)
+                Padding(
+                  padding: const EdgeInsets.only(right: 10),
+                  child: Text(
+                    pour,
+                    style: TextStyle(
+                      fontFamily: 'Oswald',
+                      fontSize: 13,
+                      letterSpacing: 0.8,
+                      fontVariations: const [FontVariation.weight(500)],
+                      fontFeatures: const [FontFeature.tabularFigures()],
+                      color: colors.ink.withValues(alpha: 0.7),
+                    ),
+                  ),
+                ),
               Text(
                 step.durationLabel,
                 style: TextStyle(

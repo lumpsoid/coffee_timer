@@ -20,7 +20,7 @@ pub use editor::{
     AddStep, AddStepButton, CloseEditor, DeleteRecipe, EditRecipe, EditorDraft, EditorReady,
     EditorStep, EditorUpdate, NewDraft, RemoveStep, SaveRecipe, SetRecipeCoffee,
     SetRecipeDescription, SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName,
-    StepPresetChoice,
+    SetStepWater, StepPresetChoice,
 };
 pub use recipe_list::{
     LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListReady, RecipeListUpdate,

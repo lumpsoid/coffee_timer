@@ -100,6 +100,9 @@ pub struct BrewStep {
     pub name: String,
     /// `Ns`.
     pub duration_label: String,
+    /// The water this step pours at the water shown, `50g`; none for a step
+    /// that pours nothing.
+    pub pour_label: Option<String>,
     pub status: BrewStepStatus,
     /// The step's arc on the dial's step track, as fractions of the whole
     /// brew: steps lie end to end from 0.0 to 1.0.
@@ -140,6 +143,9 @@ pub struct BrewTimer {
     pub position_label: String,
     /// `MM:SS` left.
     pub remaining_label: String,
+    /// What the scale should read once this step has poured, `Pour to
+    /// 150g`; none for a step that pours nothing.
+    pub pour_to_label: Option<String>,
     /// Period of the ring's repeating sweep, in seconds: the step's full
     /// duration. None for a 0-second step (the ring stays still).
     pub sweep_seconds: Option<u32>,
