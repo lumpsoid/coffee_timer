@@ -8,7 +8,7 @@ use coffee_timer_core::brew::{
 };
 use coffee_timer_core::catalog::{CatalogChange, RecipeSummary};
 use coffee_timer_core::editor::EditorState;
-use coffee_timer_core::model::{AccentOption, Settings, ThemeSelection};
+use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, ThemeSelection};
 
 pub fn summary(out: &mut impl Write, summary: &RecipeSummary) -> io::Result<()> {
     let line = format!(
@@ -126,6 +126,9 @@ pub fn change(out: &mut impl Write, change: &CatalogChange) -> io::Result<()> {
 pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
     writeln!(out, "Theme: {}", settings.theme().storage_value())?;
     writeln!(out, "Accent: {}", settings.accent().to_hex())?;
+    writeln!(out, "Sound: {}", settings.sound().storage_value())?;
+    writeln!(out, "Vibration: {}", settings.vibration().storage_value())?;
+    writeln!(out, "Pre-alert: {}", settings.pre_alert().label())?;
     let themes: Vec<&str> = ThemeSelection::ALL
         .into_iter()
         .map(ThemeSelection::storage_value)
@@ -135,6 +138,15 @@ pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
     for option in AccentOption::ALL {
         writeln!(out, "  {:<7} {}", option.name(), option.color().to_hex())?;
     }
+    let leads: Vec<String> = PreAlertLead::ALL
+        .into_iter()
+        .map(|lead| lead.seconds().to_string())
+        .collect();
+    writeln!(
+        out,
+        "Pre-alert options: {} (seconds; 0 is off)",
+        leads.join(", ")
+    )?;
     Ok(())
 }
 

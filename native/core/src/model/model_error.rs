@@ -19,6 +19,8 @@ pub enum ModelError {
     AccentOutOfRange(i64),
     MalformedAccentHex(String),
     UnknownTheme(String),
+    UnknownToggle(String),
+    UnknownPreAlert(String),
     StepIndexOutOfRange { index: usize, len: usize },
 }
 
@@ -57,6 +59,10 @@ impl fmt::Display for ModelError {
             }
             Self::UnknownTheme(raw) => {
                 write!(f, "Theme \"{raw}\" is not light, dark or system")
+            }
+            Self::UnknownToggle(raw) => write!(f, "\"{raw}\" is not on or off"),
+            Self::UnknownPreAlert(raw) => {
+                write!(f, "Pre-alert \"{raw}\" is not 0, 3, 5 or 10 seconds")
             }
             Self::StepIndexOutOfRange { index, len } => {
                 write!(f, "Step {index} is out of range for {len} steps")

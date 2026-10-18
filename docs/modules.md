@@ -67,8 +67,13 @@ again.
   its look across renames, reorders and builds.
 - **Settings:** `ThemeSelection` (light, dark or system), `AccentColor` (ARGB,
   with `#AARRGGBB` and `#RRGGBB` parsing), `AccentOption` (the ten named
-  accents), and `Settings`. `Settings` has a per-field `from_storage`
-  fallback.
+  accents), `Toggle` (`On` / `Off`, stored and typed as `on` / `off`: the
+  brew's sound and its vibration), `PreAlertLead` (`Off`, 3, 5 or 10 s,
+  default 3 s, stored and typed as its seconds, labelled `Off` / `3 s`),
+  and `Settings`. `Settings::from_storage` takes the raw rows as
+  `StoredSettings` (one `Option<&str>` per key) and falls back per field
+  to `Settings::FALLBACK` (system, Material blue, sound and vibration on,
+  3 s).
 - **`ModelError`** carries user-facing texts that match the legacy app's.
 
 Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
@@ -131,8 +136,9 @@ Test: [`catalog_test.rs`](../native/core/tests/catalog_test.rs).
 
 [`native/core/src/settings`](../native/core/src/settings)
 
-`SettingsController` owns `Settings`. It provides `load`, `set_theme` and
-`set_accent`, and writes through its `SettingsStore` first.
+`SettingsController` owns `Settings`. It provides `load`, `set_theme`,
+`set_accent`, `set_sound`, `set_vibration` and `set_pre_alert`, and writes
+through its `SettingsStore` first.
 
 Test:
 [`settings_controller_test.rs`](../native/core/tests/settings_controller_test.rs).
@@ -145,12 +151,15 @@ Test:
   provides `open`, `start`, `tick`, `pause`, `resume`, `reset`, `leave`,
   `adjust_ratio`, `save_ratio` (the adjusted ratio saved to the recipe
   through `&mut RecipeCatalog`, returning the `CatalogChange`) and
-  `on_catalog_change`. `with_cues(CuePolicy)` builds
-  one with a non-default pre-alert.
-- `CuePolicy` is the pre-alert rule as named config: the lead in seconds
-  (`DEFAULT_PRE_ALERT_LEAD_SECONDS` = 3, 0 = off) and its buzz
-  (`PRE_ALERT_MS` = 40). It fires on the tick that leaves exactly the
-  lead, for steps longer than the lead.
+  `on_catalog_change`. `tick(&Settings)` takes the user's settings on
+  every call.
+- `CuePolicy` (`CuePolicy::of(&Settings)`) is the one home of the brew's
+  cues and of muting them: the step boundary's buzz (`STEP_BUZZ_MS` = 100)
+  and sound, the finish's buzz pattern (`FINISH_PATTERN_MS`) and sound,
+  and the pre-alert (`PRE_ALERT_MS` = 40) at the settings' lead. With
+  sound off it gives no `PlayStepSound`, with vibration off no `Vibrate`
+  or `VibratePattern`. The pre-alert fires on the tick that leaves exactly
+  the lead, for steps longer than the lead.
 - `BrewState` is `Empty`, `Idle(BrewView)`, `Running(BrewView,
   RunningStep)`, `Paused(BrewView, RunningStep)` or `Finished(BrewView,
   FinishedBrew)`. `FinishedBrew` is the time the last run brewed;
@@ -239,7 +248,9 @@ The store implements the core's ports. It makes no decisions.
   position down and gives the recipe the freed one. Rows are read through core's lenient constructors
   (grams are clamped into bounds).
   [`settings_rows.rs`](../native/store/src/settings_rows.rs) stores key/value
-  rows.
+  rows: `theme`, `accent_color`, `sound` and `vibration` (`on` / `off`)
+  and `pre_alert_seconds`. A missing row loads its fallback, so the cue
+  rows needed no migration.
 - **`UuidIds`** ([`uuid_ids.rs`](../native/store/src/uuid_ids.rs)) is the
   production `IdGen`, which produces UUID v7 text. The hub and the CLI share
   it.
@@ -259,7 +270,9 @@ A second head on core and store. It proves that core needs no rinf. It
 decides nothing: core produces every label, status and error text.
 
 - [`args.rs`](../native/cli/src/args.rs) defines the clap arguments: `list`,
-  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `delete`, `brew` and `settings`, plus the global `--db`.
+  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `delete`, `brew` and `settings`
+  (`theme`, `accent`, `sound`, `vibration`, `pre-alert`), plus the global `--db`.
+  `brew` ticks with the stored settings.
 - [`lib.rs`](../native/cli/src/lib.rs) provides `Controllers::boot` (build
   and load), `run` (dispatch one command) and `default_db_path`.
 - [`commands.rs`](../native/cli/src/commands.rs) has one function per
@@ -308,7 +321,7 @@ makes no business decisions.
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
-| settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
+| settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial
 mappings. The loops are not unit tested; they are kept thin enough to
@@ -368,7 +381,8 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
 - [`effects/`](../test/effects) tests one plugin call per effect, order, and
   that a failure does not block later effects.
 - [`pages/`](../test/pages) tests the list page's long-press menu and
-  snackbars (failures and the undo offer) and the editor
+  snackbars (failures and the undo offer), the settings page's cue
+  controls following Rust's state, and the editor
   page: open, field errors, pop on `Closed`, notices, and the delete dialog.
 - [`widgets/`](../test/widgets) tests the display widgets, including the
   ring's restart key.

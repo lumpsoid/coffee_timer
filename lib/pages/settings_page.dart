@@ -4,8 +4,9 @@ import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:flutter/material.dart';
 
-/// The theme picker and the accent colour picker, over the options Rust
-/// offers.
+/// The theme picker, the accent colour picker and the brew's cues (sound,
+/// vibration, pre-alert), over the options Rust offers. Every control shows
+/// Rust's state and sends the change; none keeps its own.
 class SettingsPage extends StatelessWidget {
   const SettingsPage({required this.settings, super.key});
 
@@ -76,6 +77,45 @@ class SettingsPage extends StatelessWidget {
             ),
           ),
           onTap: () => _showAccentColorPicker(context, state),
+        ),
+        const SizedBox(height: 20),
+        const Text(
+          'Brew cues',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        SwitchListTile(
+          title: const Text('Sound'),
+          subtitle: const Text('Play a sound at each step'),
+          value: state.sound,
+          onChanged: (on) => SetSound(on: on).sendSignalToRust(),
+        ),
+        SwitchListTile(
+          title: const Text('Vibration'),
+          subtitle: const Text('Buzz at each step and before it ends'),
+          value: state.vibration,
+          onChanged: (on) => SetVibration(on: on).sendSignalToRust(),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          // Follows Rust's state, which may differ from what was picked.
+          key: ValueKey(('preAlert', state.preAlertSeconds)),
+          initialValue: state.preAlertSeconds,
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            labelText: 'Pre-alert before each step ends',
+          ),
+          items: [
+            for (final option in state.preAlerts)
+              DropdownMenuItem(
+                value: option.seconds,
+                child: Text(option.label),
+              ),
+          ],
+          onChanged: (seconds) {
+            if (seconds != null) {
+              SetPreAlert(seconds: seconds).sendSignalToRust();
+            }
+          },
         ),
       ],
     );

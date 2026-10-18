@@ -3,15 +3,7 @@ use crate::brew::{
     SaveRatioError,
 };
 use crate::catalog::{CatalogChange, RecipeCatalog};
-use crate::model::{BrewMetrics, BrewRatio, RecipeId};
-
-/// Buzz length at each step boundary (legacy `vibrate_leaf.dart`:
-/// `Vibration.vibrate(duration: 100)`).
-const VIBRATE_MS: u32 = 100;
-
-/// The end of a brew: two long buzzes, so it does not feel like one more
-/// step boundary. Pause and buzz lengths in ms, starting with a pause.
-const FINISHED_PATTERN_MS: [u32; 4] = [0, 400, 200, 400];
+use crate::model::{BrewMetrics, BrewRatio, RecipeId, Settings};
 
 /// Owner of the brew page: which recipe is open and where its timer is.
 ///
@@ -23,7 +15,6 @@ const FINISHED_PATTERN_MS: [u32; 4] = [0, 400, 200, 400];
 pub struct BrewController {
     state: BrewState,
     metrics: BrewMetrics,
-    cues: CuePolicy,
     /// Accepted starts so far; the running step carries the latest.
     runs: u64,
 }
@@ -32,14 +23,6 @@ impl BrewController {
     /// Starts with no recipe open.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Starts with no recipe open, cueing step boundaries by `cues`.
-    pub fn with_cues(cues: CuePolicy) -> Self {
-        Self {
-            cues,
-            ..Self::default()
-        }
     }
 
     /// Shows the recipe with `id`, idle, at its own ratio. An id the catalog
@@ -144,12 +127,14 @@ impl BrewController {
     }
 
     /// One second passes and the brew notification follows. A few seconds
-    /// before a step ends it buzzes briefly, once ([`CuePolicy`]). At zero
-    /// the brew moves to the next step (vibrate, sound) or, after the last
-    /// step, finishes (screen-on off, the finish buzz pattern, sound,
-    /// notification gone). A no-op unless running (paused and finished
+    /// before a step ends it buzzes briefly, once. At zero the brew moves
+    /// to the next step (vibrate, sound) or, after the last step, finishes
+    /// (screen-on off, the finish buzz pattern, sound, notification gone).
+    /// The buzzes and the sound are the cues `settings` allow
+    /// ([`CuePolicy`]), read on every tick, so a change mid-brew applies
+    /// from the next one. A no-op unless running (paused and finished
     /// included).
-    pub fn tick(&mut self) -> Vec<Effect> {
+    pub fn tick(&mut self, settings: &Settings) -> Vec<Effect> {
         let (view, step) = match std::mem::take(&mut self.state) {
             BrewState::Running(view, step) => (view, step),
             other => {
@@ -157,33 +142,31 @@ impl BrewController {
                 return Vec::new();
             }
         };
+        let cues = CuePolicy::of(settings);
         let step = step.ticked();
         if !step.remaining().is_zero() {
-            let pre_alert = self.cues.pre_alert(&step);
+            let pre_alert = cues.pre_alert(&step);
             return pre_alert
                 .into_iter()
                 .chain([self.keep_running(view, step)])
                 .collect();
         }
         match view.next_step(&step) {
-            Some(next) => vec![
-                Effect::Vibrate { ms: VIBRATE_MS },
-                Effect::PlayStepSound,
-                self.keep_running(view, next),
-            ],
+            Some(next) => {
+                let mut effects = cues.step_boundary();
+                effects.push(self.keep_running(view, next));
+                effects
+            }
             None => {
                 let finished = view.finished(step.first(), &self.metrics);
                 self.state = BrewState::Finished(view, finished);
                 // The notification goes last: hiding it lets the platform
                 // stop keeping the app awake, after the buzz and sound.
-                vec![
-                    Effect::KeepScreenOn(false),
-                    Effect::VibratePattern {
-                        pattern_ms: FINISHED_PATTERN_MS.to_vec(),
-                    },
-                    Effect::PlayStepSound,
-                    Effect::HideBrewNotification,
-                ]
+                [Effect::KeepScreenOn(false)]
+                    .into_iter()
+                    .chain(cues.finish())
+                    .chain([Effect::HideBrewNotification])
+                    .collect()
             }
         }
     }

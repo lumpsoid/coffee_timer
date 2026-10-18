@@ -12,7 +12,7 @@ use std::time::Duration;
 use coffee_timer_core::brew::{BrewController, Effect};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::{DeleteError, EditorController, SaveError};
-use coffee_timer_core::model::{AccentColor, ModelError, RecipeId, StepId};
+use coffee_timer_core::model::{AccentColor, ModelError, PreAlertLead, RecipeId, StepId};
 use coffee_timer_core::ports::StoreError;
 use coffee_timer_core::settings::SettingsController;
 use coffee_timer_store::{SqliteStore, UuidIds};
@@ -23,9 +23,10 @@ use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, DuplicateRecipe,
     EditRecipe, EditorReady, EditorUpdate, LeaveBrew, MoveStep, NewDraft, OpenBrew, PauseBrew,
     PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew,
-    ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetRecipeCoffee, SetRecipeDescription,
-    SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName, SetStepWater, SetTheme,
-    SettingsReady, SettingsUpdate, StartBrew, UndoRemoveRecipe,
+    ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetPreAlert, SetRecipeCoffee,
+    SetRecipeDescription, SetRecipeName, SetRecipeWater, SetSound, SetStepDuration, SetStepName,
+    SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
+    UndoRemoveRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -90,6 +91,9 @@ pub async fn run(mut c: Controllers) {
     let settings_ready = SettingsReady::get_dart_signal_receiver();
     let set_theme = SetTheme::get_dart_signal_receiver();
     let set_accent = SetAccent::get_dart_signal_receiver();
+    let set_sound = SetSound::get_dart_signal_receiver();
+    let set_vibration = SetVibration::get_dart_signal_receiver();
+    let set_pre_alert = SetPreAlert::get_dart_signal_receiver();
 
     // The brew's one-second beat: exists exactly while a brew runs.
     let mut ticker: Option<Interval> = None;
@@ -122,7 +126,9 @@ pub async fn run(mut c: Controllers) {
                 show_brew(&c.brew, &effects.unwrap_or_default());
             }
             () = next_tick(&mut ticker) => {
-                let effects = c.brew.tick();
+                // The settings as they are now: a change mid-brew applies
+                // from this tick.
+                let effects = c.brew.tick(c.settings.state());
                 show_brew(&c.brew, &effects);
             }
             Some(_) = reset_brew.recv() => {
@@ -234,6 +240,18 @@ pub async fn run(mut c: Controllers) {
                 report(c.settings.set_accent(AccentColor::from_argb32(pack.message.argb)));
                 show_settings(&c.settings);
             }
+            Some(pack) = set_sound.recv() => {
+                report(c.settings.set_sound(pack.message.on.into()));
+                show_settings(&c.settings);
+            }
+            Some(pack) = set_vibration.recv() => {
+                report(c.settings.set_vibration(pack.message.on.into()));
+                show_settings(&c.settings);
+            }
+            Some(pack) = set_pre_alert.recv() => {
+                report(set_pre_alert_seconds(&mut c.settings, pack.message.seconds));
+                show_settings(&c.settings);
+            }
 
             else => break,
         }
@@ -315,6 +333,14 @@ fn duplicate(
     recipe_id: &str,
 ) -> Result<(), Box<dyn Error>> {
     editor.duplicate(&RecipeId::try_parse(recipe_id)?, catalog)?;
+    Ok(())
+}
+
+fn set_pre_alert_seconds(
+    settings: &mut SettingsController,
+    seconds: u32,
+) -> Result<(), Box<dyn Error>> {
+    settings.set_pre_alert(PreAlertLead::try_from_seconds(seconds)?)?;
     Ok(())
 }
 

@@ -8,7 +8,8 @@ use coffee_timer_core::brew::{BrewController, RatioChange};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::editor::{EditError, EditorController, StepPreset};
 use coffee_timer_core::model::{
-    AccentColor, AccentOption, BrewMetrics, RecipeId, StepId, ThemeSelection,
+    AccentColor, AccentOption, BrewMetrics, PreAlertLead, RecipeId, Settings, StepId,
+    ThemeSelection, Toggle,
 };
 use coffee_timer_core::settings::SettingsController;
 
@@ -147,26 +148,35 @@ pub struct BrewPause {
     pub seconds: u32,
 }
 
-/// Opens the recipe, starts it at `from`, then ticks while it runs, calling
-/// `wait` before each tick (a one-second sleep, or nothing with `--fast`).
-/// With `pause`, pauses and later resumes the brew as the dial does.
+/// How `brew` runs: the step it starts from, and when it pauses, if ever.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BrewRun {
+    pub from: usize,
+    pub pause: Option<BrewPause>,
+}
+
+/// Opens the recipe, starts it at `run.from`, then ticks while it runs,
+/// calling `wait` before each tick (a one-second sleep, or nothing with
+/// `--fast`). With `run.pause`, pauses and later resumes the brew as the
+/// dial does. Each tick gives the cues `settings` allow, so a muted sound
+/// or vibration prints no such effect.
 pub fn brew(
     id: &str,
-    from: usize,
-    pause: Option<BrewPause>,
+    run: BrewRun,
     wait: &mut dyn FnMut(),
     brew: &mut BrewController,
     catalog: &RecipeCatalog,
+    settings: &Settings,
     out: &mut impl Write,
 ) -> Result<(), CliError> {
     let opened = brew.open(&RecipeId::try_parse(id)?, catalog);
     render::effects(out, &opened)?;
-    let started = brew.start(from)?;
+    let started = brew.start(run.from)?;
     writeln!(out, "start    {}", render::timer_line(brew.state()))?;
     render::effects(out, &started)?;
     let mut tick: u32 = 0;
     while brew.state().is_running() {
-        if let Some(pause) = pause.filter(|pause| pause.at == tick) {
+        if let Some(pause) = run.pause.filter(|pause| pause.at == tick) {
             let paused = brew.pause()?;
             writeln!(out, "pause    {}", render::timer_line(brew.state()))?;
             render::effects(out, &paused)?;
@@ -178,7 +188,7 @@ pub fn brew(
             render::effects(out, &resumed)?;
         }
         wait();
-        let effects = brew.tick();
+        let effects = brew.tick(settings);
         tick = tick.saturating_add(1);
         writeln!(out, "tick {tick:<3} {}", render::timer_line(brew.state()))?;
         render::effects(out, &effects)?;
@@ -203,6 +213,15 @@ pub fn settings(
                 None => AccentColor::try_from_hex(value)?,
             };
             settings.set_accent(accent)?;
+        }
+        Some(SettingsAction::Sound { value }) => {
+            settings.set_sound(Toggle::try_parse(value)?)?;
+        }
+        Some(SettingsAction::Vibration { value }) => {
+            settings.set_vibration(Toggle::try_parse(value)?)?;
+        }
+        Some(SettingsAction::PreAlert { value }) => {
+            settings.set_pre_alert(PreAlertLead::try_parse(value)?)?;
         }
     }
     render::settings(out, settings.state())?;

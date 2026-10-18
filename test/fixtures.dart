@@ -79,6 +79,9 @@ BrewRecipe brewRecipe({List<BrewStepStatus>? statuses}) => BrewRecipe(
 SettingsUpdate settings({
   ThemeChoice theme = ThemeChoice.system,
   int accent = 0xFF2196F3,
+  bool sound = true,
+  bool vibration = true,
+  int preAlertSeconds = 3,
 }) => SettingsUpdate(
   theme: theme,
   accent: accent,
@@ -86,5 +89,14 @@ SettingsUpdate settings({
   accents: const [
     AccentChoice(name: 'Blue', argb: 0xFF2196F3),
     AccentChoice(name: 'Red', argb: 0xFFF44336),
+  ],
+  sound: sound,
+  vibration: vibration,
+  preAlertSeconds: preAlertSeconds,
+  preAlerts: const [
+    PreAlertChoice(seconds: 0, label: 'Off'),
+    PreAlertChoice(seconds: 3, label: '3 s'),
+    PreAlertChoice(seconds: 5, label: '5 s'),
+    PreAlertChoice(seconds: 10, label: '10 s'),
   ],
 );

@@ -139,7 +139,7 @@ mod tests {
     use coffee_timer_core::catalog::RecipeCatalog;
     use coffee_timer_core::fakes::FakeRecipeStore;
     use coffee_timer_core::model::{
-        CoffeeDose, Recipe, RecipeId, RecipeName, RecipeStep, StepId, WaterAmount,
+        CoffeeDose, Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepId, WaterAmount,
     };
 
     use super::*;
@@ -237,7 +237,7 @@ mod tests {
     fn running_carries_the_step_index_and_its_sweep() -> TestResult {
         let mut brew = opened()?;
         let _effects = brew.start(0)?;
-        let _effects = brew.tick();
+        let _effects = brew.tick(&Settings::FALLBACK);
         let BrewUpdate::Running { recipe, timer } = BrewUpdate::from(brew.state()) else {
             return Err("not running".into());
         };
@@ -270,7 +270,7 @@ mod tests {
     fn paused_carries_the_held_step_and_its_status() -> TestResult {
         let mut brew = opened()?;
         let _effects = brew.start(0)?;
-        let _effects = brew.tick();
+        let _effects = brew.tick(&Settings::FALLBACK);
         let _effects = brew.pause()?;
         let BrewUpdate::Paused { recipe, timer } = BrewUpdate::from(brew.state()) else {
             return Err("not paused".into());
@@ -288,7 +288,7 @@ mod tests {
         let mut brew = opened()?;
         let _effects = brew.start(0)?;
         for _ in 0..31 {
-            let _effects = brew.tick();
+            let _effects = brew.tick(&Settings::FALLBACK);
         }
         let BrewUpdate::Finished { recipe, finished } = BrewUpdate::from(brew.state()) else {
             return Err("not finished".into());

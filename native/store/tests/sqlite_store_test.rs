@@ -5,8 +5,8 @@ use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, CoffeeDose, Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepDuration,
-    StepId, ThemeSelection, WaterAmount,
+    AccentColor, CoffeeDose, PreAlertLead, Recipe, RecipeId, RecipeName, RecipeStep, Settings,
+    StepDuration, StepId, StoredSettings, ThemeSelection, Toggle, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
 use coffee_timer_core::settings::SettingsController;
@@ -437,7 +437,10 @@ fn stored_rows_are_read_through_the_core_constructors() -> TestResult {
 #[test]
 fn fresh_settings_load_the_fallback() -> TestResult {
     let store = SqliteStore::open_in_memory()?;
-    assert_eq!(store.load()?, Settings::from_storage(None, None));
+    assert_eq!(
+        store.load()?,
+        Settings::from_storage(StoredSettings::default())
+    );
     Ok(())
 }
 
@@ -451,6 +454,59 @@ fn settings_round_trip() -> TestResult {
     let second = first.with_theme(ThemeSelection::Light);
     store.save(second)?;
     assert_eq!(store.load()?, second);
+
+    for sound in Toggle::ALL {
+        for vibration in Toggle::ALL {
+            for lead in PreAlertLead::ALL {
+                let cues = second
+                    .with_sound(sound)
+                    .with_vibration(vibration)
+                    .with_pre_alert(lead);
+                store.save(cues)?;
+                assert_eq!(store.load()?, cues);
+            }
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn cue_settings_are_stored_as_key_value_rows() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    let mut store = SqliteStore::open(&path)?;
+    store.save(
+        Settings::FALLBACK
+            .with_sound(Toggle::Off)
+            .with_pre_alert(PreAlertLead::Seconds10),
+    )?;
+    let raw = Connection::open(&path)?;
+    let row = |key: &str| -> rusqlite::Result<String> {
+        raw.query_row("SELECT value FROM settings WHERE key = ?1", [key], |row| {
+            row.get(0)
+        })
+    };
+    assert_eq!(row("sound")?, "off");
+    assert_eq!(row("vibration")?, "on");
+    assert_eq!(row("pre_alert_seconds")?, "10");
+    Ok(())
+}
+
+#[test]
+fn malformed_cue_rows_fall_back_per_field() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    let store = SqliteStore::open(&path)?;
+    let raw = Connection::open(&path)?;
+    raw.execute(
+        "INSERT INTO settings (key, value) VALUES ('theme', 'dark'), ('sound', 'loud'),
+         ('vibration', 'off'), ('pre_alert_seconds', '7')",
+        [],
+    )?;
+    assert_eq!(
+        store.load()?,
+        Settings::new(ThemeSelection::Dark, AccentColor::FALLBACK).with_vibration(Toggle::Off)
+    );
     Ok(())
 }
 
@@ -465,7 +521,13 @@ fn invalid_or_missing_settings_rows_fall_back_per_field() -> TestResult {
         "INSERT INTO settings (key, value) VALUES ('theme', 'sepia')",
         [],
     )?;
-    assert_eq!(store.load()?, Settings::from_storage(Some("sepia"), None));
+    assert_eq!(
+        store.load()?,
+        Settings::from_storage(StoredSettings {
+            theme: Some("sepia"),
+            ..StoredSettings::default()
+        })
+    );
 
     raw.execute(
         "INSERT INTO settings (key, value) VALUES ('accent_color', '-FF0000')",

@@ -26,4 +26,7 @@ pub use recipe_list::{
     LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListReady, RecipeListUpdate,
     RecipeSummary, RemoveRecipe, StainCorner, UndoRemoveRecipe,
 };
-pub use settings::{AccentChoice, SetAccent, SetTheme, SettingsReady, SettingsUpdate, ThemeChoice};
+pub use settings::{
+    AccentChoice, PreAlertChoice, SetAccent, SetPreAlert, SetSound, SetTheme, SetVibration,
+    SettingsReady, SettingsUpdate, ThemeChoice,
+};

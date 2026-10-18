@@ -1,20 +1,36 @@
-use coffee_timer_core::model::Settings;
+use coffee_timer_core::model::{Settings, StoredSettings};
 use coffee_timer_core::ports::{SettingsStore, StoreError};
 use rusqlite::{Connection, OptionalExtension};
 
 use crate::sqlite_store::{SqliteStore, db_error};
 
 /// Key/value rows, as legacy `sqlite_settings_repository.dart:18-20`: the
-/// theme's storage value and the accent as `#AARRGGBB`.
+/// theme's storage value and the accent as `#AARRGGBB`. The brew's cues,
+/// new since the port, follow the same scheme: sound and vibration as
+/// `on`/`off`, the pre-alert lead in seconds. A database without their rows
+/// (one from before them) loads their fallbacks, so no migration is needed.
 const THEME_KEY: &str = "theme";
 const ACCENT_KEY: &str = "accent_color";
+const SOUND_KEY: &str = "sound";
+const VIBRATION_KEY: &str = "vibration";
+const PRE_ALERT_KEY: &str = "pre_alert_seconds";
 
 impl SettingsStore for SqliteStore {
     fn load(&self) -> Result<Settings, StoreError> {
         let conn = self.conn()?;
-        let theme = value(&conn, THEME_KEY).map_err(db_error)?;
-        let accent = value(&conn, ACCENT_KEY).map_err(db_error)?;
-        Ok(Settings::from_storage(theme.as_deref(), accent.as_deref()))
+        let read = |key| value(&conn, key).map_err(db_error);
+        let theme = read(THEME_KEY)?;
+        let accent = read(ACCENT_KEY)?;
+        let sound = read(SOUND_KEY)?;
+        let vibration = read(VIBRATION_KEY)?;
+        let pre_alert = read(PRE_ALERT_KEY)?;
+        Ok(Settings::from_storage(StoredSettings {
+            theme: theme.as_deref(),
+            accent: accent.as_deref(),
+            sound: sound.as_deref(),
+            vibration: vibration.as_deref(),
+            pre_alert: pre_alert.as_deref(),
+        }))
     }
 
     fn save(&mut self, settings: Settings) -> Result<(), StoreError> {
@@ -38,6 +54,9 @@ fn save(conn: &mut Connection, settings: Settings) -> rusqlite::Result<()> {
         )?;
         put.execute([THEME_KEY, settings.theme().storage_value()])?;
         put.execute([ACCENT_KEY, settings.accent().to_hex().as_str()])?;
+        put.execute([SOUND_KEY, settings.sound().storage_value()])?;
+        put.execute([VIBRATION_KEY, settings.vibration().storage_value()])?;
+        put.execute([PRE_ALERT_KEY, settings.pre_alert().storage_value().as_str()])?;
     }
     tx.commit()
 }

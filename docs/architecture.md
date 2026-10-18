@@ -35,7 +35,7 @@ and not on each other. Dart sees only the generated signal classes.
 | Controller | State object | Owns |
 |---|---|---|
 | [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>`, plus the last `RemovedRecipe` | the recipe list and its persistence, and the one removal that can be undone (shared) |
-| [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme and accent, and their persistence |
+| [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme, accent and brew cues (sound, vibration, pre-alert), and their persistence |
 | [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` / `Finished(view, finished)` | the open recipe and its timer |
 | [`EditorController`](../native/core/src/editor/editor_controller.rs) | [`EditorState`](../native/core/src/editor/editor_state.rs): `Closed` / `Open(Draft)` | one draft, new or of an existing recipe |
 
@@ -67,6 +67,9 @@ actions are the exception. They clear the previous notice whatever they do.
   `IdGen`. Tests use the fakes in
   [`core/src/fakes`](../native/core/src/fakes), which are compiled only for
   tests and under the `test-fakes` feature.
+- **The user's settings** enter `BrewController::tick` as `&Settings`,
+  read from `SettingsController::state()` on every tick (see
+  [the timer](#the-timer)).
 - **The shared controller** `RecipeCatalog` enters as an action argument.
   `BrewController::open`, `BrewController::on_catalog_change`,
   `EditorController::edit` and `EditorController::duplicate` take
@@ -210,9 +213,7 @@ clock. Time arrives as `tick()`, one call per second while
   exactly the pre-alert lead (3 s by default) returns `Vibrate { ms: 40 }`
   before the notification: a lighter cue that the step is about to end.
   Its rule is [`CuePolicy`](../native/core/src/brew/cue_policy.rs), named
-  config the controller holds (`BrewController::with_cues`; `new` uses
-  the default), so a setting can later change the lead or turn it off
-  (lead 0). Since the countdown only falls and a pause keeps it, the
+  config built from the user's settings. Since the countdown only falls and a pause keeps it, the
   moment comes once per step: pausing and resuming around it never
   repeats it, and a restart is a new countdown. A step no longer than the
   lead gets none. The lead is at least 1 s, so the pre-alert never shares
@@ -224,6 +225,18 @@ clock. Time arrives as `tick()`, one call per second while
   boundary) + `PlayStepSound` + `HideBrewNotification`. The hide comes
   last, so the app is still kept awake for the final buzz and sound. A
   0-second step shows `00:00` for one tick.
+- **Muting and the pre-alert lead are settings, decided in core.**
+  `tick(&Settings)` builds `CuePolicy::of(settings)` on every call, and
+  only `CuePolicy` makes the cue effects: with sound off a tick returns
+  no `PlayStepSound`, with vibration off no `Vibrate` (step boundary or
+  pre-alert) and no finish `VibratePattern`, and the pre-alert comes at
+  the settings' lead (off, 3, 5 or 10 s). The screen and notification
+  effects are never muted. The settings are passed in, not copied into the
+  brew controller: `SettingsController` stays their one owner, there is no
+  second copy for the hub and the CLI to keep in step at boot and after
+  every change, and the dependency shows in the signature. The hub reads
+  `c.settings.state()` at each beat, so a change mid-brew applies from the
+  next tick. Flutter performs every effect it gets and filters none.
 - While running or paused, `BrewView::next_label(index)` previews the
   step after the current one, `Next: Pour 2 · 0:45 · 100g` (its `M:SS`
   duration, and its pour at the water shown if it pours), or `Last step`.

@@ -1,8 +1,8 @@
 # Coffee Timer — Documentation
 
 Coffee Timer runs multi-step coffee brewing recipes. Each step counts down on
-its own. At every step boundary the phone vibrates and plays a sound, and the
-screen stays awake while a brew runs. Recipes and settings are stored
+its own. At every step boundary the phone vibrates and plays a sound (each can be
+turned off in Settings), and the screen stays awake while a brew runs. Recipes and settings are stored
 locally in SQLite.
 
 The app is a Rust core driven through [rinf](https://github.com/cunarist/rinf)
@@ -71,7 +71,11 @@ to.
   labels follow the new order. Field errors appear from the first save
   attempt onward.
 - **Settings.** Sets the theme (light, dark or system) and one of ten accent
-  colours.
+  colours, and the brew's cues: the step sound on or off, vibration on or
+  off (step boundaries, the pre-alert and the finish buzz), and the
+  pre-alert before each step ends: off, 3 s (the default), 5 s or 10 s.
+  Sound and vibration start on. A change made during a brew applies from
+  its next second.
 
 ## Repository layout
 
@@ -144,6 +148,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings theme dark
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AARRGGBB / #RRGGBB
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings sound off        # on | off
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings vibration off    # on | off
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (off) | 3 | 5 | 10
 ```
 
 - `--db <PATH>` is optional. If the file is missing, it is created and seeded
@@ -154,7 +161,10 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   countdown, the next-step preview, each step's status and the effects
   (`[vibrate 100ms]` at a step boundary, `[vibrate 40ms]` for the
   pre-alert 3 s before a step ends, `[vibrate pattern 0/400/200/400ms]`, `[sound]`,
-  `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`). Its last
+  `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`). It follows
+  the stored settings: with sound off it prints no `[sound]`, with
+  vibration off no `[vibrate …]`, and the pre-alert comes at the stored
+  lead, or not at all when it is off. Its last
   tick line is the done line: the time brewed, and the scale's final
   reading if any step pours, as in `done 2:30 (Poured to 250g)`.
   `--fast` skips the waits.

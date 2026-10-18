@@ -1,55 +1,73 @@
-use std::num::NonZeroU32;
-
 use crate::brew::{Effect, RunningStep};
+use crate::model::{PreAlertLead, Settings, Toggle};
 
-/// The lighter cues a brew gives ahead of a step boundary, as named
-/// config: how many seconds before a step ends the pre-alert buzzes, and
-/// how long it buzzes. One value, held by
-/// [`crate::brew::BrewController`], so a setting can later replace the
-/// default without touching the timer.
+/// The cues a brew gives, as named config: the buzz and sound at a step
+/// boundary and at the finish, and the lighter pre-alert buzz a few
+/// seconds before a step ends. Built from the user's [`Settings`] on every
+/// tick ([`crate::brew::BrewController::tick`]), so muting is decided
+/// here: with sound off no cue plays the sound, with vibration off none
+/// buzzes, and the shell carries out whatever is left.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CuePolicy {
-    /// Seconds left in a step when the pre-alert fires; none turns it off.
-    pre_alert_lead: Option<NonZeroU32>,
-}
-
-impl Default for CuePolicy {
-    fn default() -> Self {
-        Self::new(Self::DEFAULT_PRE_ALERT_LEAD_SECONDS)
-    }
+    pre_alert: PreAlertLead,
+    sound: Toggle,
+    vibration: Toggle,
 }
 
 impl CuePolicy {
-    /// Seconds before a step ends that the pre-alert fires by default.
-    pub const DEFAULT_PRE_ALERT_LEAD_SECONDS: u32 = 3;
+    /// Buzz length at each step boundary (legacy `vibrate_leaf.dart`:
+    /// `Vibration.vibrate(duration: 100)`).
+    pub const STEP_BUZZ_MS: u32 = 100;
 
     /// The pre-alert's buzz, shorter than a step boundary's 100 ms so the
     /// two feel different.
     pub const PRE_ALERT_MS: u32 = 40;
 
-    /// A pre-alert `lead_seconds` before each step ends; 0 is no pre-alert.
-    pub fn new(lead_seconds: u32) -> Self {
-        Self {
-            pre_alert_lead: NonZeroU32::new(lead_seconds),
-        }
-    }
+    /// The end of a brew: two long buzzes, so it does not feel like one more
+    /// step boundary. Pause and buzz lengths in ms, starting with a pause.
+    pub const FINISH_PATTERN_MS: [u32; 4] = [0, 400, 200, 400];
 
-    /// Seconds before a step ends that the pre-alert fires; 0 when off.
-    pub fn pre_alert_lead_seconds(self) -> u32 {
-        self.pre_alert_lead.map_or(0, NonZeroU32::get)
+    /// The cues `settings` allow.
+    pub fn of(settings: &Settings) -> Self {
+        Self {
+            pre_alert: settings.pre_alert(),
+            sound: settings.sound(),
+            vibration: settings.vibration(),
+        }
     }
 
     /// The pre-alert for `step`, just ticked, if this is its moment: the
     /// tick that leaves exactly the lead time. That moment comes once per
     /// step (the countdown only falls, and pausing keeps it), and never at
     /// a step boundary (the lead is at least 1 s). A step no longer than
-    /// the lead gets none: it would buzz at its start, or never.
+    /// the lead gets none: it would buzz at its start, or never. It is a
+    /// buzz, so vibration off silences it.
     pub(crate) fn pre_alert(self, step: &RunningStep) -> Option<Effect> {
-        let lead = self.pre_alert_lead?.get();
-        (step.duration().seconds() > lead && step.remaining().seconds() == lead).then_some(
-            Effect::Vibrate {
-                ms: Self::PRE_ALERT_MS,
-            },
-        )
+        let lead = self.pre_alert.seconds();
+        let due =
+            lead > 0 && step.duration().seconds() > lead && step.remaining().seconds() == lead;
+        (due && self.vibration.is_on()).then_some(Effect::Vibrate {
+            ms: Self::PRE_ALERT_MS,
+        })
+    }
+
+    /// A step boundary's cues: a buzz, then the sound.
+    pub(crate) fn step_boundary(self) -> Vec<Effect> {
+        self.buzz_then_sound(Effect::Vibrate {
+            ms: Self::STEP_BUZZ_MS,
+        })
+    }
+
+    /// The finish's cues: the two long buzzes, then the sound.
+    pub(crate) fn finish(self) -> Vec<Effect> {
+        self.buzz_then_sound(Effect::VibratePattern {
+            pattern_ms: Self::FINISH_PATTERN_MS.to_vec(),
+        })
+    }
+
+    fn buzz_then_sound(self, buzz: Effect) -> Vec<Effect> {
+        let buzz = self.vibration.is_on().then_some(buzz);
+        let sound = self.sound.is_on().then_some(Effect::PlayStepSound);
+        buzz.into_iter().chain(sound).collect()
     }
 }

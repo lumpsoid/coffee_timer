@@ -1,4 +1,4 @@
-//! User settings: theme and accent, and their persistence.
+//! User settings: theme, accent and the brew's cues, and their persistence.
 
 mod settings_controller;
 
