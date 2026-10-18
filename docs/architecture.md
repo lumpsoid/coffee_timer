@@ -137,7 +137,8 @@ pause), `PlayStepSound`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)
 `HideBrewNotification`. Only `BrewController` returns effects. The hub maps
 each effect to a `PlatformEffect` signal and sends it after the brew view.
 Dart's [`PlatformEffectPerformer`](../lib/effects/platform_effect_performer.dart)
-makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`,
+makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`
+(`[vibrate 40ms]` for the pre-alert),
 `[vibrate pattern 0/400/200/400ms]`, `[sound]`, `[screen on]`, `[screen off]`, `[notify Bloom · 00:35 | Next:
 Pour]` and `[notify off]`.
 
@@ -181,12 +182,28 @@ clock. Time arrives as `tick()`, one call per second while
 - `tick()` takes one second off the current step, and never goes below zero.
   Every tick that leaves the brew running returns `ShowBrewNotification`
   last. When a step reaches zero, the next step begins and the tick returns
-  `Vibrate` + `PlayStepSound` before it. After the last step, the brew is
+  `Vibrate` + `PlayStepSound` before it. The tick that leaves a step
+  exactly the pre-alert lead (3 s by default) returns `Vibrate { ms: 40 }`
+  before the notification: a lighter cue that the step is about to end.
+  Its rule is [`CuePolicy`](../native/core/src/brew/cue_policy.rs), named
+  config the controller holds (`BrewController::with_cues`; `new` uses
+  the default), so a setting can later change the lead or turn it off
+  (lead 0). Since the countdown only falls and a pause keeps it, the
+  moment comes once per step: pausing and resuming around it never
+  repeats it, and a restart is a new countdown. A step no longer than the
+  lead gets none. The lead is at least 1 s, so the pre-alert never shares
+  a tick with a step boundary or the finish: the last step gets its
+  pre-alert 3 s before the end, and the finishing tick carries only the
+  finish effects. After the last step, the brew is
   `Finished` and the tick returns `KeepScreenOn(false)` +
   `VibratePattern [0, 400, 200, 400]` (two long buzzes, unlike a step
   boundary) + `PlayStepSound` + `HideBrewNotification`. The hide comes
   last, so the app is still kept awake for the final buzz and sound. A
   0-second step shows `00:00` for one tick.
+- While running or paused, `BrewView::next_label(index)` previews the
+  step after the current one, `Next: Pour 2 · 0:45 · 100g` (its `M:SS`
+  duration, and its pour at the water shown if it pours), or `Last step`.
+  It goes out as `BrewTimer.next_label`; the page shows it under the dial.
 - `Finished(view, finished)` marks every step done. `FinishedBrew` holds
   the time the run brewed, `M:SS`: the steps from the one it started at
   (`RunningStep::first`) to the last, summed by `BrewMetrics`.

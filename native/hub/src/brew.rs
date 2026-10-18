@@ -113,6 +113,7 @@ fn timer(view: &BrewView, step: &RunningStep) -> BrewTimer {
         position_label: view.position_label(step.index()),
         remaining_label: step.remaining_label(),
         pour_to_label: view.pour_to_label(step.index()),
+        next_label: view.next_label(step.index()),
         sweep_seconds: step.sweep().map(StepDuration::seconds),
     }
 }
@@ -247,6 +248,7 @@ mod tests {
         assert_eq!(timer.position_label, "Step 1 of 2");
         assert_eq!(timer.remaining_label, "00:29");
         assert_eq!(timer.sweep_seconds, Some(30));
+        assert_eq!(timer.next_label, "Next: Pour · 0:00");
         Ok(())
     }
 
@@ -260,6 +262,7 @@ mod tests {
         assert_eq!(statuses(&recipe), ["done", "current"]);
         assert_eq!(timer.step_index, 1);
         assert_eq!(timer.sweep_seconds, None);
+        assert_eq!(timer.next_label, "Last step");
         Ok(())
     }
 
@@ -276,6 +279,7 @@ mod tests {
         assert_eq!(timer.run, 1);
         assert_eq!(timer.step_index, 0);
         assert_eq!(timer.remaining_label, "00:29");
+        assert_eq!(timer.next_label, "Next: Pour · 0:00");
         Ok(())
     }
 

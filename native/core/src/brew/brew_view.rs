@@ -17,9 +17,14 @@ pub struct BrewView {
     style: LabelStyle,
     /// Each step's pour at the water shown, in step order.
     pours: Vec<Option<Pour>>,
+    /// What follows each step, in step order (see [`BrewView::next_label`]).
+    next_labels: Vec<String>,
 }
 
 impl BrewView {
+    /// [`BrewView::next_label`] on the last step: nothing follows.
+    pub const LAST_STEP_LABEL: &'static str = "Last step";
+
     /// `recipe` at the ratio `adjusted` on the brew page, or at its own
     /// ratio. An adjusted ratio equal to the recipe's is no adjustment.
     /// The step pours follow the water ([`PourScale`]).
@@ -34,6 +39,8 @@ impl BrewView {
             RatioSetting::Adjusted(ratio) => ratio.water_grams(coffee),
             RatioSetting::Recipe(_) => recipe.water().grams(),
         };
+        let pours = PourScale::new(recipe.water(), water).pours(recipe.steps());
+        let next_labels = next_labels(&recipe, &pours, metrics);
         Self {
             coffee_label: format!("{}g", coffee.grams()),
             water_label: format!("{water}g"),
@@ -41,7 +48,8 @@ impl BrewView {
             ratio,
             duration_label: metrics.duration_label(&recipe),
             style: LabelStyle::of(&recipe, metrics),
-            pours: PourScale::new(recipe.water(), water).pours(recipe.steps()),
+            pours,
+            next_labels,
             recipe,
         }
     }
@@ -145,6 +153,17 @@ impl BrewView {
             .map(Pour::poured_to_label)
     }
 
+    /// What comes after step `index`, shown under the dial while it runs
+    /// or is paused: `Next: Pour 2 · 0:45 · 100g` (the pour only if that
+    /// step pours, at the water shown), or [`BrewView::LAST_STEP_LABEL`] on
+    /// the last step (and past it).
+    pub fn next_label(&self, index: usize) -> String {
+        self.next_labels
+            .get(index)
+            .cloned()
+            .unwrap_or_else(|| Self::LAST_STEP_LABEL.to_owned())
+    }
+
     /// Where step `index` sits in the brew, `Step 2 of 3`.
     pub fn position_label(&self, index: usize) -> String {
         format!("Step {} of {}", index + 1, self.step_count())
@@ -191,4 +210,26 @@ impl BrewView {
     pub fn duration_label(&self) -> &str {
         &self.duration_label
     }
+}
+
+/// For each step, the label of the one after it; the last reads
+/// [`BrewView::LAST_STEP_LABEL`].
+fn next_labels(recipe: &Recipe, pours: &[Option<Pour>], metrics: &BrewMetrics) -> Vec<String> {
+    let steps = recipe.steps();
+    (1..=steps.len())
+        .map(
+            |next| match (steps.get(next), pours.get(next).copied().flatten()) {
+                (Some(step), pour) => {
+                    let duration = metrics.duration_label_of([step.duration()]);
+                    match pour {
+                        Some(pour) => {
+                            format!("Next: {} · {duration} · {}", step.name(), pour.label())
+                        }
+                        None => format!("Next: {} · {duration}", step.name()),
+                    }
+                }
+                (None, _) => BrewView::LAST_STEP_LABEL.to_owned(),
+            },
+        )
+        .collect()
 }

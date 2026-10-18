@@ -3,8 +3,8 @@
 //! `lib/recipe_details/pages/recipe_details_page.dart` (what is shown).
 
 use coffee_timer_core::brew::{
-    BrewController, BrewError, BrewNotice, BrewState, BrewView, Effect, RatioChange, RatioSetting,
-    StepStatus,
+    BrewController, BrewError, BrewNotice, BrewState, BrewView, CuePolicy, Effect, RatioChange,
+    RatioSetting, StepStatus,
 };
 use coffee_timer_core::catalog::RecipeCatalog;
 use coffee_timer_core::fakes::FakeRecipeStore;
@@ -1255,5 +1255,216 @@ fn a_recipe_that_pours_nothing_has_no_poured_label() -> TestResult {
     let (brew, _catalog) = brewed(&[1], 0)?;
     let view = brew.state().view().ok_or("no view")?;
     assert_eq!(view.poured_label(), None);
+    Ok(())
+}
+
+// pre-alert
+
+/// The pre-alert: a short buzz a few seconds before a step ends.
+const PRE_ALERT: Effect = Effect::Vibrate { ms: 40 };
+
+/// Ticks a running brew to its end; the numbers of the ticks (from 1) that
+/// pre-alerted, and the effects of the last tick.
+fn pre_alert_ticks(brew: &mut BrewController) -> (Vec<u32>, Vec<Effect>) {
+    let mut ticks = Vec::new();
+    let mut last = Vec::new();
+    let mut tick = 0;
+    while brew.state().is_running() {
+        tick += 1;
+        last = brew.tick();
+        let alerts = last.iter().filter(|&effect| *effect == PRE_ALERT).count();
+        assert!(alerts <= 1, "tick {tick} pre-alerted {alerts} times");
+        if alerts == 1 {
+            ticks.push(tick);
+        }
+    }
+    (ticks, last)
+}
+
+#[test]
+fn the_default_lead_is_three_seconds() {
+    assert_eq!(CuePolicy::default().pre_alert_lead_seconds(), 3);
+    assert_eq!(CuePolicy::DEFAULT_PRE_ALERT_LEAD_SECONDS, 3);
+    assert_eq!(CuePolicy::new(0).pre_alert_lead_seconds(), 0, "off");
+}
+
+#[test]
+fn the_pre_alert_fires_once_on_the_tick_that_leaves_three_seconds() -> TestResult {
+    let (mut brew, _catalog) = opened(&[5, 5])?;
+    brew.start(0)?;
+    assert_eq!(brew.tick(), [show("Step 1 · 00:04", Some("Step 2"))]);
+    assert_eq!(
+        brew.tick(),
+        [PRE_ALERT, show("Step 1 · 00:03", Some("Step 2"))],
+        "the buzz comes before the notification, which stays last"
+    );
+    assert_eq!(brew.tick(), [show("Step 1 · 00:02", Some("Step 2"))]);
+    Ok(())
+}
+
+#[test]
+fn each_long_enough_step_pre_alerts_once_and_the_end_only_finishes() -> TestResult {
+    let (mut brew, _catalog) = opened(&[5, 5])?;
+    brew.start(0)?;
+    let (ticks, last) = pre_alert_ticks(&mut brew);
+    // The last step pre-alerts too, 3 s before the end; the finish buzz
+    // fires alone at the end, so the two never stack.
+    assert_eq!(ticks, [2, 7]);
+    assert_eq!(last, ended());
+    Ok(())
+}
+
+#[test]
+fn a_step_no_longer_than_the_lead_gets_no_pre_alert() -> TestResult {
+    // 3 s and 2 s and 0 s are too short; the 4 s step pre-alerts once its
+    // first second has passed: tick 3 + 2 + 1 (the 0 s step) + 1.
+    let (mut brew, _catalog) = opened(&[3, 2, 0, 4])?;
+    brew.start(0)?;
+    let (ticks, last) = pre_alert_ticks(&mut brew);
+    assert_eq!(ticks, [7]);
+    assert_eq!(last, ended());
+    Ok(())
+}
+
+#[test]
+fn pausing_after_the_pre_alert_does_not_repeat_it() -> TestResult {
+    let (mut brew, _catalog) = opened(&[5])?;
+    brew.start(0)?;
+    brew.tick();
+    assert!(brew.tick().contains(&PRE_ALERT));
+
+    let paused = brew.pause()?;
+    let resumed = brew.resume()?;
+    assert!(!paused.contains(&PRE_ALERT) && !resumed.contains(&PRE_ALERT));
+    let (ticks, last) = pre_alert_ticks(&mut brew);
+    assert_eq!(ticks, [] as [u32; 0], "already given before the pause");
+    assert_eq!(last, ended());
+    Ok(())
+}
+
+#[test]
+fn pausing_just_before_the_pre_alert_gives_it_once_after_resuming() -> TestResult {
+    let (mut brew, _catalog) = opened(&[5])?;
+    brew.start(0)?;
+    assert!(!brew.tick().contains(&PRE_ALERT));
+    brew.pause()?;
+    assert_eq!(brew.tick(), [], "nothing ticks while paused");
+    brew.resume()?;
+    brew.pause()?;
+    brew.resume()?;
+
+    let (ticks, _last) = pre_alert_ticks(&mut brew);
+    assert_eq!(ticks, [1], "the first tick after resuming leaves 3 s");
+    Ok(())
+}
+
+#[test]
+fn a_brew_started_from_a_middle_step_pre_alerts_from_there() -> TestResult {
+    let (mut brew, _catalog) = opened(&[5, 6, 2])?;
+    brew.start(1)?;
+    let (ticks, last) = pre_alert_ticks(&mut brew);
+    assert_eq!(
+        ticks,
+        [3],
+        "6 s step at 3 s left; the 2 s step is too short"
+    );
+    assert_eq!(last, ended());
+    Ok(())
+}
+
+#[test]
+fn a_restart_gives_the_restarted_step_its_pre_alert_again() -> TestResult {
+    let (mut brew, _catalog) = opened(&[5])?;
+    brew.start(0)?;
+    brew.tick();
+    brew.tick();
+    brew.start(0)?;
+    let (ticks, _last) = pre_alert_ticks(&mut brew);
+    assert_eq!(ticks, [2], "a new run counts the step down again");
+    Ok(())
+}
+
+#[test]
+fn the_cue_policy_sets_the_lead_or_turns_the_pre_alert_off() -> TestResult {
+    let catalog = catalog(vec![recipe("a", &[5, 1])?])?;
+    let brewed_with = |cues: CuePolicy| -> Result<Vec<u32>, Box<dyn std::error::Error>> {
+        let mut brew = BrewController::with_cues(cues);
+        brew.open(&id("a")?, &catalog);
+        brew.start(0)?;
+        Ok(pre_alert_ticks(&mut brew).0)
+    };
+    assert_eq!(brewed_with(CuePolicy::new(1))?, [4]);
+    assert_eq!(brewed_with(CuePolicy::new(4))?, [1]);
+    assert_eq!(
+        brewed_with(CuePolicy::new(5))?,
+        [] as [u32; 0],
+        "as long as the step"
+    );
+    assert_eq!(brewed_with(CuePolicy::new(0))?, [] as [u32; 0], "off");
+    Ok(())
+}
+
+// next-step preview
+
+/// What the page shows under the dial for the step the timer is on,
+/// running or paused; none otherwise.
+fn next_label(brew: &BrewController) -> Option<String> {
+    let step = brew.state().running().or(brew.state().paused())?;
+    Some(brew.state().view()?.next_label(step.index()))
+}
+
+#[test]
+fn the_next_step_shows_its_name_and_duration() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30, 75, 5])?;
+    assert_eq!(next_label(&brew), None, "idle has no timer");
+    brew.start(0)?;
+    assert_eq!(next_label(&brew).as_deref(), Some("Next: Step 2 · 1:15"));
+    brew.pause()?;
+    assert_eq!(
+        next_label(&brew).as_deref(),
+        Some("Next: Step 2 · 1:15"),
+        "paused"
+    );
+    brew.resume()?;
+    for _ in 0..30 {
+        brew.tick();
+    }
+    assert_eq!(next_label(&brew).as_deref(), Some("Next: Step 3 · 0:05"));
+    Ok(())
+}
+
+#[test]
+fn the_last_step_reads_last_step() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30, 5])?;
+    brew.start(1)?;
+    assert_eq!(next_label(&brew).as_deref(), Some("Last step"));
+    assert_eq!(BrewView::LAST_STEP_LABEL, "Last step");
+    while brew.state().is_running() {
+        brew.tick();
+    }
+    assert_eq!(next_label(&brew), None, "finished has no timer");
+    Ok(())
+}
+
+#[test]
+fn a_pouring_next_step_shows_its_pour_at_the_ratio_shown() -> TestResult {
+    let (mut brew, _catalog) = pour_over()?;
+    brew.start(0)?;
+    assert_eq!(
+        next_label(&brew).as_deref(),
+        Some("Next: Bloom · 0:02 · 50g")
+    );
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    assert_eq!(
+        next_label(&brew).as_deref(),
+        Some("Next: Bloom · 0:02 · 51g")
+    );
+    brew.start(1)?;
+    assert_eq!(
+        next_label(&brew).as_deref(),
+        Some("Next: Pour · 0:03 · 204g")
+    );
+    brew.start(2)?;
+    assert_eq!(next_label(&brew).as_deref(), Some("Last step"));
     Ok(())
 }

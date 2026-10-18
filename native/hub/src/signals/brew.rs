@@ -162,6 +162,9 @@ pub struct BrewTimer {
     /// What the scale should read once this step has poured, `Pour to
     /// 150g`; none for a step that pours nothing.
     pub pour_to_label: Option<String>,
+    /// What comes next, shown under the dial: `Next: Pour 2 · 0:45 ·
+    /// 100g` (the pour only if that step pours), or `Last step`.
+    pub next_label: String,
     /// Period of the ring's repeating sweep, in seconds: the step's full
     /// duration. None for a 0-second step (the ring stays still).
     pub sweep_seconds: Option<u32>,

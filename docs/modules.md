@@ -137,14 +137,21 @@ Test:
 
 - `BrewController` owns `BrewState` and runs the timer state machine. It
   provides `open`, `start`, `tick`, `pause`, `resume`, `reset`, `leave`,
-  `adjust_ratio` and `on_catalog_change`.
+  `adjust_ratio` and `on_catalog_change`. `with_cues(CuePolicy)` builds
+  one with a non-default pre-alert.
+- `CuePolicy` is the pre-alert rule as named config: the lead in seconds
+  (`DEFAULT_PRE_ALERT_LEAD_SECONDS` = 3, 0 = off) and its buzz
+  (`PRE_ALERT_MS` = 40). It fires on the tick that leaves exactly the
+  lead, for steps longer than the lead.
 - `BrewState` is `Empty`, `Idle(BrewView)`, `Running(BrewView,
   RunningStep)`, `Paused(BrewView, RunningStep)` or `Finished(BrewView,
   FinishedBrew)`. `FinishedBrew` is the time the last run brewed;
   `BrewView::poured_label` is the scale's final reading.
 - `BrewView` is the open recipe with its labels, its `LabelStyle` (the
   brew page wears the list card's label), `Step N of M` positions, and each
-  step's `Pour` at the water shown (`pour_to_label(index)`). Its
+  step's `Pour` at the water shown (`pour_to_label(index)`), and the
+  next-step preview (`next_label(index)`: `Next: Pour · 2:00 · 200g` or
+  `Last step`). Its
   `RatioSetting` is `Recipe` or `Adjusted`; `RatioChange` is
   one press of the page's ratio controls.
 - `RunningStep` is the current (or paused) step, the time left, the run

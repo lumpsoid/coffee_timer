@@ -164,7 +164,8 @@ class _BrewPageState extends State<BrewPage> {
   }
 
   /// The open recipe, printed on its own label paper; [timer] is null
-  /// while idle or done. Tapping the dial calls [onDial]; [face] is its
+  /// while idle or done, and otherwise also gives the next-step line under
+  /// the dial. Tapping the dial calls [onDial]; [face] is its
   /// centre. The Reset button shows when [resettable].
   Widget _page(
     BrewRecipe recipe,
@@ -262,8 +263,23 @@ class _BrewPageState extends State<BrewPage> {
                     ),
                   ),
                 ),
-                // The slot stays while idle, so the page does not jump when
+                // Both slots stay while idle, so the page does not jump when
                 // a brew starts.
+                SizedBox(
+                  height: 28,
+                  child: timer == null
+                      ? null
+                      : Center(
+                          child: Text(
+                            // Not upper-cased like the captions: `g` is a
+                            // unit.
+                            timer.nextLabel,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: _caption(colors, size: 12),
+                          ),
+                        ),
+                ),
                 SizedBox(
                   height: 44,
                   child: !resettable

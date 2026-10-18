@@ -43,6 +43,12 @@ to.
   runs or is paused the dial reads the scale total to pour up to, such as
   `Pour to 150g` (this step's pour plus every earlier one). An adjusted
   ratio scales every pour with the water.
+  Under the dial, a running or paused brew previews the step after this
+  one, `Next: Pour 2 · 0:45 · 100g` (its pour only if it pours), or reads
+  `Last step`. Three seconds before a step ends the phone gives one short
+  buzz, lighter than a step boundary's, so you can get ready to pour. A
+  step of 3 s or less gets none, and pausing never repeats it. The last
+  step gets one too; the end of the brew then buzzes twice as usual.
 - **Editor.** Edits a recipe's name, description, coffee (1–200 g) and
   water (1–2000 g), and its timed steps. A new recipe starts at 15 g to
   250 g. The total
@@ -133,8 +139,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   `$XDG_DATA_HOME/coffee_timer/coffee_timer.db`, then
   `~/.local/share/coffee_timer/coffee_timer.db`, then `./coffee_timer.db`.
 - `brew` ticks once per second until the last step ends, and prints the
-  countdown, each step's status and the effects (`[vibrate 100ms]`,
-  `[vibrate pattern 0/400/200/400ms]`, `[sound]`,
+  countdown, the next-step preview, each step's status and the effects
+  (`[vibrate 100ms]` at a step boundary, `[vibrate 40ms]` for the
+  pre-alert 3 s before a step ends, `[vibrate pattern 0/400/200/400ms]`, `[sound]`,
   `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`). Its last
   tick line is the done line: the time brewed, and the scale's final
   reading if any step pours, as in `done 2:30 (Poured to 250g)`.
@@ -145,8 +152,8 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   `resume` lines with their effects.
 - `list` and `show` print each recipe's coffee and water grams; `show` also
   prints the ratio and each step's pour (scaled with `--ratio-steps`).
-  `brew` prints a pouring step's target next to its countdown, as in
-  `00:30 Bloom (Pour to 50g)`.
+  `brew` prints a pouring step's target next to its countdown, then the
+  next step, as in `00:30 Bloom (Pour to 50g)  Next: Pour · 2:00 · 200g`.
 - `new --coffee GRAMS --water GRAMS` sets the dose (1–200 g and
   1–2000 g). Without them the recipe gets the editor's 15 g and 250 g.
 - `--step NAME=SECONDS[@GRAMS]` splits at the last `=`, then the seconds at

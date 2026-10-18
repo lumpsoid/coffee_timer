@@ -1,4 +1,6 @@
-use crate::brew::{BrewError, BrewNotice, BrewState, BrewView, Effect, RatioChange, RunningStep};
+use crate::brew::{
+    BrewError, BrewNotice, BrewState, BrewView, CuePolicy, Effect, RatioChange, RunningStep,
+};
 use crate::catalog::{CatalogChange, RecipeCatalog};
 use crate::model::{BrewMetrics, BrewRatio, RecipeId};
 
@@ -20,6 +22,7 @@ const FINISHED_PATTERN_MS: [u32; 4] = [0, 400, 200, 400];
 pub struct BrewController {
     state: BrewState,
     metrics: BrewMetrics,
+    cues: CuePolicy,
     /// Accepted starts so far; the running step carries the latest.
     runs: u64,
 }
@@ -28,6 +31,14 @@ impl BrewController {
     /// Starts with no recipe open.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Starts with no recipe open, cueing step boundaries by `cues`.
+    pub fn with_cues(cues: CuePolicy) -> Self {
+        Self {
+            cues,
+            ..Self::default()
+        }
     }
 
     /// Shows the recipe with `id`, idle, at its own ratio. An id the catalog
@@ -107,10 +118,12 @@ impl BrewController {
         ])
     }
 
-    /// One second passes and the brew notification follows. At zero the brew
-    /// moves to the next step (vibrate, sound) or, after the last step,
-    /// finishes (screen-on off, the finish buzz pattern, sound, notification
-    /// gone). A no-op unless running (paused and finished included).
+    /// One second passes and the brew notification follows. A few seconds
+    /// before a step ends it buzzes briefly, once ([`CuePolicy`]). At zero
+    /// the brew moves to the next step (vibrate, sound) or, after the last
+    /// step, finishes (screen-on off, the finish buzz pattern, sound,
+    /// notification gone). A no-op unless running (paused and finished
+    /// included).
     pub fn tick(&mut self) -> Vec<Effect> {
         let (view, step) = match std::mem::take(&mut self.state) {
             BrewState::Running(view, step) => (view, step),
@@ -121,7 +134,11 @@ impl BrewController {
         };
         let step = step.ticked();
         if !step.remaining().is_zero() {
-            return vec![self.keep_running(view, step)];
+            let pre_alert = self.cues.pre_alert(&step);
+            return pre_alert
+                .into_iter()
+                .chain([self.keep_running(view, step)])
+                .collect();
         }
         match view.next_step(&step) {
             Some(next) => vec![

@@ -27,6 +27,7 @@ void main() {
           stepName: 'Step 1',
           positionLabel: 'Step 1 of 2',
           remainingLabel: '00:15',
+          nextLabel: 'Next: Step 2 · 0:15',
           sweepSeconds: 15,
         ),
       );

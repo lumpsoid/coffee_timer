@@ -54,6 +54,11 @@ impl RunningStep {
         self.step.name()
     }
 
+    /// The step's full duration.
+    pub fn duration(&self) -> StepDuration {
+        self.step.duration()
+    }
+
     pub fn remaining(&self) -> StepDuration {
         self.remaining
     }

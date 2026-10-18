@@ -228,16 +228,16 @@ fn fast_brew_prints_every_tick_and_effect() -> TestResult {
     assert_eq!(
         session.run(&["brew", "r1", "--fast"])?,
         "\
-start    00:02 A  |  1:current 2:pending 3:pending
+start    00:02 A  Next: Zero · 0:00  |  1:current 2:pending 3:pending
 [screen on]
 [notify A · 00:02 | Next: Zero]
-tick 1   00:01 A  |  1:current 2:pending 3:pending
+tick 1   00:01 A  Next: Zero · 0:00  |  1:current 2:pending 3:pending
 [notify A · 00:01 | Next: Zero]
-tick 2   00:00 Zero  |  1:done 2:current 3:pending
+tick 2   00:00 Zero  Next: B · 0:01  |  1:done 2:current 3:pending
 [vibrate 100ms]
 [sound]
 [notify Zero · 00:00 | Next: B]
-tick 3   00:01 B  |  1:done 2:done 3:current
+tick 3   00:01 B  Last step  |  1:done 2:done 3:current
 [vibrate 100ms]
 [sound]
 [notify B · 00:01]
@@ -266,20 +266,20 @@ fn brew_pauses_at_the_chosen_tick_and_resumes_where_it_was() -> TestResult {
             "5"
         ])?,
         "\
-start    00:03 A  |  1:current 2:pending
+start    00:03 A  Next: B · 0:01  |  1:current 2:pending
 [screen on]
 [notify A · 00:03 | Next: B]
-tick 1   00:02 A  |  1:current 2:pending
+tick 1   00:02 A  Next: B · 0:01  |  1:current 2:pending
 [notify A · 00:02 | Next: B]
-pause    paused 00:02 A  |  1:paused 2:pending
+pause    paused 00:02 A  Next: B · 0:01  |  1:paused 2:pending
 [screen off]
 [notify A · 00:02 · Paused | Next: B]
-resume   00:02 A  |  1:current 2:pending
+resume   00:02 A  Next: B · 0:01  |  1:current 2:pending
 [screen on]
 [notify A · 00:02 | Next: B]
-tick 2   00:01 A  |  1:current 2:pending
+tick 2   00:01 A  Next: B · 0:01  |  1:current 2:pending
 [notify A · 00:01 | Next: B]
-tick 3   00:01 B  |  1:done 2:current
+tick 3   00:01 B  Last step  |  1:done 2:current
 [vibrate 100ms]
 [sound]
 [notify B · 00:01]
@@ -299,11 +299,12 @@ fn brew_from_a_later_step_starts_there() -> TestResult {
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(
         lines.first().copied(),
-        Some("start    00:25 Brew  |  1:done 2:current")
+        Some("start    00:25 Brew  Last step  |  1:done 2:current")
     );
-    // Start and each running tick add a notification line; the end adds
-    // four effect lines. The run brewed only the step it started from.
-    assert_eq!(lines.len(), 3 + 24 * 2 + 5);
+    // Start and each running tick add a notification line, the tick that
+    // leaves 3 s adds the pre-alert, and the end adds four effect lines.
+    // The run brewed only the step it started from.
+    assert_eq!(lines.len(), 3 + 24 * 2 + 1 + 5);
     assert_eq!(
         lines.get(lines.len() - 5).copied(),
         Some("tick 25  done 0:25  |  1:done 2:done")
@@ -317,16 +318,51 @@ fn brew_prints_the_pour_to_target_of_each_pouring_step() -> TestResult {
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(
         lines.first().copied(),
-        Some("start    00:30 Bloom (Pour to 50g)  |  1:done 2:current 3:pending")
+        Some(
+            "start    00:30 Bloom (Pour to 50g)  Next: Pour · 2:00 · 200g  |  1:done 2:current 3:pending"
+        )
     );
     assert!(
-        lines.contains(&"tick 30  02:00 Pour (Pour to 250g)  |  1:done 2:done 3:current"),
+        lines
+            .contains(&"tick 30  02:00 Pour (Pour to 250g)  Last step  |  1:done 2:done 3:current"),
         "{out}"
     );
     // Done: the steps brewed and what the scale reads now.
     assert!(
         lines.contains(&"tick 150 done 2:30 (Poured to 250g)  |  1:done 2:done 3:done"),
         "{out}"
+    );
+    Ok(())
+}
+
+#[test]
+fn brew_prints_the_pre_alert_before_a_step_ends() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["new", "Short", "--step", "A=4", "--step", "B=1"])?;
+    let out = session.run(&["brew", "r1", "--fast"])?;
+    let lines: Vec<&str> = out.lines().collect();
+    let tick1 = lines
+        .iter()
+        .position(|line| line.starts_with("tick 1 "))
+        .ok_or("no tick 1")?;
+    assert_eq!(
+        lines.get(tick1..tick1 + 3),
+        Some(
+            &[
+                "tick 1   00:03 A  Next: B · 0:01  |  1:current 2:pending",
+                "[vibrate 40ms]",
+                "[notify A · 00:03 | Next: B]",
+            ][..]
+        ),
+        "{out}"
+    );
+    assert_eq!(
+        lines
+            .iter()
+            .filter(|&&line| line == "[vibrate 40ms]")
+            .count(),
+        1,
+        "once, and not for the 1 s step: {out}"
     );
     Ok(())
 }
