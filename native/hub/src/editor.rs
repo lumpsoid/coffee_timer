@@ -9,7 +9,7 @@ impl From<&EditorState> for EditorUpdate {
         match state {
             EditorState::Closed => Self::Closed,
             EditorState::Open(draft) => Self::Open {
-                draft: Box::new(draft.into()),
+                draft: Box::new(EditorDraft::from(&**draft)),
             },
         }
     }
@@ -24,6 +24,10 @@ impl From<&Draft> for EditorDraft {
             name: draft.name().to_owned(),
             name_error: draft.name_error(),
             description: draft.description().to_owned(),
+            coffee: draft.coffee().to_owned(),
+            coffee_error: draft.coffee_error(),
+            water: draft.water().to_owned(),
+            water_error: draft.water_error(),
             total_label: draft.total_label(),
             steps: draft.step_rows().into_iter().map(EditorStep::from).collect(),
             add_step_buttons: StepPreset::ALL

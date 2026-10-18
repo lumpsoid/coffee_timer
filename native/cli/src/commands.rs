@@ -45,7 +45,8 @@ pub fn show(
     Ok(())
 }
 
-/// Fills a new draft the way the editor page would: the draft's first row
+/// Fills a new draft the way the editor page would: the coffee and water
+/// fields take `--coffee` and `--water` when given, the draft's first row
 /// takes the first step, and each further step is an added row.
 pub fn new_recipe(
     recipe: &NewRecipe,
@@ -57,6 +58,12 @@ pub fn new_recipe(
     editor.new_draft();
     editor.set_name(&recipe.name)?;
     editor.set_description(&recipe.description)?;
+    if let Some(coffee) = &recipe.coffee {
+        editor.set_coffee(coffee)?;
+    }
+    if let Some(water) = &recipe.water {
+        editor.set_water(water)?;
+    }
     let mut steps = recipe.steps.iter();
     if let Some(step) = steps.next() {
         let first_row = editor

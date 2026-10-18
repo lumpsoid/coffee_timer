@@ -10,7 +10,8 @@ use coffee_timer_core::editor::{
 };
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
-    ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -32,6 +33,8 @@ fn v60() -> Result<Recipe, ModelError> {
         rid("recipe-1")?,
         RecipeName::try_parse("V60")?,
         "clean".to_owned(),
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
         vec![RecipeStep::new(
             sid("step-1")?,
             "Bloom".to_owned(),
@@ -44,6 +47,8 @@ fn espresso() -> Result<Recipe, ModelError> {
     Ok(Recipe::blank(
         rid("espresso")?,
         RecipeName::try_parse("Espresso")?,
+        CoffeeDose::try_parse(18)?,
+        WaterAmount::try_parse(36)?,
     ))
 }
 
@@ -233,6 +238,8 @@ fn actions_without_a_draft_are_errors() -> TestResult {
     let s1 = sid("s1")?;
     assert_eq!(editor.set_name("x"), Err(EditError::NoDraft));
     assert_eq!(editor.set_description("x"), Err(EditError::NoDraft));
+    assert_eq!(editor.set_coffee("18"), Err(EditError::NoDraft));
+    assert_eq!(editor.set_water("36"), Err(EditError::NoDraft));
     assert_eq!(editor.set_step_name(&s1, "x"), Err(EditError::NoDraft));
     assert_eq!(editor.set_step_duration(&s1, "1"), Err(EditError::NoDraft));
     assert_eq!(editor.add_step(StepPreset::Wait), Err(EditError::NoDraft));
@@ -325,6 +332,70 @@ fn name_and_description_are_trimmed_on_save() -> TestResult {
     let saved = catalog.get(&rid("r1")?).ok_or("not saved")?;
     assert_eq!(saved.name().as_str(), "Aeropress");
     assert_eq!(saved.description(), "strong");
+    Ok(())
+}
+
+// Coffee and water
+
+/// `(coffee, water)` grams of the saved recipe `id`.
+fn saved_dose(catalog: &RecipeCatalog, id: &str) -> Result<(u32, u32), Box<dyn std::error::Error>> {
+    let saved = catalog.get(&rid(id)?).ok_or("not saved")?;
+    Ok((saved.coffee().grams(), saved.water().grams()))
+}
+
+#[test]
+fn a_new_draft_starts_with_a_one_cup_dose() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    let draft = draft(&editor)?;
+    assert_eq!((draft.coffee(), draft.water()), ("15", "250"));
+    editor.set_name("V60")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_dose(&catalog, "r1")?, (15, 250));
+    Ok(())
+}
+
+#[test]
+fn edit_prefills_the_stored_dose_and_saves_the_typed_one() -> TestResult {
+    let mut catalog = catalog(vec![espresso()?])?;
+    let mut editor = editing("espresso", &catalog)?;
+    let draft = draft(&editor)?;
+    assert_eq!((draft.coffee(), draft.water()), ("18", "36"));
+    editor.set_name("Lungo")?;
+    editor.set_coffee(" 18 ")?;
+    editor.set_water("54")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_dose(&catalog, "espresso")?, (18, 54));
+    Ok(())
+}
+
+#[test]
+fn dose_errors_show_from_the_first_save_and_follow_the_text() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_coffee("lots")?;
+    editor.set_water("0")?;
+    assert_eq!(draft(&editor)?.coffee_error(), None, "hidden before save");
+    assert_eq!(draft(&editor)?.water_error(), None, "hidden before save");
+
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert!(catalog.state().is_empty());
+    assert_eq!(draft(&editor)?.coffee(), "lots", "keeps the text as typed");
+    assert_eq!(
+        draft(&editor)?.coffee_error().as_deref(),
+        Some("Enter grams")
+    );
+    assert_eq!(draft(&editor)?.water_error().as_deref(), Some("1–2000 g"));
+
+    editor.set_coffee("201")?;
+    editor.set_water("2000")?;
+    assert_eq!(draft(&editor)?.coffee_error().as_deref(), Some("1–200 g"));
+    assert_eq!(draft(&editor)?.water_error(), None);
+
+    editor.set_coffee("200")?;
+    editor.save(&mut catalog)?;
+    assert_eq!(saved_dose(&catalog, "r1")?, (200, 2000));
     Ok(())
 }
 

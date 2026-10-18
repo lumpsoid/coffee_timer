@@ -25,10 +25,11 @@ impl EditorController {
         }
     }
 
-    /// Opens a draft for a new recipe: no name, one blank `0` second step.
+    /// Opens a draft for a new recipe: no name, 15 g coffee to 250 g water,
+    /// one blank `0` second step.
     /// Replaces any open draft.
     pub fn new_draft(&mut self) {
-        self.state = EditorState::Open(Draft::new(self.ids.as_mut(), &self.metrics));
+        self.state = EditorState::Open(Box::new(Draft::new(self.ids.as_mut(), &self.metrics)));
     }
 
     /// Opens a draft of the recipe with `id`, as stored. Replaces any open
@@ -37,7 +38,11 @@ impl EditorController {
         let recipe = catalog
             .get(id)
             .ok_or_else(|| EditError::UnknownRecipe(id.clone()))?;
-        self.state = EditorState::Open(Draft::of(recipe, self.ids.as_mut(), &self.metrics));
+        self.state = EditorState::Open(Box::new(Draft::of(
+            recipe,
+            self.ids.as_mut(),
+            &self.metrics,
+        )));
         Ok(())
     }
 
@@ -48,6 +53,18 @@ impl EditorController {
 
     pub fn set_description(&mut self, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_description(raw);
+        Ok(())
+    }
+
+    /// The coffee grams as typed.
+    pub fn set_coffee(&mut self, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_coffee(raw);
+        Ok(())
+    }
+
+    /// The water grams as typed.
+    pub fn set_water(&mut self, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_water(raw);
         Ok(())
     }
 

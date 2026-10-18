@@ -22,9 +22,9 @@ use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, EditRecipe,
     EditorReady, EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PlatformEffect, RecipeListReady,
-    RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, SaveRecipe, SetAccent,
-    SetRecipeDescription, SetRecipeName, SetStepDuration, SetStepName, SetTheme, SettingsReady,
-    SettingsUpdate, StartBrew,
+    RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, SaveRecipe, SetAccent, SetRecipeCoffee,
+    SetRecipeDescription, SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName, SetTheme,
+    SettingsReady, SettingsUpdate, StartBrew,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -70,6 +70,8 @@ pub async fn run(mut c: Controllers) {
     let edit_recipe = EditRecipe::get_dart_signal_receiver();
     let set_recipe_name = SetRecipeName::get_dart_signal_receiver();
     let set_recipe_description = SetRecipeDescription::get_dart_signal_receiver();
+    let set_recipe_coffee = SetRecipeCoffee::get_dart_signal_receiver();
+    let set_recipe_water = SetRecipeWater::get_dart_signal_receiver();
     let set_step_name = SetStepName::get_dart_signal_receiver();
     let set_step_duration = SetStepDuration::get_dart_signal_receiver();
     let add_step = AddStep::get_dart_signal_receiver();
@@ -141,6 +143,14 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = set_recipe_description.recv() => {
                 report(c.editor.set_description(&pack.message.raw));
+                show_editor(&c.editor);
+            }
+            Some(pack) = set_recipe_coffee.recv() => {
+                report(c.editor.set_coffee(&pack.message.raw));
+                show_editor(&c.editor);
+            }
+            Some(pack) = set_recipe_water.recv() => {
+                report(c.editor.set_water(&pack.message.raw));
                 show_editor(&c.editor);
             }
             Some(pack) = set_step_name.recv() => {

@@ -18,8 +18,9 @@ pub use brew::{
 };
 pub use editor::{
     AddStep, AddStepButton, CloseEditor, DeleteRecipe, EditRecipe, EditorDraft, EditorReady,
-    EditorStep, EditorUpdate, NewDraft, RemoveStep, SaveRecipe, SetRecipeDescription,
-    SetRecipeName, SetStepDuration, SetStepName, StepPresetChoice,
+    EditorStep, EditorUpdate, NewDraft, RemoveStep, SaveRecipe, SetRecipeCoffee,
+    SetRecipeDescription, SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName,
+    StepPresetChoice,
 };
 pub use recipe_list::{
     LabelShade, LabelTexture, LabelTone, RecipeLabel, RecipeListReady, RecipeListUpdate,

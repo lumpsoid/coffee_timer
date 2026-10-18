@@ -68,6 +68,12 @@ pub struct NewRecipe {
     /// Recipe description.
     #[arg(long, default_value = "")]
     pub description: String,
+    /// Ground coffee in grams, 1–200. [default: the editor's, 15]
+    #[arg(long, value_name = "GRAMS")]
+    pub coffee: Option<String>,
+    /// Water in grams, 1–2000. [default: the editor's, 250]
+    #[arg(long, value_name = "GRAMS")]
+    pub water: Option<String>,
     /// A step as NAME=SECONDS (e.g. "Grind=30"); repeat in brew order. A
     /// blank NAME saves as "Step N". Without any, the recipe gets one blank
     /// 0-second step.

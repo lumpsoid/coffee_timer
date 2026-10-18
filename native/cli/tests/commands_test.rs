@@ -45,8 +45,8 @@ impl Session {
 }
 
 const SEED_LIST: &str = "\
-espresso-uuid  Espresso  Coffee: 20 g  Water: 100 g  Time: 0:55  Strong coffee
-pourover-uuid  Pour Over  Coffee: 30 g  Water: 150 g  Time: 3:10  Light and clean
+espresso-uuid  Espresso  Coffee: 18 g  Water: 36 g  Time: 0:55  Strong coffee
+pourover-uuid  Pour Over  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean
 ";
 
 #[test]
@@ -62,7 +62,7 @@ fn show_renders_the_brew_page() -> TestResult {
         "\
 pourover-uuid  Pour Over
 Light and clean
-Coffee: 30g  Water: 150g  Ratio: 1:5  Time: 3:10
+Coffee: 15g  Water: 250g  Ratio: 1:16.7  Time: 3:10
   1. Grind  40s  pending
   2. Bloom  30s  pending
   3. Pour  120s  pending
@@ -75,11 +75,11 @@ Coffee: 30g  Water: 150g  Ratio: 1:5  Time: 3:10
 fn show_with_ratio_steps_moves_the_water_for_that_showing() -> TestResult {
     let mut session = Session::new()?;
     let more = session.run(&["show", "pourover-uuid", "--ratio-steps", "3"])?;
-    assert!(more.contains("Coffee: 30g  Water: 195g  Ratio: 1:6.5 (adjusted)"));
+    assert!(more.contains("Coffee: 15g  Water: 270g  Ratio: 1:18 (adjusted)"));
     let less = session.run(&["show", "pourover-uuid", "--ratio-steps", "-2"])?;
-    assert!(less.contains("Coffee: 30g  Water: 120g  Ratio: 1:4 (adjusted)"));
+    assert!(less.contains("Coffee: 15g  Water: 240g  Ratio: 1:16 (adjusted)"));
     let plain = session.run(&["show", "pourover-uuid"])?;
-    assert!(plain.contains("Coffee: 30g  Water: 150g  Ratio: 1:5  Time"));
+    assert!(plain.contains("Coffee: 15g  Water: 250g  Ratio: 1:16.7  Time"));
     Ok(())
 }
 
@@ -97,6 +97,10 @@ fn new_saves_a_recipe_and_it_persists() -> TestResult {
         "  V60 ",
         "--description",
         "clean ",
+        "--coffee",
+        "16",
+        "--water",
+        "256",
         "--step",
         "Bloom=30",
         "--step",
@@ -108,14 +112,14 @@ fn new_saves_a_recipe_and_it_persists() -> TestResult {
     let list = reopened.run(&["list"])?;
     assert_eq!(
         list,
-        format!("{SEED_LIST}r1  V60  Coffee: 20 g  Water: 100 g  Time: 0:35  clean\n")
+        format!("{SEED_LIST}r1  V60  Coffee: 16 g  Water: 256 g  Time: 0:35  clean\n")
     );
     assert_eq!(
         reopened.run(&["show", "r1"])?,
         "\
 r1  V60
 clean
-Coffee: 20g  Water: 100g  Ratio: 1:5  Time: 0:35
+Coffee: 16g  Water: 256g  Ratio: 1:16  Time: 0:35
   1. Bloom  30s  pending
   2. Step 2  5s  pending
 "
@@ -124,14 +128,12 @@ Coffee: 20g  Water: 100g  Ratio: 1:5  Time: 0:35
 }
 
 #[test]
-fn new_without_steps_saves_one_blank_step() -> TestResult {
+fn new_without_steps_or_dose_saves_the_editors_defaults() -> TestResult {
     let mut session = Session::new()?;
     assert_eq!(session.run(&["new", "Plain"])?, "upserted r1\n");
-    assert!(
-        session
-            .run(&["show", "r1"])?
-            .ends_with("  1. Step 1  0s  pending\n")
-    );
+    let shown = session.run(&["show", "r1"])?;
+    assert!(shown.contains("Coffee: 15g  Water: 250g  Ratio: 1:16.7"));
+    assert!(shown.ends_with("  1. Step 1  0s  pending\n"));
     Ok(())
 }
 
@@ -142,6 +144,10 @@ fn new_with_invalid_fields_prints_the_field_errors_and_saves_nothing() -> TestRe
         .run(&[
             "new",
             " ",
+            "--coffee",
+            "0",
+            "--water",
+            "lots",
             "--step",
             "Grind=30",
             "--step",
@@ -156,6 +162,8 @@ fn new_with_invalid_fields_prints_the_field_errors_and_saves_nothing() -> TestRe
         "\
 Fix the highlighted fields
   Recipe name \" \": Enter a recipe name
+  Coffee \"0\": 1–200 g
+  Water \"lots\": Enter grams
   Step 2 name \"Bloom\", duration \"abc\": Enter seconds
   Step 3 name \"Pour\", duration \"6000\": 0–5999 seconds"
     );
@@ -185,7 +193,7 @@ fn delete_removes_the_recipe_and_it_persists() -> TestResult {
     );
     assert_eq!(
         session.reopened()?.run(&["list"])?,
-        "pourover-uuid  Pour Over  Coffee: 30 g  Water: 150 g  Time: 3:10  Light and clean\n"
+        "pourover-uuid  Pour Over  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean\n"
     );
     Ok(())
 }

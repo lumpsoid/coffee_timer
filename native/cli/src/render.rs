@@ -30,7 +30,7 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
     writeln!(out, "{}", view.description())?;
     let adjusted = match view.ratio() {
         RatioSetting::Adjusted(_) => " (adjusted)",
-        RatioSetting::NoCoffee | RatioSetting::Recipe(_) => "",
+        RatioSetting::Recipe(_) => "",
     };
     writeln!(
         out,
@@ -112,6 +112,12 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
     let name = draft
         .name_error()
         .map(|error| format!("Recipe name \"{}\": {error}", draft.name()));
+    let coffee = draft
+        .coffee_error()
+        .map(|error| format!("Coffee \"{}\": {error}", draft.coffee()));
+    let water = draft
+        .water_error()
+        .map(|error| format!("Water \"{}\": {error}", draft.water()));
     let steps = draft.step_rows().into_iter().filter_map(|row| {
         row.duration_error.map(|error| {
             format!(
@@ -120,7 +126,11 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
             )
         })
     });
-    name.into_iter().chain(steps).collect()
+    name.into_iter()
+        .chain(coffee)
+        .chain(water)
+        .chain(steps)
+        .collect()
 }
 
 fn statuses(rows: &[StepRow]) -> String {

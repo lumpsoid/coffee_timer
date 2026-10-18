@@ -1,8 +1,8 @@
 //! Port of `test/domain/recipe_test.dart`.
 
 use coffee_timer_core::model::{
-    BrewMetrics, BrewRatio, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration,
-    StepId,
+    BrewMetrics, BrewRatio, CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, RecipeStep,
+    StepDuration, StepId, WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -15,11 +15,26 @@ fn step(seconds: i64) -> Result<RecipeStep, ModelError> {
     ))
 }
 
+fn dose(grams: i64) -> Result<CoffeeDose, ModelError> {
+    CoffeeDose::try_parse(grams)
+}
+
+fn water(grams: i64) -> Result<WaterAmount, ModelError> {
+    WaterAmount::try_parse(grams)
+}
+
+/// `water_grams` per gram of `coffee`.
+fn ratio(coffee: i64, water_grams: i64) -> Result<BrewRatio, ModelError> {
+    Ok(BrewRatio::of(dose(coffee)?, water(water_grams)?))
+}
+
 fn recipe(step_seconds: &[i64]) -> Result<Recipe, ModelError> {
     Ok(Recipe::new(
         RecipeId::try_parse("r")?,
         RecipeName::try_parse("Recipe")?,
         String::new(),
+        dose(20)?,
+        water(100)?,
         step_seconds
             .iter()
             .map(|&s| step(s))
@@ -256,13 +271,82 @@ fn with_step_removed_at_rejects_an_index_past_the_end() -> TestResult {
 
 #[test]
 fn blank_starts_empty_and_builds_up() -> TestResult {
-    let built = Recipe::blank(RecipeId::try_parse("x")?, RecipeName::try_parse("Aero")?)
-        .described_as("quick".to_owned())
-        .with_step_added(step(20)?);
+    let built = Recipe::blank(
+        RecipeId::try_parse("x")?,
+        RecipeName::try_parse("Aero")?,
+        dose(17)?,
+        water(220)?,
+    )
+    .described_as("quick".to_owned())
+    .with_step_added(step(20)?);
     assert_eq!(built.description(), "quick");
     assert_eq!(built.steps().len(), 1);
     assert_eq!(built.steps()[0].duration().seconds(), 20);
+    assert_eq!((built.coffee().grams(), built.water().grams()), (17, 220));
     Ok(())
+}
+
+// CoffeeDose / WaterAmount
+
+#[test]
+fn coffee_dose_accepts_1_to_200_grams() {
+    assert_eq!(CoffeeDose::try_parse(1).map(CoffeeDose::grams), Ok(1));
+    assert_eq!(CoffeeDose::try_parse(200).map(CoffeeDose::grams), Ok(200));
+    assert_eq!(
+        CoffeeDose::try_parse(0),
+        Err(ModelError::CoffeeDoseOutOfRange(0))
+    );
+    assert_eq!(
+        CoffeeDose::try_parse(201),
+        Err(ModelError::CoffeeDoseOutOfRange(201))
+    );
+}
+
+#[test]
+fn water_amount_accepts_1_to_2000_grams() {
+    assert_eq!(WaterAmount::try_parse(1).map(WaterAmount::grams), Ok(1));
+    assert_eq!(
+        WaterAmount::try_parse(2000).map(WaterAmount::grams),
+        Ok(2000)
+    );
+    assert_eq!(
+        WaterAmount::try_parse(0),
+        Err(ModelError::WaterAmountOutOfRange(0))
+    );
+    assert_eq!(
+        WaterAmount::try_parse(2001),
+        Err(ModelError::WaterAmountOutOfRange(2001))
+    );
+}
+
+#[test]
+fn grams_text_is_trimmed_decimal_with_its_own_messages() {
+    assert_eq!(
+        CoffeeDose::try_parse_text(" 18 ").map(CoffeeDose::grams),
+        Ok(18)
+    );
+    assert_eq!(
+        WaterAmount::try_parse_text("250").map(WaterAmount::grams),
+        Ok(250)
+    );
+    let not_a_number = CoffeeDose::try_parse_text("18.5").map_err(|e| e.to_string());
+    assert_eq!(not_a_number, Err("Enter grams".to_owned()));
+    let not_a_number = WaterAmount::try_parse_text("").map_err(|e| e.to_string());
+    assert_eq!(not_a_number, Err("Enter grams".to_owned()));
+    let too_much = CoffeeDose::try_parse_text("500").map_err(|e| e.to_string());
+    assert_eq!(too_much, Err("1–200 g".to_owned()));
+    let too_much = WaterAmount::try_parse_text("0").map_err(|e| e.to_string());
+    assert_eq!(too_much, Err("1–2000 g".to_owned()));
+}
+
+#[test]
+fn stored_grams_are_clamped_into_bounds() {
+    assert_eq!(CoffeeDose::clamped(0).grams(), 1);
+    assert_eq!(CoffeeDose::clamped(18).grams(), 18);
+    assert_eq!(CoffeeDose::clamped(i64::MAX).grams(), 200);
+    assert_eq!(WaterAmount::clamped(-5).grams(), 1);
+    assert_eq!(WaterAmount::clamped(36).grams(), 36);
+    assert_eq!(WaterAmount::clamped(10_000).grams(), 2000);
 }
 
 // BrewMetrics
@@ -273,15 +357,6 @@ fn duration_label_of_formats_a_raw_durations_list() {
     assert_eq!(metrics.duration_label_of(durations(&[65])), "1:05");
     assert_eq!(metrics.duration_label_of(durations(&[])), "0:00");
     assert_eq!(metrics.duration_label_of(durations(&[5999, 5999])), "99:99");
-}
-
-#[test]
-fn grams_scale_with_step_count() -> TestResult {
-    let metrics = BrewMetrics::default();
-    let r = recipe(&[30, 30, 30])?;
-    assert_eq!(metrics.coffee_grams(&r), 30);
-    assert_eq!(metrics.water_grams(&r), 150);
-    Ok(())
 }
 
 #[test]
@@ -317,38 +392,35 @@ fn duration_label_reads_99_99_at_the_cap() -> TestResult {
 }
 
 #[test]
-fn ratio_label_is_water_per_gram_of_coffee() -> TestResult {
+fn ratio_label_is_the_stored_water_per_gram_of_stored_coffee() -> TestResult {
     let metrics = BrewMetrics::default();
+    // 20 g to 100 g, whatever the steps.
     assert_eq!(metrics.ratio_label(&recipe(&[30, 30])?), "1:5");
-    assert_eq!(metrics.ratio_label(&recipe(&[])?), "—");
+    assert_eq!(metrics.ratio_label(&recipe(&[])?), "1:5");
     Ok(())
 }
 
 #[test]
-fn brew_ratio_rounds_to_a_tenth_and_needs_coffee() {
-    assert_eq!(
-        BrewRatio::of(30, 150).map(BrewRatio::label),
-        Some("1:5".to_owned())
-    );
-    assert_eq!(
-        BrewRatio::of(30, 100).map(BrewRatio::label),
-        Some("1:3.3".to_owned())
-    );
-    assert_eq!(BrewRatio::of(0, 100), None);
+fn brew_ratio_rounds_to_a_tenth() -> TestResult {
+    assert_eq!(ratio(30, 150)?.label(), "1:5");
+    assert_eq!(ratio(30, 100)?.label(), "1:3.3");
+    assert_eq!(ratio(15, 250)?.label(), "1:16.7");
+    assert_eq!(ratio(18, 36)?.label(), "1:2");
+    Ok(())
 }
 
 #[test]
 fn brew_ratio_steps_onto_the_half_grid_within_bounds() -> TestResult {
-    let ratio = BrewRatio::of(30, 100).ok_or("no ratio")?;
-    assert_eq!(ratio.more_water().label(), "1:3.5");
-    assert_eq!(ratio.less_water().label(), "1:3");
-    let whole = BrewRatio::of(10, 50).ok_or("no ratio")?;
+    let r = ratio(30, 100)?;
+    assert_eq!(r.more_water().label(), "1:3.5");
+    assert_eq!(r.less_water().label(), "1:3");
+    let whole = ratio(10, 50)?;
     assert_eq!(whole.more_water().label(), "1:5.5");
     assert_eq!(whole.less_water().label(), "1:4.5");
-    let weak = BrewRatio::of(1, 1000).ok_or("no ratio")?;
+    let weak = ratio(1, 1000)?;
     assert_eq!(weak.more_water().label(), "1:30");
     assert_eq!(weak.less_water().label(), "1:30");
-    let strong = BrewRatio::of(10, 1).ok_or("no ratio")?;
+    let strong = ratio(10, 1)?;
     assert_eq!(strong.less_water().label(), "1:1");
     assert_eq!(strong.more_water().label(), "1:1");
     Ok(())
@@ -356,8 +428,8 @@ fn brew_ratio_steps_onto_the_half_grid_within_bounds() -> TestResult {
 
 #[test]
 fn brew_ratio_water_rounds_half_up_to_a_gram() -> TestResult {
-    let ratio = BrewRatio::of(10, 155).ok_or("no ratio")?;
-    assert_eq!(ratio.water_grams(15), 233);
-    assert_eq!(ratio.water_grams(0), 0);
+    let r = ratio(10, 155)?;
+    assert_eq!(r.water_grams(dose(15)?), 233);
+    assert_eq!(r.water_grams(dose(1)?), 16);
     Ok(())
 }

@@ -47,8 +47,10 @@ assert the state.
 The state objects are complete views, so the screens hold no logic. Every
 label is computed in core: `20g`, `1:35`, `MM:SS`, `Ns`, `Step N name`. Core
 also computes each step's status, the field errors, and the editor's notice.
-[`BrewMetrics`](../native/core/src/model/brew_metrics.rs) is the one home for
-the coffee, water and total-duration figures.
+The coffee and water grams are stored on the recipe, as `CoffeeDose` and
+`WaterAmount`. [`BrewMetrics`](../native/core/src/model/brew_metrics.rs) is
+the one home for the figures derived from them and the steps: the ratio and
+the total duration.
 
 A failed write leaves the state unchanged and returns `Err`. Draft
 actions are the exception. They clear the previous notice whatever they do.
@@ -157,9 +159,9 @@ clock. Time arrives as `tick()`, one call per second while
   only: one step of 0.5 more or less water per gram of coffee, within
   `1:1..=1:30`, or back to the recipe's own. The coffee stays and the water
   follows. It returns no effects and leaves a running timer alone. `open`
-  and `leave` drop the adjustment. An edit to the open recipe keeps it. A
-  recipe without coffee has no ratio and the change is
-  `Err(BrewError::NoCoffee)`.
+  and `leave` drop the adjustment. An edit to the open recipe keeps it,
+  applied to the edited recipe's coffee. Every recipe has coffee
+  (`CoffeeDose` is at least 1 g), so every recipe has a ratio to change.
 - Every accepted start increments a run number, held in
   [`RunningStep`](../native/core/src/brew/running_step.rs). Each tick and
   step change keeps it, so a restart of the same step is distinguishable from

@@ -12,7 +12,8 @@ to.
 
 ## What the app does
 
-- **Recipe list.** Lists every recipe with its coffee, water and total time,
+- **Recipe list.** Lists every recipe with its coffee, water and total time
+  (the coffee and water are the recipe's own stored grams),
   each drawn as a coffee-bag label. Short brews get a dark roast label, long
   ones a light crema label, and each recipe has its own paper texture.
   Tap a recipe to brew it. Long-press it to edit or delete it. The `+` button
@@ -22,10 +23,13 @@ to.
   start the brew from step 1, or tap it again to reset. Long-press a step to
   start from that step. The dial sweeps through the current step, and its
   outer track and the step list mark each step done, current or pending.
+  The coffee, water and ratio are the recipe's stored grams.
   Tap the coffee/water/ratio figures to change the ratio for this brew in
   steps of 0.5. The coffee stays the same and the water follows. Leaving the
   page goes back to the recipe's own ratio.
-- **Editor.** Edits a recipe's name, description and timed steps. The total
+- **Editor.** Edits a recipe's name, description, coffee (1–200 g) and
+  water (1–2000 g), and its timed steps. A new recipe starts at 15 g to
+  250 g. The total
   and each step's `MM:SS` update live. Preset buttons add "Add coffee", "Add
   water", "Wait" or blank steps. Field errors appear from the first save
   attempt onward.
@@ -92,9 +96,9 @@ with no Flutter:
 ```shell
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db list
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show espresso-uuid
-cargo run -p coffee_timer_cli -- --db /tmp/ct.db show espresso-uuid --ratio-steps -2   # 1:4
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --ratio-steps -2   # 1:16
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
-    --step Bloom=30 --step Pour=120
+    --coffee 15 --water 250 --step Bloom=30 --step Pour=120
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings
@@ -111,6 +115,10 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   `[sound]`, `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`).
   `--fast` skips the waits.
   `--from N` starts at a 0-based step.
+- `list` and `show` print each recipe's coffee and water grams; `show` also
+  prints the ratio.
+- `new --coffee GRAMS --water GRAMS` sets the dose (1–200 g and
+  1–2000 g). Without them the recipe gets the editor's 15 g and 250 g.
 - `--step NAME=SECONDS` splits at the last `=`. A blank name is saved as
   `Step N`.
 - Use `--help` on any command for its options.

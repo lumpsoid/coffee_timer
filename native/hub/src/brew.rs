@@ -47,7 +47,6 @@ fn recipe(view: &BrewView, steps: Vec<BrewStep>) -> BrewRecipe {
 impl From<RatioSetting> for BrewRatioSetting {
     fn from(setting: RatioSetting) -> Self {
         match setting {
-            RatioSetting::NoCoffee => Self::NoCoffee,
             RatioSetting::Recipe(_) => Self::Recipe,
             RatioSetting::Adjusted(_) => Self::Adjusted,
         }
@@ -119,7 +118,9 @@ mod tests {
     use coffee_timer_core::brew::BrewController;
     use coffee_timer_core::catalog::RecipeCatalog;
     use coffee_timer_core::fakes::FakeRecipeStore;
-    use coffee_timer_core::model::{Recipe, RecipeId, RecipeName, RecipeStep, StepId};
+    use coffee_timer_core::model::{
+        CoffeeDose, Recipe, RecipeId, RecipeName, RecipeStep, StepId, WaterAmount,
+    };
 
     use super::*;
 
@@ -139,6 +140,8 @@ mod tests {
             RecipeId::try_parse("r1")?,
             RecipeName::try_parse("V60")?,
             "clean".to_owned(),
+            CoffeeDose::try_parse(20)?,
+            WaterAmount::try_parse(100)?,
             vec![step("s1", "Bloom", 30)?, step("s2", "Pour", 0)?],
         );
         let mut catalog = RecipeCatalog::new(Box::new(FakeRecipeStore::with_recipes(vec![recipe])));

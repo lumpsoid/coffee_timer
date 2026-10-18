@@ -7,7 +7,8 @@ pub enum EditorState {
     /// No draft: never opened, closed, saved, or deleted.
     #[default]
     Closed,
-    Open(Draft),
+    /// Boxed: a draft is large next to `Closed`.
+    Open(Box<Draft>),
 }
 
 impl EditorState {

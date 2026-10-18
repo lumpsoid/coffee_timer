@@ -21,8 +21,8 @@ impl RecipeSummary {
             id: recipe.id().clone(),
             name: recipe.name().as_str().to_owned(),
             description: recipe.description().to_owned(),
-            coffee_label: format!("{} g", metrics.coffee_grams(recipe)),
-            water_label: format!("{} g", metrics.water_grams(recipe)),
+            coffee_label: format!("{} g", recipe.coffee().grams()),
+            water_label: format!("{} g", recipe.water().grams()),
             time_label: metrics.duration_label(recipe),
             style: LabelStyle::of(recipe, metrics),
         }

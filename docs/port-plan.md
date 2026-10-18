@@ -176,6 +176,23 @@ Fixed / changed:
 - A new `RemoveRecipe` intent deletes from the list without opening a
   draft.
 
+## Changed after the port
+
+Deliberate changes to behavior the port had kept.
+
+- **Real coffee and water amounts (schema v2).** Legacy `BrewMetrics`
+  derived the figures from the step count: 10 g coffee and 50 g water per
+  step, so the ratio was always `1:5`. A recipe now stores its coffee dose
+  (`CoffeeDose`, 1–200 g) and total water (`WaterAmount`, 1–2000 g),
+  edited in the editor with the other fields' live validation. The list
+  card, the brew page label, the ratio, and the brew page's ratio adjuster
+  all use the stored values. The v2 migration gives each existing recipe
+  what the old formula showed (a recipe the formula would put outside the
+  bounds, such as one with no steps, reads clamped into them). A new
+  database seeds Espresso 18 g / 36 g and Pour Over 15 g / 250 g. Because a
+  dose is never 0 g, the brew page's "no coffee, no ratio" case
+  (`RatioSetting::NoCoffee`, `BrewError::NoCoffee`) is gone.
+
 ## Phases
 
 | # | Phase | Gate |

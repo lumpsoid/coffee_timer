@@ -43,7 +43,7 @@ impl BrewController {
     /// nothing changes.
     pub fn adjust_ratio(&mut self, change: RatioChange) -> Result<(), BrewError> {
         let view = self.state.view().ok_or(BrewError::NoRecipe)?;
-        let ratio = view.ratio().ratio().ok_or(BrewError::NoCoffee)?;
+        let ratio = view.ratio().ratio();
         let adjusted = match change {
             RatioChange::MoreWater => Some(ratio.more_water()),
             RatioChange::LessWater => Some(ratio.less_water()),

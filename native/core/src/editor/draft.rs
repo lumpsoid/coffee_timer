@@ -3,7 +3,9 @@ use std::fmt;
 use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
 use crate::editor::{DraftMode, EditError, EditorStepRow, StepPreset};
-use crate::model::{BrewMetrics, ModelError, Recipe, RecipeId, RecipeName, StepId};
+use crate::model::{
+    BrewMetrics, CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, StepId, WaterAmount,
+};
 use crate::ports::IdGen;
 
 /// The recipe being edited, as typed: the whole editor view state.
@@ -18,6 +20,8 @@ pub struct Draft {
     mode: DraftMode,
     name: Field<RecipeName>,
     description: String,
+    coffee: Field<CoffeeDose>,
+    water: Field<WaterAmount>,
     steps: Vec<DraftStep>,
     errors_shown: bool,
     notice: Option<String>,
@@ -25,7 +29,12 @@ pub struct Draft {
 }
 
 impl Draft {
-    /// A new recipe: fresh id, no name, one blank step.
+    /// Text a new recipe's coffee field starts with: a single pour-over cup.
+    const NEW_COFFEE_TEXT: &'static str = "15";
+    /// Text a new recipe's water field starts with, `1:16.7` to the coffee.
+    const NEW_WATER_TEXT: &'static str = "250";
+
+    /// A new recipe: fresh id, no name, a one-cup dose, one blank step.
     pub(crate) fn new(ids: &mut dyn IdGen, metrics: &BrewMetrics) -> Self {
         let id = ids.recipe_id();
         Self {
@@ -33,6 +42,8 @@ impl Draft {
             mode: DraftMode::New,
             name: Field::parse("", RecipeName::try_parse),
             description: String::new(),
+            coffee: Field::parse(Self::NEW_COFFEE_TEXT, CoffeeDose::try_parse_text),
+            water: Field::parse(Self::NEW_WATER_TEXT, WaterAmount::try_parse_text),
             steps: vec![DraftStep::new(ids.step_id(), StepPreset::Blank.step_name())],
             errors_shown: false,
             notice: None,
@@ -47,6 +58,14 @@ impl Draft {
             mode: DraftMode::Existing,
             name: Field::parse(recipe.name().as_str(), RecipeName::try_parse),
             description: recipe.description().to_owned(),
+            coffee: Field::parse(
+                &recipe.coffee().grams().to_string(),
+                CoffeeDose::try_parse_text,
+            ),
+            water: Field::parse(
+                &recipe.water().grams().to_string(),
+                WaterAmount::try_parse_text,
+            ),
             steps: recipe.steps().iter().map(DraftStep::of).collect(),
             errors_shown: false,
             notice: None,
@@ -72,6 +91,14 @@ impl Draft {
 
     pub(crate) fn set_description(&mut self, raw: &str) {
         raw.clone_into(&mut self.description);
+    }
+
+    pub(crate) fn set_coffee(&mut self, raw: &str) {
+        self.coffee = Field::parse(raw, CoffeeDose::try_parse_text);
+    }
+
+    pub(crate) fn set_water(&mut self, raw: &str) {
+        self.water = Field::parse(raw, WaterAmount::try_parse_text);
     }
 
     pub(crate) fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
@@ -114,6 +141,8 @@ impl Draft {
     pub(crate) fn submit(&mut self) -> Option<Recipe> {
         self.errors_shown = true;
         let name = self.name.value()?.clone();
+        let coffee = *self.coffee.value()?;
+        let water = *self.water.value()?;
         let steps = self
             .steps
             .iter()
@@ -124,6 +153,8 @@ impl Draft {
             self.id.clone(),
             name,
             self.description.trim().to_owned(),
+            coffee,
+            water,
             steps,
         ))
     }
@@ -162,6 +193,26 @@ impl Draft {
     /// The description as typed.
     pub fn description(&self) -> &str {
         &self.description
+    }
+
+    /// The coffee grams as typed.
+    pub fn coffee(&self) -> &str {
+        self.coffee.raw()
+    }
+
+    /// `Enter grams` or `1–200 g`, once errors are shown.
+    pub fn coffee_error(&self) -> Option<String> {
+        self.shown(self.coffee.error())
+    }
+
+    /// The water grams as typed.
+    pub fn water(&self) -> &str {
+        self.water.raw()
+    }
+
+    /// `Enter grams` or `1–2000 g`, once errors are shown.
+    pub fn water_error(&self) -> Option<String> {
+        self.shown(self.water.error())
     }
 
     /// Live `M:SS` total of the typed durations, read leniently and capped

@@ -3,8 +3,8 @@
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
-    BrewMetrics, LabelStyle, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration,
-    StepId,
+    BrewMetrics, CoffeeDose, LabelStyle, ModelError, Recipe, RecipeId, RecipeName, RecipeStep,
+    StepDuration, StepId, WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -13,6 +13,8 @@ fn recipe(id: &str, name: &str) -> Result<Recipe, ModelError> {
     Ok(Recipe::blank(
         RecipeId::try_parse(id)?,
         RecipeName::try_parse(name)?,
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
     ))
 }
 
@@ -159,7 +161,7 @@ fn get_finds_a_recipe_by_id() -> TestResult {
 }
 
 #[test]
-fn summary_carries_the_legacy_tile_values() -> TestResult {
+fn summary_carries_the_stored_dose_and_the_total_time() -> TestResult {
     let step = |id: &str, seconds: i64| -> Result<RecipeStep, ModelError> {
         Ok(RecipeStep::new(
             StepId::try_parse(id)?,
@@ -171,6 +173,8 @@ fn summary_carries_the_legacy_tile_values() -> TestResult {
         RecipeId::try_parse("a")?,
         RecipeName::try_parse("Espresso")?,
         "Strong coffee".to_owned(),
+        CoffeeDose::try_parse(18)?,
+        WaterAmount::try_parse(36)?,
         vec![step("s1", 30)?, step("s2", 65)?],
     );
     assert_eq!(
@@ -179,8 +183,8 @@ fn summary_carries_the_legacy_tile_values() -> TestResult {
             id: RecipeId::try_parse("a")?,
             name: "Espresso".to_owned(),
             description: "Strong coffee".to_owned(),
-            coffee_label: "20 g".to_owned(),
-            water_label: "100 g".to_owned(),
+            coffee_label: "18 g".to_owned(),
+            water_label: "36 g".to_owned(),
             time_label: "1:35".to_owned(),
             style: LabelStyle::of(&recipe, &BrewMetrics::default()),
         }

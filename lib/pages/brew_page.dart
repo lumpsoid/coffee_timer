@@ -181,9 +181,7 @@ class _BrewPageState extends State<BrewPage> {
                 _Rule(colors: colors),
                 GestureDetector(
                   behavior: HitTestBehavior.opaque,
-                  onTap: recipe.ratio == BrewRatioSetting.noCoffee
-                      ? null
-                      : () => _showRatioSheet(colors),
+                  onTap: () => _showRatioSheet(colors),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8),
                     child: LabelSpecs(
@@ -239,10 +237,8 @@ class _BrewPageState extends State<BrewPage> {
                   ),
                 const SizedBox(height: 14),
                 Text(
-                  recipe.ratio == BrewRatioSetting.noCoffee
-                      ? 'Hold a step to start from there'
-                      : 'Tap the figures to change the ratio\n'
-                            'Hold a step to start from there',
+                  'Tap the figures to change the ratio\n'
+                  'Hold a step to start from there',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontFamily: 'Fraunces',

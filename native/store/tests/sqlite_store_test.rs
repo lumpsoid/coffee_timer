@@ -1,12 +1,12 @@
-//! `SqliteStore`: schema v1 and seed, recipe order, step replacement,
+//! `SqliteStore`: schema v2 and seed, recipe doses, recipe order, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepDuration, StepId,
-    ThemeSelection,
+    AccentColor, CoffeeDose, Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepDuration,
+    StepId, ThemeSelection, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
 use coffee_timer_core::settings::SettingsController;
@@ -88,8 +88,18 @@ fn recipe(id: &str, name: &str, steps: Vec<RecipeStep>) -> Outcome<Recipe> {
         RecipeId::try_parse(id)?,
         RecipeName::try_parse(name)?,
         format!("{name} notes"),
+        CoffeeDose::try_parse(20)?,
+        WaterAmount::try_parse(300)?,
         steps,
     ))
+}
+
+/// `(id, coffee grams, water grams)` of each recipe.
+fn doses(recipes: &[Recipe]) -> Vec<(&str, u32, u32)> {
+    recipes
+        .iter()
+        .map(|r| (r.id().as_str(), r.coffee().grams(), r.water().grams()))
+        .collect()
 }
 
 fn ids(recipes: &[Recipe]) -> Vec<&str> {
@@ -110,13 +120,59 @@ fn fresh_database_is_seeded_with_espresso_then_pour_over() -> TestResult {
 }
 
 #[test]
-fn opened_file_is_at_schema_v1() -> TestResult {
+fn fresh_database_seeds_real_doses() -> TestResult {
+    let store = SqliteStore::open_in_memory()?;
+    assert_eq!(
+        doses(&store.load_all()?),
+        [("espresso-uuid", 18, 36), ("pourover-uuid", 15, 250)]
+    );
+    Ok(())
+}
+
+#[test]
+fn doses_round_trip_and_follow_an_upsert() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let first = recipe("r1", "V60", vec![step("s1", "Pour", 90)?])?;
+    store.upsert(&first)?;
+    let edited = Recipe::new(
+        first.id().clone(),
+        first.name().clone(),
+        first.description().to_owned(),
+        CoffeeDose::try_parse(16)?,
+        WaterAmount::try_parse(256)?,
+        first.steps().to_vec(),
+    );
+    store.upsert(&edited)?;
+    let loaded = store.load_all()?;
+    assert_eq!(doses(&loaded).last(), Some(&("r1", 16, 256)));
+    Ok(())
+}
+
+#[test]
+fn stored_doses_out_of_range_are_clamped() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    drop(SqliteStore::open(&path)?);
+    Connection::open(&path)?.execute_batch(
+        "UPDATE recipe SET coffee_grams = 0, water_grams = 0 WHERE id = 'espresso-uuid';
+         UPDATE recipe SET coffee_grams = 999, water_grams = 99999 WHERE id = 'pourover-uuid';",
+    )?;
+    let store = SqliteStore::open(&path)?;
+    assert_eq!(
+        doses(&store.load_all()?),
+        [("espresso-uuid", 1, 1), ("pourover-uuid", 200, 2000)]
+    );
+    Ok(())
+}
+
+#[test]
+fn opened_file_is_at_schema_v2() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
     SqliteStore::open(&path)?;
     let version: u32 =
         Connection::open(&path)?.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 1);
+    assert_eq!(version, 2);
     Ok(())
 }
 

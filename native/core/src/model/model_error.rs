@@ -3,7 +3,8 @@ use std::fmt;
 /// Why a model value could not be built or an operation was rejected.
 ///
 /// Texts match the legacy form messages where the legacy app had one
-/// (`Enter a recipe name`, `Enter seconds`, `0–5999 seconds`).
+/// (`Enter a recipe name`, `Enter seconds`, `0–5999 seconds`); the grams
+/// fields, new since the port, read `Enter grams` and `1–200 g`.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelError {
     EmptyRecipeId,
@@ -11,6 +12,10 @@ pub enum ModelError {
     BlankRecipeName,
     StepDurationNotANumber(String),
     StepDurationOutOfRange(i64),
+    CoffeeDoseNotANumber(String),
+    CoffeeDoseOutOfRange(i64),
+    WaterAmountNotANumber(String),
+    WaterAmountOutOfRange(i64),
     AccentOutOfRange(i64),
     MalformedAccentHex(String),
     UnknownTheme(String),
@@ -28,6 +33,21 @@ impl fmt::Display for ModelError {
                 f,
                 "0–{} seconds",
                 crate::model::StepDuration::MAX_STEP_SECONDS
+            ),
+            Self::CoffeeDoseNotANumber(_) | Self::WaterAmountNotANumber(_) => {
+                write!(f, "Enter grams")
+            }
+            Self::CoffeeDoseOutOfRange(_) => write!(
+                f,
+                "{}–{} g",
+                crate::model::CoffeeDose::MIN_GRAMS,
+                crate::model::CoffeeDose::MAX_GRAMS
+            ),
+            Self::WaterAmountOutOfRange(_) => write!(
+                f,
+                "{}–{} g",
+                crate::model::WaterAmount::MIN_GRAMS,
+                crate::model::WaterAmount::MAX_GRAMS
             ),
             Self::AccentOutOfRange(value) => {
                 write!(f, "Accent {value} is not a 32-bit ARGB value")

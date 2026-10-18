@@ -53,7 +53,11 @@ void main() {
     tester,
   ) async {
     // A draft left open from before is not this page's.
-    editor.apply(EditorUpdateOpen(draft: draft(id: 'old', name: 'Old')));
+    editor.apply(
+      EditorUpdateOpen(
+        draft: draft(id: 'old', name: 'Old'),
+      ),
+    );
     await pumpEditor(tester);
     expect(opens, 1);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
@@ -65,6 +69,10 @@ void main() {
     expect(find.text('Total duration: 0:30'), findsOneWidget);
     expect(find.text('Step 1 name'), findsOneWidget);
     expect(find.text('MM:SS — 00:30'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Coffee (g)'), findsOneWidget);
+    expect(find.text('15'), findsOneWidget);
+    expect(find.widgetWithText(TextFormField, 'Water (g)'), findsOneWidget);
+    expect(find.text('250'), findsOneWidget);
   });
 
   testWidgets('renders the add-step buttons from state, in order', (
@@ -93,6 +101,10 @@ void main() {
           name: '',
           nameError: 'Enter a recipe name',
           description: '',
+          coffee: '0',
+          coffeeError: '1–200 g',
+          water: 'x',
+          waterError: 'Enter grams',
           totalLabel: '0:00',
           steps: [
             EditorStep(
@@ -111,6 +123,8 @@ void main() {
     await tester.pump();
 
     expect(find.text('Enter a recipe name'), findsOneWidget);
+    expect(find.text('1–200 g'), findsOneWidget);
+    expect(find.text('Enter grams'), findsOneWidget);
     expect(find.text('Enter seconds'), findsOneWidget);
     expect(find.byTooltip('Delete'), findsNothing);
   });

@@ -92,7 +92,9 @@ impl From<LabelStyle> for RecipeLabel {
 #[cfg(test)]
 mod tests {
     use coffee_timer_core::fakes::FakeRecipeStore;
-    use coffee_timer_core::model::{RecipeId, RecipeName, RecipeStep, StepDuration, StepId};
+    use coffee_timer_core::model::{
+        CoffeeDose, RecipeId, RecipeName, RecipeStep, StepDuration, StepId, WaterAmount,
+    };
 
     use super::*;
 
@@ -103,6 +105,8 @@ mod tests {
             RecipeId::try_parse("r1")?,
             RecipeName::try_parse("V60")?,
             "clean".to_owned(),
+            CoffeeDose::try_parse(20)?,
+            WaterAmount::try_parse(100)?,
             vec![RecipeStep::new(
                 StepId::try_parse("s1")?,
                 "Add coffee".to_owned(),
@@ -122,8 +126,8 @@ mod tests {
         assert_eq!(row.name, "V60");
         assert_eq!(row.description, "clean");
         assert_eq!(row.time_label, "1:35");
-        assert!(row.coffee_label.ends_with(" g"));
-        assert!(row.water_label.ends_with(" g"));
+        assert_eq!(row.coffee_label, "20 g");
+        assert_eq!(row.water_label, "100 g");
         assert!(matches!(row.label.tone, LabelTone::Roast));
     }
 

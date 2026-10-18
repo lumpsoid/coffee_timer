@@ -68,7 +68,7 @@ pub struct BrewRecipe {
     pub coffee_label: String,
     /// `100g`, at the ratio shown.
     pub water_label: String,
-    /// Water per gram of coffee, `1:5`; `—` without coffee.
+    /// Water per gram of coffee, `1:5`.
     pub ratio_label: String,
     pub ratio: BrewRatioSetting,
     /// Total, `M:SS`.
@@ -96,8 +96,6 @@ pub struct BrewStep {
 /// Whose ratio the page shows.
 #[derive(Serialize, SignalPiece)]
 pub enum BrewRatioSetting {
-    /// The recipe has no coffee; its ratio cannot change.
-    NoCoffee,
     /// The recipe's own ratio.
     Recipe,
     /// Changed for this brew; water and ratio differ from the recipe's.

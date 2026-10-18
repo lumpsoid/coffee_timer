@@ -29,6 +29,8 @@ EditorDraft draft({
   canDelete: canDelete,
   name: name,
   description: '',
+  coffee: '15',
+  water: '250',
   totalLabel: '0:30',
   steps: const [
     EditorStep(

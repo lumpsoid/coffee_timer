@@ -1,7 +1,8 @@
-use crate::model::{ModelError, RecipeId, RecipeName, RecipeStep};
+use crate::model::{CoffeeDose, ModelError, RecipeId, RecipeName, RecipeStep, WaterAmount};
 
-/// A brew recipe. Every field is a valid-by-construction value; the derived
-/// brew figures live in `BrewMetrics`, not here.
+/// A brew recipe. Every field is a valid-by-construction value: the coffee
+/// dose and the total water are stored, the figures derived from them and
+/// the steps (ratio, total time) live in `BrewMetrics`, not here.
 ///
 /// Change is expressed as named operations that consume the recipe and
 /// return the changed one — there are no setters.
@@ -10,6 +11,8 @@ pub struct Recipe {
     id: RecipeId,
     name: RecipeName,
     description: String,
+    coffee: CoffeeDose,
+    water: WaterAmount,
     steps: Vec<RecipeStep>,
 }
 
@@ -18,19 +21,23 @@ impl Recipe {
         id: RecipeId,
         name: RecipeName,
         description: String,
+        coffee: CoffeeDose,
+        water: WaterAmount,
         steps: Vec<RecipeStep>,
     ) -> Self {
         Self {
             id,
             name,
             description,
+            coffee,
+            water,
             steps,
         }
     }
 
     /// A fresh recipe with no description and no steps.
-    pub fn blank(id: RecipeId, name: RecipeName) -> Self {
-        Self::new(id, name, String::new(), Vec::new())
+    pub fn blank(id: RecipeId, name: RecipeName, coffee: CoffeeDose, water: WaterAmount) -> Self {
+        Self::new(id, name, String::new(), coffee, water, Vec::new())
     }
 
     pub fn renamed(self, name: RecipeName) -> Self {
@@ -71,6 +78,16 @@ impl Recipe {
 
     pub fn description(&self) -> &str {
         &self.description
+    }
+
+    /// Ground coffee the recipe uses.
+    pub fn coffee(&self) -> CoffeeDose {
+        self.coffee
+    }
+
+    /// Water the whole recipe uses.
+    pub fn water(&self) -> WaterAmount {
+        self.water
     }
 
     pub fn steps(&self) -> &[RecipeStep] {

@@ -25,6 +25,18 @@ pub struct SetRecipeDescription {
     pub raw: String,
 }
 
+/// The coffee grams as typed.
+#[derive(Deserialize, DartSignal)]
+pub struct SetRecipeCoffee {
+    pub raw: String,
+}
+
+/// The water grams as typed.
+#[derive(Deserialize, DartSignal)]
+pub struct SetRecipeWater {
+    pub raw: String,
+}
+
 /// `row` is an `EditorStep::id`.
 #[derive(Deserialize, DartSignal)]
 pub struct SetStepName {
@@ -80,6 +92,14 @@ pub struct EditorDraft {
     /// `Enter a recipe name`, once a save was attempted.
     pub name_error: Option<String>,
     pub description: String,
+    /// The coffee grams as typed.
+    pub coffee: String,
+    /// `Enter grams` or `1–200 g`, once a save was attempted.
+    pub coffee_error: Option<String>,
+    /// The water grams as typed.
+    pub water: String,
+    /// `Enter grams` or `1–2000 g`, once a save was attempted.
+    pub water_error: Option<String>,
     /// Live total, `M:SS`.
     pub total_label: String,
     pub steps: Vec<EditorStep>,

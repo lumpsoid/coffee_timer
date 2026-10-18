@@ -164,6 +164,37 @@ class _EditorPageState extends State<EditorPage> {
             onChanged: (raw) =>
                 SetRecipeDescription(raw: raw).sendSignalToRust(),
           ),
+          const SizedBox(height: 12),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextFormField(
+                  initialValue: draft.coffee,
+                  decoration: InputDecoration(
+                    labelText: 'Coffee (g)',
+                    errorText: draft.coffeeError,
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (raw) =>
+                      SetRecipeCoffee(raw: raw).sendSignalToRust(),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: TextFormField(
+                  initialValue: draft.water,
+                  decoration: InputDecoration(
+                    labelText: 'Water (g)',
+                    errorText: draft.waterError,
+                  ),
+                  keyboardType: TextInputType.number,
+                  onChanged: (raw) =>
+                      SetRecipeWater(raw: raw).sendSignalToRust(),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 20),
           Text('Total duration: ${draft.totalLabel}'),
           const SizedBox(height: 20),

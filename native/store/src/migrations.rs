@@ -1,14 +1,38 @@
 //! Schema migrations keyed by `PRAGMA user_version`. Each entry takes the
 //! database to its version from the one before; add a version by appending
 //! one entry. A shipped entry is never edited.
+//!
+//! An entry may also carry `fresh` SQL, run right after its own only on a
+//! database this same migration created (from version 0). That lets a new
+//! database's seed differ from what an upgraded database keeps, while every
+//! statement still runs against the schema of its own version.
 
 use coffee_timer_core::ports::StoreError;
 use rusqlite::Connection;
 
 use crate::sqlite_store::db_error;
 
-/// `(version, sql)`, in ascending version order starting at 1.
-const MIGRATIONS: &[(u32, &str)] = &[(1, V1_SCHEMA_AND_SEED)];
+/// One schema version: `sql` takes the database to `version`; `fresh`, if
+/// any, then runs only on a database created in this migration.
+struct Migration {
+    version: u32,
+    sql: &'static str,
+    fresh: Option<&'static str>,
+}
+
+/// In ascending version order starting at 1.
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: V1_SCHEMA_AND_SEED,
+        fresh: None,
+    },
+    Migration {
+        version: 2,
+        sql: V2_RECIPE_DOSE,
+        fresh: Some(V2_FRESH_SEED_DOSE),
+    },
+];
 
 /// v1: tables, plus the two example recipes. Seeding is part of creating the
 /// database, so it happens once: emptying the catalog does not re-seed
@@ -47,6 +71,26 @@ INSERT INTO step (id, recipe_id, position, name, duration_seconds) VALUES
     ('step5', 'pourover-uuid', 2, 'Pour', 120);
 ";
 
+/// v2: a recipe stores its coffee dose and total water in grams. Until v1
+/// they were derived from the step count (10 g coffee and 50 g water per
+/// step), so an upgraded recipe gets exactly that and shows what it showed.
+/// The core reads the values leniently (clamped into its bounds), so the
+/// bounds are not repeated here.
+const V2_RECIPE_DOSE: &str = "
+ALTER TABLE recipe ADD COLUMN coffee_grams INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE recipe ADD COLUMN water_grams INTEGER NOT NULL DEFAULT 0;
+
+UPDATE recipe SET
+    coffee_grams = 10 * (SELECT COUNT(*) FROM step WHERE step.recipe_id = recipe.id),
+    water_grams  = 50 * (SELECT COUNT(*) FROM step WHERE step.recipe_id = recipe.id);
+";
+
+/// v2 on a new database: the seeded recipes get real doses instead.
+const V2_FRESH_SEED_DOSE: &str = "
+UPDATE recipe SET coffee_grams = 18, water_grams = 36 WHERE id = 'espresso-uuid';
+UPDATE recipe SET coffee_grams = 15, water_grams = 250 WHERE id = 'pourover-uuid';
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -59,15 +103,19 @@ pub(crate) fn migrate(conn: &mut Connection) -> Result<(), StoreError> {
     let current: u32 = tx
         .pragma_query_value(None, "user_version", |row| row.get(0))
         .map_err(db_error)?;
-    let latest = MIGRATIONS.last().map_or(0, |&(version, _)| version);
+    let latest = MIGRATIONS.last().map_or(0, |m| m.version);
     if current > latest {
         return Err(StoreError::new(format!(
             "database schema v{current} is newer than this app (v{latest})"
         )));
     }
-    for &(version, sql) in MIGRATIONS.iter().filter(|&&(version, _)| version > current) {
-        tx.execute_batch(sql).map_err(db_error)?;
-        tx.pragma_update(None, "user_version", version)
+    let created = current == 0;
+    for m in MIGRATIONS.iter().filter(|m| m.version > current) {
+        tx.execute_batch(m.sql).map_err(db_error)?;
+        if let (true, Some(fresh)) = (created, m.fresh) {
+            tx.execute_batch(fresh).map_err(db_error)?;
+        }
+        tx.pragma_update(None, "user_version", m.version)
             .map_err(db_error)?;
     }
     let violations: i64 = tx
@@ -94,10 +142,52 @@ mod tests {
     }
 
     #[test]
-    fn fresh_database_ends_at_v1() -> TestResult {
+    fn fresh_database_ends_at_v2() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 1);
+        assert_eq!(user_version(&conn)?, 2);
+        Ok(())
+    }
+
+    fn doses(conn: &Connection) -> rusqlite::Result<Vec<(String, i64, i64)>> {
+        conn.prepare("SELECT id, coffee_grams, water_grams FROM recipe ORDER BY position")?
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+            .collect()
+    }
+
+    #[test]
+    fn fresh_database_seeds_real_doses() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        migrate(&mut conn)?;
+        assert_eq!(
+            doses(&conn)?,
+            [
+                ("espresso-uuid".to_owned(), 18, 36),
+                ("pourover-uuid".to_owned(), 15, 250),
+            ]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn v1_recipes_keep_the_dose_their_step_count_gave() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA_AND_SEED)?;
+        conn.execute_batch(
+            "INSERT INTO recipe (id, name, description) VALUES ('none', 'No steps', '');
+             UPDATE recipe SET name = 'Mine' WHERE id = 'espresso-uuid';",
+        )?;
+        conn.pragma_update(None, "user_version", 1)?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 2);
+        assert_eq!(
+            doses(&conn)?,
+            [
+                ("espresso-uuid".to_owned(), 20, 100),
+                ("pourover-uuid".to_owned(), 30, 150),
+                ("none".to_owned(), 0, 0),
+            ]
+        );
         Ok(())
     }
 
@@ -108,14 +198,14 @@ mod tests {
         migrate(&mut conn)?;
         let recipes: i64 = conn.query_row("SELECT COUNT(*) FROM recipe", [], |r| r.get(0))?;
         assert_eq!(recipes, 2);
-        assert_eq!(user_version(&conn)?, 1);
+        assert_eq!(user_version(&conn)?, 2);
         Ok(())
     }
 
     #[test]
     fn newer_database_is_refused() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 2)?;
+        conn.pragma_update(None, "user_version", 3)?;
         assert!(migrate(&mut conn).is_err());
         Ok(())
     }
