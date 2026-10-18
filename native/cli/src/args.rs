@@ -24,6 +24,16 @@ pub enum Command {
     Show {
         /// Recipe id, as printed by `list`.
         id: String,
+        /// Change the ratio by N steps of 0.5 for this showing, as the brew
+        /// page's ratio buttons do: positive adds water, negative takes it
+        /// away. The coffee stays.
+        #[arg(
+            long,
+            default_value_t = 0,
+            value_name = "N",
+            allow_negative_numbers = true
+        )]
+        ratio_steps: i32,
     },
     /// Create a recipe.
     New(NewRecipe),

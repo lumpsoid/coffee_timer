@@ -55,6 +55,7 @@ BrewRecipe brewRecipe({List<BrewStepStatus>? statuses}) => BrewRecipe(
   coffeeLabel: '20g',
   waterLabel: '100g',
   ratioLabel: '1:5',
+  ratio: BrewRatioSetting.recipe,
   durationLabel: '0:30',
   label: label(),
   steps: [

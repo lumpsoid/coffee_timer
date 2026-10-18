@@ -4,7 +4,7 @@
 
 use std::io::Write;
 
-use coffee_timer_core::brew::BrewController;
+use coffee_timer_core::brew::{BrewController, RatioChange};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::editor::{EditError, EditorController, StepPreset};
 use coffee_timer_core::model::{AccentColor, AccentOption, BrewMetrics, RecipeId, ThemeSelection};
@@ -22,14 +22,25 @@ pub fn list(catalog: &RecipeCatalog, out: &mut impl Write) -> Result<(), CliErro
     Ok(())
 }
 
+/// Opens the recipe, then presses the brew page's more-water (positive) or
+/// less-water (negative) button `ratio_steps` times.
 pub fn show(
     id: &str,
+    ratio_steps: i32,
     brew: &mut BrewController,
     catalog: &RecipeCatalog,
     out: &mut impl Write,
 ) -> Result<(), CliError> {
     let effects = brew.open(&RecipeId::try_parse(id)?, catalog);
     render::effects(out, &effects)?;
+    let change = if ratio_steps < 0 {
+        RatioChange::LessWater
+    } else {
+        RatioChange::MoreWater
+    };
+    for _ in 0..ratio_steps.unsigned_abs() {
+        brew.adjust_ratio(change)?;
+    }
     render::brew_page(out, brew.state())?;
     Ok(())
 }

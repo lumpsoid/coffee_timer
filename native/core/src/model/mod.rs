@@ -3,6 +3,7 @@
 mod accent_color;
 mod accent_option;
 mod brew_metrics;
+mod brew_ratio;
 mod hyphenated;
 mod label_shade;
 mod label_style;
@@ -22,6 +23,7 @@ mod theme_selection;
 pub use accent_color::AccentColor;
 pub use accent_option::AccentOption;
 pub use brew_metrics::BrewMetrics;
+pub use brew_ratio::BrewRatio;
 pub use label_shade::LabelShade;
 pub use label_style::LabelStyle;
 pub use label_texture::LabelTexture;

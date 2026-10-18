@@ -1,7 +1,8 @@
 //! Port of `test/domain/recipe_test.dart`.
 
 use coffee_timer_core::model::{
-    BrewMetrics, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    BrewMetrics, BrewRatio, ModelError, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration,
+    StepId,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -320,5 +321,43 @@ fn ratio_label_is_water_per_gram_of_coffee() -> TestResult {
     let metrics = BrewMetrics::default();
     assert_eq!(metrics.ratio_label(&recipe(&[30, 30])?), "1:5");
     assert_eq!(metrics.ratio_label(&recipe(&[])?), "—");
+    Ok(())
+}
+
+#[test]
+fn brew_ratio_rounds_to_a_tenth_and_needs_coffee() {
+    assert_eq!(
+        BrewRatio::of(30, 150).map(BrewRatio::label),
+        Some("1:5".to_owned())
+    );
+    assert_eq!(
+        BrewRatio::of(30, 100).map(BrewRatio::label),
+        Some("1:3.3".to_owned())
+    );
+    assert_eq!(BrewRatio::of(0, 100), None);
+}
+
+#[test]
+fn brew_ratio_steps_onto_the_half_grid_within_bounds() -> TestResult {
+    let ratio = BrewRatio::of(30, 100).ok_or("no ratio")?;
+    assert_eq!(ratio.more_water().label(), "1:3.5");
+    assert_eq!(ratio.less_water().label(), "1:3");
+    let whole = BrewRatio::of(10, 50).ok_or("no ratio")?;
+    assert_eq!(whole.more_water().label(), "1:5.5");
+    assert_eq!(whole.less_water().label(), "1:4.5");
+    let weak = BrewRatio::of(1, 1000).ok_or("no ratio")?;
+    assert_eq!(weak.more_water().label(), "1:30");
+    assert_eq!(weak.less_water().label(), "1:30");
+    let strong = BrewRatio::of(10, 1).ok_or("no ratio")?;
+    assert_eq!(strong.less_water().label(), "1:1");
+    assert_eq!(strong.more_water().label(), "1:1");
+    Ok(())
+}
+
+#[test]
+fn brew_ratio_water_rounds_half_up_to_a_gram() -> TestResult {
+    let ratio = BrewRatio::of(10, 155).ok_or("no ratio")?;
+    assert_eq!(ratio.water_grams(15), 233);
+    assert_eq!(ratio.water_grams(0), 0);
     Ok(())
 }

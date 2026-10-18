@@ -1,30 +1,53 @@
 use std::cmp::Ordering;
 
-use crate::brew::{RunningStep, StepRow, StepStatus};
-use crate::model::{BrewMetrics, LabelStyle, Recipe, RecipeId};
+use crate::brew::{RatioSetting, RunningStep, StepRow, StepStatus};
+use crate::model::{BrewMetrics, BrewRatio, LabelStyle, Recipe, RecipeId};
 
-/// The open recipe as the brew page shows it. Built once per recipe version;
-/// the timer's position is kept beside it in [`crate::brew::BrewState`].
+/// The open recipe as the brew page shows it. Built once per recipe version
+/// and ratio; the timer's position is kept beside it in
+/// [`crate::brew::BrewState`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrewView {
     recipe: Recipe,
     coffee_label: String,
     water_label: String,
     ratio_label: String,
+    ratio: RatioSetting,
     duration_label: String,
     style: LabelStyle,
 }
 
 impl BrewView {
-    pub(crate) fn of(recipe: Recipe, metrics: &BrewMetrics) -> Self {
+    /// `recipe` at the ratio `adjusted` on the brew page, or at its own
+    /// ratio. An adjusted ratio equal to the recipe's is no adjustment, and a
+    /// recipe without coffee keeps none.
+    pub(crate) fn of(recipe: Recipe, metrics: &BrewMetrics, adjusted: Option<BrewRatio>) -> Self {
+        let coffee = metrics.coffee_grams(&recipe);
+        let ratio = match (metrics.ratio(&recipe), adjusted) {
+            (None, _) => RatioSetting::NoCoffee,
+            (Some(own), Some(ratio)) if ratio != own => RatioSetting::Adjusted(ratio),
+            (Some(own), _) => RatioSetting::Recipe(own),
+        };
+        let water = match ratio {
+            RatioSetting::Adjusted(ratio) => ratio.water_grams(coffee),
+            RatioSetting::NoCoffee | RatioSetting::Recipe(_) => metrics.water_grams(&recipe),
+        };
         Self {
-            coffee_label: format!("{}g", metrics.coffee_grams(&recipe)),
-            water_label: format!("{}g", metrics.water_grams(&recipe)),
-            ratio_label: metrics.ratio_label(&recipe),
+            coffee_label: format!("{coffee}g"),
+            water_label: format!("{water}g"),
+            ratio_label: ratio
+                .ratio()
+                .map_or_else(|| BrewRatio::NONE_LABEL.to_owned(), BrewRatio::label),
+            ratio,
             duration_label: metrics.duration_label(&recipe),
             style: LabelStyle::of(&recipe, metrics),
             recipe,
         }
+    }
+
+    /// The same recipe at the ratio `adjusted`, or at its own.
+    pub(crate) fn with_ratio(self, adjusted: Option<BrewRatio>, metrics: &BrewMetrics) -> Self {
+        Self::of(self.recipe, metrics, adjusted)
     }
 
     /// The step at `index`, about to run with its full duration in start
@@ -104,14 +127,19 @@ impl BrewView {
         &self.coffee_label
     }
 
-    /// Water grams, `100g`.
+    /// Water grams at the ratio shown, `100g`.
     pub fn water_label(&self) -> &str {
         &self.water_label
     }
 
-    /// Water per gram of coffee, `1:5`.
+    /// Water per gram of coffee, `1:5`; `—` without coffee.
     pub fn ratio_label(&self) -> &str {
         &self.ratio_label
+    }
+
+    /// The ratio shown, and whether it is the recipe's own.
+    pub fn ratio(&self) -> RatioSetting {
+        self.ratio
     }
 
     /// The recipe's printed-label look, the same one the list shows.

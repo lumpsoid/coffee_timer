@@ -20,11 +20,11 @@ use rinf::{DartSignal, RustSignal, debug_print};
 use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::signals::{
-    AddStep, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, EditRecipe, EditorReady,
-    EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PlatformEffect, RecipeListReady, RecipeListUpdate,
-    RemoveRecipe, RemoveStep, ResetBrew, SaveRecipe, SetAccent, SetRecipeDescription,
-    SetRecipeName, SetStepDuration, SetStepName, SetTheme, SettingsReady, SettingsUpdate,
-    StartBrew,
+    AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, EditRecipe,
+    EditorReady, EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PlatformEffect, RecipeListReady,
+    RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, SaveRecipe, SetAccent,
+    SetRecipeDescription, SetRecipeName, SetStepDuration, SetStepName, SetTheme, SettingsReady,
+    SettingsUpdate, StartBrew,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -64,6 +64,7 @@ pub async fn run(mut c: Controllers) {
     let start_brew = StartBrew::get_dart_signal_receiver();
     let reset_brew = ResetBrew::get_dart_signal_receiver();
     let leave_brew = LeaveBrew::get_dart_signal_receiver();
+    let adjust_brew_ratio = AdjustBrewRatio::get_dart_signal_receiver();
     let editor_ready = EditorReady::get_dart_signal_receiver();
     let new_draft = NewDraft::get_dart_signal_receiver();
     let edit_recipe = EditRecipe::get_dart_signal_receiver();
@@ -114,6 +115,10 @@ pub async fn run(mut c: Controllers) {
             Some(_) = reset_brew.recv() => {
                 let effects = c.brew.reset();
                 show_brew(&c.brew, &effects);
+            }
+            Some(pack) = adjust_brew_ratio.recv() => {
+                report(c.brew.adjust_ratio(pack.message.change.into()));
+                show_brew(&c.brew, &[]);
             }
             Some(_) = leave_brew.recv() => {
                 let effects = c.brew.leave();

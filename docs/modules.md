@@ -37,6 +37,9 @@ again.
   operations. A blank step name is saved as `Step N`.
 - **`BrewMetrics`** is the one home for coffee grams, water grams, their
   ratio (`1:5`), and the capped total duration with its `M:SS` label.
+- **`BrewRatio`** is water per gram of coffee, in tenths, with its label.
+  The brew page moves it in steps of 0.5 within `1:1..=1:30` and works out
+  the water for a dose of coffee.
 - **`LabelStyle`** is how a recipe looks in the list, as a coffee-bag label.
   `LabelTone` (roast, caramel or crema) follows total brew time, with the
   thresholds as named constants. `LabelTexture`, `LabelShade` and
@@ -110,12 +113,14 @@ Test:
 [`native/core/src/brew`](../native/core/src/brew)
 
 - `BrewController` owns `BrewState` and runs the timer state machine. It
-  provides `open`, `start`, `tick`, `reset`, `leave` and
+  provides `open`, `start`, `tick`, `reset`, `leave`, `adjust_ratio` and
   `on_catalog_change`.
 - `BrewState` is `Empty`, `Idle(BrewView)` or `Running(BrewView,
   RunningStep)`.
 - `BrewView` is the open recipe with its labels, its `LabelStyle` (the
-  brew page wears the list card's label) and `Step N of M` positions.
+  brew page wears the list card's label) and `Step N of M` positions. Its
+  `RatioSetting` is `NoCoffee`, `Recipe` or `Adjusted`; `RatioChange` is
+  one press of the page's ratio controls.
 - `RunningStep` is the current step, the time left, the run number, and the
   dial's sweep.
 - `StepRow` and `StepStatus` (`Done` / `Current` / `Pending`) describe the
@@ -123,7 +128,7 @@ Test:
   fractions of the whole brew.
 - `Effect` is a platform command. `BrewNotice` is the content of the brew
   notification.
-- `BrewError` is a rejected start.
+- `BrewError` is a rejected start or ratio change.
 
 Test:
 [`brew_controller_test.rs`](../native/core/tests/brew_controller_test.rs),
@@ -240,7 +245,7 @@ makes no business decisions.
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted` / `Removed` / `Failed`) |
-| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `ResetBrew`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running`), `PlatformEffect` |
+| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetStepName`, `SetStepDuration`, `AddStep`, `RemoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
 

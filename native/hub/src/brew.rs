@@ -1,11 +1,15 @@
 //! Brew state and effects → brew signals.
 
 use coffee_timer_core::brew::{
-    BrewNotice, BrewState, BrewView, Effect, RunningStep, StepRow, StepStatus,
+    BrewNotice, BrewState, BrewView, Effect, RatioChange, RatioSetting, RunningStep, StepRow,
+    StepStatus,
 };
 use coffee_timer_core::model::StepDuration;
 
-use crate::signals::{BrewRecipe, BrewStep, BrewStepStatus, BrewTimer, BrewUpdate, PlatformEffect};
+use crate::signals::{
+    BrewRatioChange, BrewRatioSetting, BrewRecipe, BrewStep, BrewStepStatus, BrewTimer, BrewUpdate,
+    PlatformEffect,
+};
 
 impl From<&BrewState> for BrewUpdate {
     fn from(state: &BrewState) -> Self {
@@ -33,9 +37,30 @@ fn recipe(view: &BrewView, steps: Vec<BrewStep>) -> BrewRecipe {
         coffee_label: view.coffee_label().to_owned(),
         water_label: view.water_label().to_owned(),
         ratio_label: view.ratio_label().to_owned(),
+        ratio: view.ratio().into(),
         duration_label: view.duration_label().to_owned(),
         label: view.style().into(),
         steps,
+    }
+}
+
+impl From<RatioSetting> for BrewRatioSetting {
+    fn from(setting: RatioSetting) -> Self {
+        match setting {
+            RatioSetting::NoCoffee => Self::NoCoffee,
+            RatioSetting::Recipe(_) => Self::Recipe,
+            RatioSetting::Adjusted(_) => Self::Adjusted,
+        }
+    }
+}
+
+impl From<BrewRatioChange> for RatioChange {
+    fn from(change: BrewRatioChange) -> Self {
+        match change {
+            BrewRatioChange::MoreWater => Self::MoreWater,
+            BrewRatioChange::LessWater => Self::LessWater,
+            BrewRatioChange::Recipe => Self::Recipe,
+        }
     }
 }
 
@@ -155,6 +180,7 @@ mod tests {
         assert_eq!(recipe.description, "clean");
         assert_eq!(recipe.duration_label, "0:30");
         assert_eq!(recipe.ratio_label, "1:5");
+        assert!(matches!(recipe.ratio, BrewRatioSetting::Recipe));
         let track: Vec<_> = recipe
             .steps
             .iter()
@@ -165,6 +191,20 @@ mod tests {
         assert_eq!(recipe.steps[0].number_label, "1");
         assert_eq!(recipe.steps[0].name, "Bloom");
         assert_eq!(recipe.steps[0].duration_label, "30s");
+        Ok(())
+    }
+
+    #[test]
+    fn an_adjusted_ratio_shows_its_water_and_label() -> TestResult {
+        let mut brew = opened()?;
+        brew.adjust_ratio(BrewRatioChange::MoreWater.into())?;
+        let BrewUpdate::Idle { recipe } = BrewUpdate::from(brew.state()) else {
+            return Err("not idle".into());
+        };
+        assert_eq!(recipe.coffee_label, "20g");
+        assert_eq!(recipe.water_label, "110g");
+        assert_eq!(recipe.ratio_label, "1:5.5");
+        assert!(matches!(recipe.ratio, BrewRatioSetting::Adjusted));
         Ok(())
     }
 

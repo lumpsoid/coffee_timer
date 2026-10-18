@@ -46,6 +46,15 @@ impl BrewState {
         }
     }
 
+    /// The same state with `f` applied to its view; `Empty` stays empty.
+    pub(crate) fn map_view(self, f: impl FnOnce(BrewView) -> BrewView) -> Self {
+        match self {
+            Self::Empty => Self::Empty,
+            Self::Idle(view) => Self::Idle(f(view)),
+            Self::Running(view, step) => Self::Running(f(view), step),
+        }
+    }
+
     /// Whether the page shows the recipe with `id`.
     pub(crate) fn shows(&self, id: &RecipeId) -> bool {
         self.view().is_some_and(|view| view.recipe_id() == id)

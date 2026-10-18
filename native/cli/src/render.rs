@@ -3,7 +3,7 @@
 
 use std::io::{self, Write};
 
-use coffee_timer_core::brew::{BrewState, Effect, StepRow, StepStatus};
+use coffee_timer_core::brew::{BrewState, Effect, RatioSetting, StepRow, StepStatus};
 use coffee_timer_core::catalog::{CatalogChange, RecipeSummary};
 use coffee_timer_core::editor::EditorState;
 use coffee_timer_core::model::{AccentOption, Settings, ThemeSelection};
@@ -28,9 +28,13 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
     };
     writeln!(out, "{}  {}", view.recipe_id().as_str(), view.name())?;
     writeln!(out, "{}", view.description())?;
+    let adjusted = match view.ratio() {
+        RatioSetting::Adjusted(_) => " (adjusted)",
+        RatioSetting::NoCoffee | RatioSetting::Recipe(_) => "",
+    };
     writeln!(
         out,
-        "Coffee: {}  Water: {}  Ratio: {}  Time: {}",
+        "Coffee: {}  Water: {}  Ratio: {}{adjusted}  Time: {}",
         view.coffee_label(),
         view.water_label(),
         view.ratio_label(),

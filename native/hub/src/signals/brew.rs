@@ -23,6 +23,23 @@ pub struct StartBrew {
 #[derive(Deserialize, DartSignal)]
 pub struct ResetBrew;
 
+/// Change the open recipe's ratio for this brew only; the coffee stays and
+/// the water follows.
+#[derive(Deserialize, DartSignal)]
+pub struct AdjustBrewRatio {
+    pub change: BrewRatioChange,
+}
+
+#[derive(Deserialize, SignalPiece)]
+pub enum BrewRatioChange {
+    /// One step more water per gram of coffee.
+    MoreWater,
+    /// One step less water per gram of coffee.
+    LessWater,
+    /// Back to the recipe's own ratio.
+    Recipe,
+}
+
 /// The brew page closed.
 #[derive(Deserialize, DartSignal)]
 pub struct LeaveBrew;
@@ -49,10 +66,11 @@ pub struct BrewRecipe {
     pub description: String,
     /// `20g`.
     pub coffee_label: String,
-    /// `100g`.
+    /// `100g`, at the ratio shown.
     pub water_label: String,
-    /// Water per gram of coffee, `1:5`.
+    /// Water per gram of coffee, `1:5`; `—` without coffee.
     pub ratio_label: String,
+    pub ratio: BrewRatioSetting,
     /// Total, `M:SS`.
     pub duration_label: String,
     /// The page wears the recipe's label, the same one the list shows.
@@ -73,6 +91,17 @@ pub struct BrewStep {
     /// brew: steps lie end to end from 0.0 to 1.0.
     pub track_start: f64,
     pub track_end: f64,
+}
+
+/// Whose ratio the page shows.
+#[derive(Serialize, SignalPiece)]
+pub enum BrewRatioSetting {
+    /// The recipe has no coffee; its ratio cannot change.
+    NoCoffee,
+    /// The recipe's own ratio.
+    Recipe,
+    /// Changed for this brew; water and ratio differ from the recipe's.
+    Adjusted,
 }
 
 #[derive(Serialize, SignalPiece)]

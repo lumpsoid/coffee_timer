@@ -22,6 +22,9 @@ to.
   start the brew from step 1, or tap it again to reset. Long-press a step to
   start from that step. The dial sweeps through the current step, and its
   outer track and the step list mark each step done, current or pending.
+  Tap the coffee/water/ratio figures to change the ratio for this brew in
+  steps of 0.5. The coffee stays the same and the water follows. Leaving the
+  page goes back to the recipe's own ratio.
 - **Editor.** Edits a recipe's name, description and timed steps. The total
   and each step's `MM:SS` update live. Preset buttons add "Add coffee", "Add
   water", "Wait" or blank steps. Field errors appear from the first save
@@ -89,6 +92,7 @@ with no Flutter:
 ```shell
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db list
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show espresso-uuid
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db show espresso-uuid --ratio-steps -2   # 1:4
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
     --step Bloom=30 --step Pour=120
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast

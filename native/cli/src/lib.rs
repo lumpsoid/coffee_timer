@@ -52,7 +52,9 @@ impl Controllers {
 pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Result<(), CliError> {
     match command {
         Command::List => commands::list(&c.catalog, out),
-        Command::Show { id } => commands::show(id, &mut c.brew, &c.catalog, out),
+        Command::Show { id, ratio_steps } => {
+            commands::show(id, *ratio_steps, &mut c.brew, &c.catalog, out)
+        }
         Command::New(recipe) => {
             commands::new_recipe(recipe, &mut c.editor, &mut c.catalog, &mut c.brew, out)
         }

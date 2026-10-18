@@ -3,7 +3,8 @@
 //! `lib/recipe_details/pages/recipe_details_page.dart` (what is shown).
 
 use coffee_timer_core::brew::{
-    BrewController, BrewError, BrewNotice, BrewState, Effect, StepStatus,
+    BrewController, BrewError, BrewNotice, BrewState, BrewView, Effect, RatioChange, RatioSetting,
+    StepStatus,
 };
 use coffee_timer_core::catalog::RecipeCatalog;
 use coffee_timer_core::fakes::FakeRecipeStore;
@@ -647,4 +648,150 @@ fn a_rejected_start_does_not_count_a_run() -> TestResult {
     let _effects = brew.start(0)?;
     assert_eq!(run(&brew), first.map(|r| r + 1));
     Ok(())
+}
+
+// ratio
+
+/// `(coffee, water, ratio)` labels of the open recipe.
+fn dose(brew: &BrewController) -> Option<(String, String, String)> {
+    brew.state().view().map(|view| {
+        (
+            view.coffee_label().to_owned(),
+            view.water_label().to_owned(),
+            view.ratio_label().to_owned(),
+        )
+    })
+}
+
+fn shown(coffee: &str, water: &str, ratio: &str) -> Option<(String, String, String)> {
+    Some((coffee.to_owned(), water.to_owned(), ratio.to_owned()))
+}
+
+fn ratio_setting(brew: &BrewController) -> Option<RatioSetting> {
+    brew.state().view().map(BrewView::ratio)
+}
+
+#[test]
+fn open_shows_the_recipes_own_ratio() -> TestResult {
+    let (brew, _catalog) = opened(&[30, 60, 5])?;
+    assert_eq!(dose(&brew), shown("30g", "150g", "1:5"));
+    assert!(matches!(
+        ratio_setting(&brew),
+        Some(RatioSetting::Recipe(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn more_or_less_water_keeps_the_coffee_and_moves_the_water() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30, 60, 5])?;
+
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    assert_eq!(dose(&brew), shown("30g", "165g", "1:5.5"));
+    assert!(matches!(
+        ratio_setting(&brew),
+        Some(RatioSetting::Adjusted(_))
+    ));
+
+    brew.adjust_ratio(RatioChange::LessWater)?;
+    brew.adjust_ratio(RatioChange::LessWater)?;
+    assert_eq!(dose(&brew), shown("30g", "135g", "1:4.5"));
+    Ok(())
+}
+
+#[test]
+fn stepping_back_to_the_recipes_ratio_is_no_adjustment() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30])?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    brew.adjust_ratio(RatioChange::LessWater)?;
+    assert!(matches!(
+        ratio_setting(&brew),
+        Some(RatioSetting::Recipe(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn back_to_the_recipe_restores_its_ratio() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30])?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    brew.adjust_ratio(RatioChange::Recipe)?;
+    assert_eq!(dose(&brew), shown("10g", "50g", "1:5"));
+    assert!(matches!(
+        ratio_setting(&brew),
+        Some(RatioSetting::Recipe(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn the_ratio_stops_at_its_bounds() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30])?;
+    for _ in 0..20 {
+        brew.adjust_ratio(RatioChange::LessWater)?;
+    }
+    assert_eq!(dose(&brew), shown("10g", "10g", "1:1"));
+    for _ in 0..100 {
+        brew.adjust_ratio(RatioChange::MoreWater)?;
+    }
+    assert_eq!(dose(&brew), shown("10g", "300g", "1:30"));
+    Ok(())
+}
+
+#[test]
+fn adjusting_mid_brew_keeps_the_timer_running() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30, 10])?;
+    brew.start(0)?;
+    brew.tick();
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    assert_eq!(timer(&brew), running(0, "00:29"));
+    assert_eq!(statuses(&brew), [Current, Pending]);
+    assert_eq!(dose(&brew), shown("20g", "110g", "1:5.5"));
+    Ok(())
+}
+
+#[test]
+fn the_adjusted_ratio_is_for_this_brew_only() -> TestResult {
+    let (mut brew, catalog) = opened(&[30])?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    brew.open(&id("a")?, &catalog);
+    assert_eq!(dose(&brew), shown("10g", "50g", "1:5"));
+
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    brew.leave();
+    brew.open(&id("a")?, &catalog);
+    assert_eq!(dose(&brew), shown("10g", "50g", "1:5"));
+    Ok(())
+}
+
+#[test]
+fn an_edit_to_the_open_recipe_keeps_the_adjusted_ratio() -> TestResult {
+    let (mut brew, mut catalog) = opened(&[30])?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    let change = catalog.upsert(recipe("a", &[30, 30])?)?;
+    brew.on_catalog_change(&change, &catalog);
+    assert_eq!(dose(&brew), shown("20g", "110g", "1:5.5"));
+    Ok(())
+}
+
+#[test]
+fn a_recipe_without_coffee_has_no_ratio_to_change() -> TestResult {
+    let (mut brew, _catalog) = opened(&[])?;
+    assert_eq!(ratio_setting(&brew), Some(RatioSetting::NoCoffee));
+    assert_eq!(
+        brew.adjust_ratio(RatioChange::MoreWater),
+        Err(BrewError::NoCoffee)
+    );
+    assert_eq!(dose(&brew), shown("0g", "0g", "—"));
+    Ok(())
+}
+
+#[test]
+fn adjusting_with_no_recipe_open_is_an_error() {
+    let mut brew = BrewController::new();
+    assert_eq!(
+        brew.adjust_ratio(RatioChange::MoreWater),
+        Err(BrewError::NoRecipe)
+    );
+    assert_eq!(brew.state(), &BrewState::Empty);
 }

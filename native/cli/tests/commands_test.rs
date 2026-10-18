@@ -72,6 +72,18 @@ Coffee: 30g  Water: 150g  Ratio: 1:5  Time: 3:10
 }
 
 #[test]
+fn show_with_ratio_steps_moves_the_water_for_that_showing() -> TestResult {
+    let mut session = Session::new()?;
+    let more = session.run(&["show", "pourover-uuid", "--ratio-steps", "3"])?;
+    assert!(more.contains("Coffee: 30g  Water: 195g  Ratio: 1:6.5 (adjusted)"));
+    let less = session.run(&["show", "pourover-uuid", "--ratio-steps", "-2"])?;
+    assert!(less.contains("Coffee: 30g  Water: 120g  Ratio: 1:4 (adjusted)"));
+    let plain = session.run(&["show", "pourover-uuid"])?;
+    assert!(plain.contains("Coffee: 30g  Water: 150g  Ratio: 1:5  Time"));
+    Ok(())
+}
+
+#[test]
 fn show_of_an_unknown_id_is_the_empty_page() -> TestResult {
     assert_eq!(Session::new()?.run(&["show", "nope"])?, "Empty recipe\n");
     Ok(())

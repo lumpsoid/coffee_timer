@@ -1,6 +1,6 @@
-use crate::brew::{BrewError, BrewNotice, BrewState, BrewView, Effect, RunningStep};
+use crate::brew::{BrewError, BrewNotice, BrewState, BrewView, Effect, RatioChange, RunningStep};
 use crate::catalog::{CatalogChange, RecipeCatalog};
-use crate::model::{BrewMetrics, RecipeId};
+use crate::model::{BrewMetrics, BrewRatio, RecipeId};
 
 /// Buzz length at each step boundary and at the end (legacy
 /// `vibrate_leaf.dart`: `Vibration.vibrate(duration: 100)`).
@@ -26,15 +26,31 @@ impl BrewController {
         Self::default()
     }
 
-    /// Shows the recipe with `id`, idle. An id the catalog does not hold
-    /// shows "Empty recipe". A running brew stops silently.
+    /// Shows the recipe with `id`, idle, at its own ratio. An id the catalog
+    /// does not hold shows "Empty recipe". A running brew stops silently.
     pub fn open(&mut self, id: &RecipeId, catalog: &RecipeCatalog) -> Vec<Effect> {
         let effects = self.stop_silently();
         self.state = match catalog.get(id) {
-            Some(recipe) => BrewState::Idle(BrewView::of(recipe.clone(), &self.metrics)),
+            Some(recipe) => BrewState::Idle(BrewView::of(recipe.clone(), &self.metrics, None)),
             None => BrewState::Empty,
         };
         effects
+    }
+
+    /// Changes the open recipe's ratio for this brew only: the coffee stays
+    /// and the water follows. Opening a recipe or leaving the page goes back
+    /// to the recipe's own ratio. A running brew keeps running. On `Err`
+    /// nothing changes.
+    pub fn adjust_ratio(&mut self, change: RatioChange) -> Result<(), BrewError> {
+        let view = self.state.view().ok_or(BrewError::NoRecipe)?;
+        let ratio = view.ratio().ratio().ok_or(BrewError::NoCoffee)?;
+        let adjusted = match change {
+            RatioChange::MoreWater => Some(ratio.more_water()),
+            RatioChange::LessWater => Some(ratio.less_water()),
+            RatioChange::Recipe => None,
+        };
+        self.set_ratio(adjusted);
+        Ok(())
     }
 
     /// Runs the open recipe from step `from` (0 for the whole recipe),
@@ -108,8 +124,8 @@ impl BrewController {
 
     /// Follows a persisted catalog change. A change to the open recipe
     /// reopens it from `catalog`: an edit shows the new version, idle (a
-    /// running brew stops); a delete shows "Empty recipe". Other recipes'
-    /// changes do nothing.
+    /// running brew stops), keeping an adjusted ratio; a delete shows "Empty
+    /// recipe". Other recipes' changes do nothing.
     pub fn on_catalog_change(
         &mut self,
         change: &CatalogChange,
@@ -119,11 +135,21 @@ impl BrewController {
         if !self.state.shows(id) {
             return Vec::new();
         }
-        self.open(id, catalog)
+        let adjusted = self.state.view().and_then(|view| view.ratio().adjusted());
+        let effects = self.open(id, catalog);
+        self.set_ratio(adjusted);
+        effects
     }
 
     pub fn state(&self) -> &BrewState {
         &self.state
+    }
+
+    /// Shows the open recipe at the ratio `adjusted`, or at its own.
+    fn set_ratio(&mut self, adjusted: Option<BrewRatio>) {
+        let metrics = self.metrics;
+        self.state =
+            std::mem::take(&mut self.state).map_view(|view| view.with_ratio(adjusted, &metrics));
     }
 
     /// Runs `step` of `view` and returns the notification showing it.

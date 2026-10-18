@@ -153,6 +153,13 @@ clock. Time arrives as `tick()`, one call per second while
   return `KeepScreenOn(false)` + `HideBrewNotification` only when a brew was
   running, and never
   vibrate or play the sound.
+- `adjust_ratio(change)` changes the open recipe's ratio for this brew
+  only: one step of 0.5 more or less water per gram of coffee, within
+  `1:1..=1:30`, or back to the recipe's own. The coffee stays and the water
+  follows. It returns no effects and leaves a running timer alone. `open`
+  and `leave` drop the adjustment. An edit to the open recipe keeps it. A
+  recipe without coffee has no ratio and the change is
+  `Err(BrewError::NoCoffee)`.
 - Every accepted start increments a run number, held in
   [`RunningStep`](../native/core/src/brew/running_step.rs). Each tick and
   step change keeps it, so a restart of the same step is distinguishable from
