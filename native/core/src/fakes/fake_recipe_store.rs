@@ -9,6 +9,7 @@ pub struct FakeRecipeStore {
     recipes: Vec<Recipe>,
     fail_loads: bool,
     fail_writes: bool,
+    fail_inserts: bool,
 }
 
 impl FakeRecipeStore {
@@ -28,10 +29,18 @@ impl FakeRecipeStore {
         }
     }
 
-    /// Every `upsert` and `remove` returns `Err` and stores nothing.
+    /// Every `upsert`, `insert_at` and `remove` returns `Err` and stores nothing.
     pub fn failing_writes(self) -> Self {
         Self {
             fail_writes: true,
+            ..self
+        }
+    }
+
+    /// Every `insert_at` returns `Err` and stores nothing; other writes work.
+    pub fn failing_inserts(self) -> Self {
+        Self {
+            fail_inserts: true,
             ..self
         }
     }
@@ -58,6 +67,16 @@ impl RecipeStore for FakeRecipeStore {
             Some(slot) => *slot = recipe.clone(),
             None => self.recipes.push(recipe.clone()),
         }
+        Ok(())
+    }
+
+    fn insert_at(&mut self, recipe: &Recipe, index: usize) -> Result<(), StoreError> {
+        self.check_write()?;
+        if self.fail_inserts {
+            return Err(StoreError::new("fake insert failure"));
+        }
+        let index = index.min(self.recipes.len());
+        self.recipes.insert(index, recipe.clone());
         Ok(())
     }
 

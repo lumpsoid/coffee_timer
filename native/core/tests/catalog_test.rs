@@ -1,6 +1,7 @@
-//! `RecipeCatalog`: load, upsert and remove write through the store first.
+//! `RecipeCatalog`: load, upsert, remove and restore write through the store
+//! first.
 
-use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
+use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary, RestoreError};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
     BrewMetrics, CoffeeDose, LabelStyle, ModelError, Recipe, RecipeId, RecipeName, RecipeStep,
@@ -146,6 +147,151 @@ fn failed_remove_leaves_state_unchanged() -> TestResult {
     let mut catalog = loaded(stored_ab()?.failing_writes())?;
     assert!(catalog.remove(RecipeId::try_parse("a")?).is_err());
     assert_eq!(ids(&catalog), ["a", "b"]);
+    Ok(())
+}
+
+// restore (undo the last removal)
+
+fn rid(raw: &str) -> Result<RecipeId, ModelError> {
+    RecipeId::try_parse(raw)
+}
+
+fn stored_abc() -> Result<FakeRecipeStore, ModelError> {
+    Ok(FakeRecipeStore::with_recipes(vec![
+        recipe("a", "Espresso")?,
+        poured("b", "Pour Over")?,
+        recipe("c", "Aero")?,
+    ]))
+}
+
+/// A recipe with its own dose and a pouring step, so a restore can be
+/// checked for the whole recipe.
+fn poured(id: &str, name: &str) -> Result<Recipe, ModelError> {
+    Ok(Recipe::new(
+        rid(id)?,
+        RecipeName::try_parse(name)?,
+        "notes".to_owned(),
+        CoffeeDose::try_parse(18)?,
+        WaterAmount::try_parse(300)?,
+        vec![
+            RecipeStep::new(
+                StepId::try_parse("s1")?,
+                "Bloom".to_owned(),
+                StepDuration::try_parse(30)?,
+                Some(WaterAmount::try_parse(50)?),
+            ),
+            RecipeStep::new(
+                StepId::try_parse("s2")?,
+                "Wait".to_owned(),
+                StepDuration::try_parse(90)?,
+                None,
+            ),
+        ],
+    ))
+}
+
+#[test]
+fn remove_then_restore_puts_the_whole_recipe_back_in_place_and_persists() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    catalog.remove(rid("b")?)?;
+    assert_eq!(ids(&catalog), ["a", "c"]);
+
+    let change = catalog.restore(&rid("b")?)?;
+
+    assert_eq!(change, CatalogChange::Upserted(rid("b")?));
+    assert_eq!(ids(&catalog), ["a", "b", "c"]);
+    assert_eq!(catalog.get(&rid("b")?), Some(&poured("b", "Pour Over")?));
+    catalog.load()?;
+    assert_eq!(ids(&catalog), ["a", "b", "c"], "store has it back in place");
+    assert_eq!(catalog.get(&rid("b")?), Some(&poured("b", "Pour Over")?));
+    Ok(())
+}
+
+#[test]
+fn a_removed_recipe_is_offered_for_undo_with_its_notice() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    assert!(catalog.restorable(&rid("b")?).is_none());
+
+    catalog.remove(rid("b")?)?;
+
+    let removed = catalog.restorable(&rid("b")?).ok_or("no undo offered")?;
+    assert_eq!(removed.notice(), "Deleted Pour Over");
+    assert_eq!(removed.index(), 1);
+    assert!(catalog.restorable(&rid("a")?).is_none());
+    Ok(())
+}
+
+#[test]
+fn a_second_undo_is_an_error_and_changes_nothing() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    catalog.remove(rid("b")?)?;
+    catalog.restore(&rid("b")?)?;
+
+    assert_eq!(
+        catalog.restore(&rid("b")?),
+        Err(RestoreError::NothingToUndo(rid("b")?))
+    );
+    assert!(catalog.restorable(&rid("b")?).is_none());
+    assert_eq!(ids(&catalog), ["a", "b", "c"]);
+    Ok(())
+}
+
+#[test]
+fn only_the_last_removal_can_be_undone() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    catalog.remove(rid("a")?)?;
+    catalog.remove(rid("b")?)?;
+
+    assert_eq!(
+        catalog.restore(&rid("a")?),
+        Err(RestoreError::NothingToUndo(rid("a")?))
+    );
+    catalog.restore(&rid("b")?)?;
+    assert_eq!(ids(&catalog), ["b", "c"], "b back first, a stays gone");
+    Ok(())
+}
+
+#[test]
+fn undo_of_a_recipe_never_removed_is_an_error() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    assert_eq!(
+        catalog.restore(&rid("missing")?),
+        Err(RestoreError::NothingToUndo(rid("missing")?))
+    );
+    assert_eq!(ids(&catalog), ["a", "b", "c"]);
+    Ok(())
+}
+
+#[test]
+fn removing_an_unknown_id_keeps_the_earlier_undo() -> TestResult {
+    let mut catalog = loaded(stored_abc()?)?;
+    catalog.remove(rid("c")?)?;
+    catalog.remove(rid("missing")?)?;
+
+    catalog.restore(&rid("c")?)?;
+    assert_eq!(ids(&catalog), ["a", "b", "c"]);
+    Ok(())
+}
+
+#[test]
+fn a_failed_restore_leaves_the_catalog_and_the_undo_unchanged() -> TestResult {
+    let mut catalog = loaded(stored_abc()?.failing_inserts())?;
+    catalog.remove(rid("a")?)?;
+
+    assert!(matches!(
+        catalog.restore(&rid("a")?),
+        Err(RestoreError::Store(_))
+    ));
+    assert_eq!(ids(&catalog), ["b", "c"]);
+    assert!(catalog.restorable(&rid("a")?).is_some(), "still on offer");
+    Ok(())
+}
+
+#[test]
+fn index_of_is_the_place_in_catalog_order() -> TestResult {
+    let catalog = loaded(stored_abc()?)?;
+    assert_eq!(catalog.index_of(&rid("c")?), Some(2));
+    assert_eq!(catalog.index_of(&rid("missing")?), None);
     Ok(())
 }
 

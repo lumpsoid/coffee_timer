@@ -11,18 +11,33 @@ pub struct RemoveRecipe {
     pub recipe_id: String,
 }
 
+/// Undo the removal of the recipe with this id (the Undo on the `Deleted …`
+/// snackbar). Only the recipe removed last can come back.
+#[derive(Deserialize, DartSignal)]
+pub struct UndoRemoveRecipe {
+    pub recipe_id: String,
+}
+
 /// The recipe list: a snapshot, then one diff per persisted catalog change.
 /// One type, so the snapshot and the diffs after it arrive in order.
 #[derive(Serialize, RustSignal)]
 pub enum RecipeListUpdate {
     /// Every recipe, in catalog order. Replaces the list.
     Snapshot { recipes: Vec<RecipeSummary> },
-    /// Replace the row with this id, or append it.
-    Upserted { recipe: RecipeSummary },
-    /// Drop the row with this id.
-    Removed { id: String },
-    /// A `RemoveRecipe` failed; the list is unchanged. A one-shot notice for
-    /// a snackbar (`Failed to delete recipe: …`), not list state.
+    /// Replace the row with this id, or insert it at `index` (its 0-based
+    /// place in catalog order: the end for a new recipe, its old place for
+    /// a restored one).
+    Upserted { recipe: RecipeSummary, index: u32 },
+    /// Drop the row with this id. `undo_notice`, when present, offers to
+    /// undo the removal: the snackbar text (`Deleted V60`), shown once with
+    /// an Undo that sends `UndoRemoveRecipe`.
+    Removed {
+        id: String,
+        undo_notice: Option<String>,
+    },
+    /// A `RemoveRecipe` or `UndoRemoveRecipe` failed; the list is unchanged.
+    /// A one-shot notice for a snackbar (`Failed to delete recipe: …`,
+    /// `Nothing to undo`), not list state.
     Failed { message: String },
 }
 

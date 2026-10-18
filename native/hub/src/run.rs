@@ -1,8 +1,8 @@
 //! The hub task: owns every controller, turns each Dart signal into one
 //! controller action, and sends the feature's state after it. One task, so
 //! actions run one at a time. It decides nothing: errors are logged and the
-//! state re-sent, except a failed list delete, which goes to Dart as the
-//! one-shot `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
+//! state re-sent, except a failed list delete or undo, which goes to Dart as
+//! the one-shot `RecipeListUpdate::Failed`; every `CatalogChange` is passed on
 //! unconditionally.
 
 use std::error::Error;
@@ -25,6 +25,7 @@ use crate::signals::{
     RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveRecipe,
     SetAccent, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater,
     SetStepDuration, SetStepName, SetStepWater, SetTheme, SettingsReady, SettingsUpdate, StartBrew,
+    UndoRemoveRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -59,6 +60,7 @@ impl Controllers {
 pub async fn run(mut c: Controllers) {
     let recipe_list_ready = RecipeListReady::get_dart_signal_receiver();
     let remove_recipe = RemoveRecipe::get_dart_signal_receiver();
+    let undo_remove_recipe = UndoRemoveRecipe::get_dart_signal_receiver();
     let brew_ready = BrewReady::get_dart_signal_receiver();
     let open_brew = OpenBrew::get_dart_signal_receiver();
     let start_brew = StartBrew::get_dart_signal_receiver();
@@ -98,6 +100,9 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = remove_recipe.recv() => {
                 report(remove(&mut c, &pack.message.recipe_id));
+            }
+            Some(pack) = undo_remove_recipe.recv() => {
+                report(restore(&mut c, &pack.message.recipe_id));
             }
 
             // Brew
@@ -260,6 +265,16 @@ fn remove(c: &mut Controllers, recipe_id: &str) -> Result<(), ModelError> {
     Ok(())
 }
 
+/// Undoes the last removal. A refusal or a store failure goes to the list
+/// as core's restore error, for a snackbar.
+fn restore(c: &mut Controllers, recipe_id: &str) -> Result<(), ModelError> {
+    match c.catalog.restore(&RecipeId::try_parse(recipe_id)?) {
+        Ok(change) => pass_on(&change, &mut c.brew, &c.catalog),
+        Err(error) => RecipeListUpdate::from(error).send_signal_to_dart(),
+    }
+    Ok(())
+}
+
 fn open(
     brew: &mut BrewController,
     catalog: &RecipeCatalog,
@@ -304,7 +319,7 @@ fn show_settings(settings: &SettingsController) {
 
 /// The value, or none after logging the error. Anything the GUI must show
 /// is already in the feature's state (the editor's notice), or, for a
-/// failed list delete, sent as the one-shot `RecipeListUpdate::Failed`.
+/// failed list delete or undo, sent as the one-shot `RecipeListUpdate::Failed`.
 fn report<T>(result: Result<T, impl Display>) -> Option<T> {
     result.map_err(|error| debug_print!("{error}")).ok()
 }

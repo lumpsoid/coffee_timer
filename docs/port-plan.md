@@ -202,6 +202,12 @@ Deliberate changes to behavior the port had kept.
   the notification stays, reading `Paused`. Every rule about stopping
   (reset, leave, open, an edit or delete of the open recipe) treats a
   paused brew like a running one.
+- **Undo a delete.** Legacy deletes were final, and both delete dialogs
+  said "This action cannot be undone." A delete, from the list or the
+  editor, now offers a `Deleted V60` snackbar with Undo, which restores
+  the whole recipe at its old place; the dialogs now ask only
+  `Delete "V60"?`. Only the last removal can be undone, and it is held in
+  memory, not stored.
 
 ## Phases
 

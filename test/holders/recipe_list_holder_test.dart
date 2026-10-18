@@ -1,4 +1,5 @@
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
+import 'package:coffee_timer/holders/undo_offer.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -36,7 +37,12 @@ void main() {
       ..apply(
         RecipeListUpdateSnapshot(recipes: [summary('a'), summary('b')]),
       )
-      ..apply(RecipeListUpdateUpserted(recipe: summary('a', name: 'Chemex')));
+      ..apply(
+        RecipeListUpdateUpserted(
+          recipe: summary('a', name: 'Chemex'),
+          index: 0,
+        ),
+      );
 
     expect(ids(), ['a', 'b']);
     expect(holder.byId('a')?.name, 'Chemex');
@@ -46,9 +52,33 @@ void main() {
   test('an upsert of a new id appends it', () {
     holder
       ..apply(RecipeListUpdateSnapshot(recipes: [summary('a')]))
-      ..apply(RecipeListUpdateUpserted(recipe: summary('b')));
+      ..apply(RecipeListUpdateUpserted(recipe: summary('b'), index: 1));
 
     expect(ids(), ['a', 'b']);
+  });
+
+  test('an upsert of a missing id inserts it at its index', () {
+    holder
+      ..apply(
+        RecipeListUpdateSnapshot(recipes: [summary('a'), summary('c')]),
+      )
+      ..apply(RecipeListUpdateUpserted(recipe: summary('b'), index: 1));
+
+    expect(ids(), ['a', 'b', 'c']);
+  });
+
+  test('a removal with an undo notice drops the row and offers the undo', () {
+    final offers = <UndoOffer>[];
+    holder
+      ..apply(
+        RecipeListUpdateSnapshot(recipes: [summary('a'), summary('b')]),
+      )
+      ..undoOffers.listen(offers.add)
+      ..apply(const RecipeListUpdateRemoved(id: 'a', undoNotice: 'Deleted V60'))
+      ..apply(const RecipeListUpdateRemoved(id: 'zz'));
+
+    expect(ids(), ['b']);
+    expect(offers, [const UndoOffer(recipeId: 'a', notice: 'Deleted V60')]);
   });
 
   test('a removal drops the row with its id', () {
@@ -67,8 +97,10 @@ void main() {
       ..apply(
         RecipeListUpdateSnapshot(recipes: [summary('a'), summary('b')]),
       )
-      ..apply(RecipeListUpdateUpserted(recipe: summary('b', name: 'Aero')))
-      ..apply(RecipeListUpdateUpserted(recipe: summary('c')))
+      ..apply(
+        RecipeListUpdateUpserted(recipe: summary('b', name: 'Aero'), index: 1),
+      )
+      ..apply(RecipeListUpdateUpserted(recipe: summary('c'), index: 2))
       ..apply(const RecipeListUpdateRemoved(id: 'a'));
 
     expect(ids(), ['b', 'c']);

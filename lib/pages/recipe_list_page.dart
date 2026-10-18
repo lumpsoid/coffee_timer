@@ -4,6 +4,7 @@ import 'package:coffee_timer/holders/brew_holder.dart';
 import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/holders/settings_holder.dart';
+import 'package:coffee_timer/holders/undo_offer.dart';
 import 'package:coffee_timer/pages/brew_page.dart';
 import 'package:coffee_timer/pages/editor_page.dart';
 import 'package:coffee_timer/pages/settings_page.dart';
@@ -12,7 +13,9 @@ import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:flutter/material.dart';
 
 /// The home page: every recipe, opening its brew page on tap and offering
-/// edit / delete on long press. A failed delete shows as a snackbar.
+/// edit / delete on long press. A delete, here or in the editor, shows a
+/// snackbar with an Undo when Rust offers one; a failed delete or undo shows
+/// as a snackbar too.
 class RecipeListPage extends StatefulWidget {
   const RecipeListPage({
     required this.recipes,
@@ -27,12 +30,17 @@ class RecipeListPage extends StatefulWidget {
   final EditorHolder editor;
   final SettingsHolder settings;
 
+  /// How long an undo offer stays up: the visual duration only. Rust keeps
+  /// the removed recipe until the next delete either way.
+  static const undoDuration = Duration(seconds: 5);
+
   @override
   State<RecipeListPage> createState() => _RecipeListPageState();
 }
 
 class _RecipeListPageState extends State<RecipeListPage> {
   late final StreamSubscription<String> _failures;
+  late final StreamSubscription<UndoOffer> _undoOffers;
 
   RecipeListHolder get recipes => widget.recipes;
   BrewHolder get brew => widget.brew;
@@ -43,6 +51,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
   void initState() {
     super.initState();
     _failures = recipes.failures.listen(_showFailure);
+    _undoOffers = recipes.undoOffers.listen(_offerUndo);
   }
 
   void _showFailure(String message) {
@@ -51,9 +60,29 @@ class _RecipeListPageState extends State<RecipeListPage> {
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  void _offerUndo(UndoOffer offer) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(offer.notice),
+          duration: RecipeListPage.undoDuration,
+          // An action would keep it up until dismissed; the offer times out.
+          persist: false,
+          action: SnackBarAction(
+            label: 'Undo',
+            onPressed: () => UndoRemoveRecipe(
+              recipeId: offer.recipeId,
+            ).sendSignalToRust(),
+          ),
+        ),
+      );
+  }
+
   @override
   void dispose() {
     unawaited(_failures.cancel());
+    unawaited(_undoOffers.cancel());
     super.dispose();
   }
 
@@ -167,7 +196,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
         builder: (ctx) => AlertDialog(
           title: const Text('Delete recipe'),
           content: Text(
-            'Delete "${recipe.name}"? This action cannot be undone.',
+            'Delete "${recipe.name}"?',
           ),
           actions: [
             TextButton(

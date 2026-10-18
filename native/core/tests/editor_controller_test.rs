@@ -982,6 +982,38 @@ fn delete_removes_the_edited_recipe_and_closes() -> TestResult {
 }
 
 #[test]
+fn an_editor_delete_can_be_undone_through_the_catalog() -> TestResult {
+    let poured = v60()?.with_step_added(RecipeStep::new(
+        sid("step-2")?,
+        "Pour".to_owned(),
+        StepDuration::try_parse(60)?,
+        Some(WaterAmount::try_parse(150)?),
+    ));
+    let mut catalog = catalog(vec![espresso()?, poured.clone(), v60_named("c", "Aero")?])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    editor.delete(&mut catalog)?;
+
+    let change = catalog.restore(&rid("recipe-1")?)?;
+
+    assert_eq!(change, CatalogChange::Upserted(rid("recipe-1")?));
+    assert_eq!(
+        catalog.state(),
+        [espresso()?, poured, v60_named("c", "Aero")?],
+        "the whole recipe, back in its place"
+    );
+    Ok(())
+}
+
+fn v60_named(id: &str, name: &str) -> Result<Recipe, ModelError> {
+    Ok(Recipe::blank(
+        rid(id)?,
+        RecipeName::try_parse(name)?,
+        CoffeeDose::try_parse(15)?,
+        WaterAmount::try_parse(250)?,
+    ))
+}
+
+#[test]
 fn delete_of_a_new_recipe_has_nothing_to_delete() -> TestResult {
     // Legacy: "create mode has nothing to delete".
     let mut catalog = catalog(vec![v60()?])?;

@@ -2,7 +2,7 @@ use coffee_timer_core::model::{
     CoffeeDose, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, StoreError};
-use rusqlite::{Connection, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use crate::sqlite_store::{SqliteStore, db_error};
 
@@ -18,6 +18,10 @@ impl RecipeStore for SqliteStore {
 
     fn upsert(&mut self, recipe: &Recipe) -> Result<(), StoreError> {
         upsert(&mut *self.conn()?, recipe).map_err(db_error)
+    }
+
+    fn insert_at(&mut self, recipe: &Recipe, index: usize) -> Result<(), StoreError> {
+        insert_at(&mut *self.conn()?, recipe, index).map_err(db_error)
     }
 
     fn remove(&mut self, id: &RecipeId) -> Result<(), StoreError> {
@@ -120,21 +124,65 @@ fn upsert(conn: &mut Connection, recipe: &Recipe) -> rusqlite::Result<()> {
         ],
     )?;
     tx.execute("DELETE FROM step WHERE recipe_id = ?1", [id])?;
-    {
-        let mut insert = tx.prepare(
-            "INSERT INTO step (id, recipe_id, position, name, duration_seconds, water_grams)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )?;
-        for (position, step) in (0_i64..).zip(recipe.steps()) {
-            insert.execute(params![
-                step.id().as_str(),
-                id,
-                position,
-                step.name(),
-                step.duration().seconds(),
-                step.water().map(WaterAmount::grams),
-            ])?;
-        }
-    }
+    insert_steps(&tx, recipe)?;
     tx.commit()
+}
+
+/// One transaction: the rows from the `index`th on move one position down
+/// (through negative positions, so no two rows ever share one), the recipe
+/// takes the freed position, and its steps are inserted in order. An
+/// `index` past the end appends.
+fn insert_at(conn: &mut Connection, recipe: &Recipe, index: usize) -> rusqlite::Result<()> {
+    let tx = conn.transaction()?;
+    let offset = i64::try_from(index).unwrap_or(i64::MAX);
+    let at: Option<i64> = tx
+        .query_row(
+            "SELECT position FROM recipe ORDER BY position LIMIT 1 OFFSET ?1",
+            [offset],
+            |row| row.get(0),
+        )
+        .optional()?;
+    if let Some(at) = at {
+        tx.execute(
+            "UPDATE recipe SET position = -position - 1 WHERE position >= ?1",
+            [at],
+        )?;
+        tx.execute(
+            "UPDATE recipe SET position = -position WHERE position < 0",
+            [],
+        )?;
+    }
+    tx.execute(
+        "INSERT INTO recipe (position, id, name, description, coffee_grams, water_grams)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![
+            at,
+            recipe.id().as_str(),
+            recipe.name().as_str(),
+            recipe.description(),
+            recipe.coffee().grams(),
+            recipe.water().grams(),
+        ],
+    )?;
+    insert_steps(&tx, recipe)?;
+    tx.commit()
+}
+
+/// Inserts `recipe`'s steps, in order, for a recipe that has none stored.
+fn insert_steps(tx: &Transaction<'_>, recipe: &Recipe) -> rusqlite::Result<()> {
+    let mut insert = tx.prepare(
+        "INSERT INTO step (id, recipe_id, position, name, duration_seconds, water_grams)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    )?;
+    for (position, step) in (0_i64..).zip(recipe.steps()) {
+        insert.execute(params![
+            step.id().as_str(),
+            recipe.id().as_str(),
+            position,
+            step.name(),
+            step.duration().seconds(),
+            step.water().map(WaterAmount::grams),
+        ])?;
+    }
+    Ok(())
 }

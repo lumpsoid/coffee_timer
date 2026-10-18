@@ -35,9 +35,37 @@ void main() {
     await pumpList(tester);
     expect(find.byType(RecipeSummaryTile), findsOneWidget);
 
-    recipes.apply(RecipeListUpdateUpserted(recipe: summary('b')));
+    recipes.apply(RecipeListUpdateUpserted(recipe: summary('b'), index: 1));
     await tester.pump();
     expect(find.byType(RecipeSummaryTile), findsNWidgets(2));
+  });
+
+  testWidgets('offers an undo for a removal, then lets it go', (
+    tester,
+  ) async {
+    await pumpList(tester);
+
+    recipes.apply(
+      const RecipeListUpdateRemoved(id: 'a', undoNotice: 'Deleted V60'),
+    );
+    await tester.pump();
+    expect(find.byType(RecipeSummaryTile), findsNothing);
+    expect(find.text('Deleted V60'), findsOneWidget);
+    expect(find.widgetWithText(SnackBarAction, 'Undo'), findsOneWidget);
+
+    await tester.pumpAndSettle(); // the entrance; the duration starts after
+    await tester.pump(RecipeListPage.undoDuration);
+    await tester.pumpAndSettle();
+    expect(find.text('Deleted V60'), findsNothing);
+  });
+
+  testWidgets('a removal without an undo notice shows no snackbar', (
+    tester,
+  ) async {
+    await pumpList(tester);
+    recipes.apply(const RecipeListUpdateRemoved(id: 'a'));
+    await tester.pump();
+    expect(find.byType(SnackBar), findsNothing);
   });
 
   testWidgets('shows a snackbar for each failed delete, repeats included', (

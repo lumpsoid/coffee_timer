@@ -76,8 +76,9 @@ Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
 
 This is the border with what cannot run in a test.
 
-- `RecipeStore`: `load_all`, `upsert` and `remove`. Recipe order is part of
-  the contract.
+- `RecipeStore`: `load_all`, `upsert`, `insert_at` and `remove`. Recipe
+  order is part of the contract; `insert_at` puts a recipe back at a
+  given place.
 - `SettingsStore`: `load` and `save`.
 - `IdGen`: `recipe_id` and `step_id`.
 - `StoreError`: a backend's reason, carried as text.
@@ -91,7 +92,8 @@ The store crate implements all three.
 
 - `FakeRecipeStore` is `Vec`-backed and keeps the order contract.
 - `FakeSettingsStore` holds settings in memory.
-- Both can be told to fail loads or writes.
+- Both can be told to fail loads or writes; `FakeRecipeStore` can also
+  fail only `insert_at` (`failing_inserts`).
 - `SequentialIds` produces `r1, r2, …` and `s1, s2, …`.
 
 The module compiles only under `cfg(test)` or the `test-fakes` feature. Core
@@ -104,8 +106,14 @@ dev-dependency, and the CLI and hub enable it for their tests. Test:
 [`native/core/src/catalog`](../native/core/src/catalog)
 
 - `RecipeCatalog` owns `Vec<Recipe>` and writes through its `RecipeStore`
-  before it changes its state. It provides `load`, `upsert`, `remove`, `get`
-  and `state`.
+  before it changes its state. It provides `load`, `upsert`, `remove`, `get`,
+  `index_of` and `state`. It also keeps the recipe it removed last as a
+  `RemovedRecipe` (the whole recipe and its index, with the undo text
+  `Deleted V60`): `restorable(id)` offers it, and `restore(id)` puts it back
+  at its index through `RecipeStore::insert_at` and returns `Upserted`. The
+  next removal replaces it, a restore uses it up, and it is never stored.
+  Any other id is `RestoreError::NothingToUndo`; a failed write is
+  `RestoreError::Store` and keeps the offer.
 - `CatalogChange` (`Upserted` / `Removed`) is returned only after the write
   has persisted.
 - `RecipeSummary` is a recipe-list row with its labels (`20 g`, `100 g`,
@@ -206,7 +214,8 @@ The store implements the core's ports. It makes no decisions.
   Pour Over seed's Bloom 50 g and Pour 200 g.
 - **Row mapping:** [`recipe_rows.rs`](../native/store/src/recipe_rows.rs)
   loads `ORDER BY position`. An upsert keeps the recipe's position and
-  replaces its steps. Rows are read through core's lenient constructors
+  replaces its steps. `insert_at` moves the rows from that place on one
+  position down and gives the recipe the freed one. Rows are read through core's lenient constructors
   (grams are clamped into bounds).
   [`settings_rows.rs`](../native/store/src/settings_rows.rs) stores key/value
   rows.
@@ -274,7 +283,7 @@ makes no business decisions.
 | Feature | Dart → Rust | Rust → Dart |
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
-| recipe list | `RecipeListReady`, `RemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted` / `Removed` / `Failed`) |
+| recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed`) |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
@@ -298,8 +307,8 @@ The GUI renders, sends intents, and performs effects. It holds no business
   theme from settings, shows the spinner, the boot failure with Retry, or
   the recipe list, and calls `finalizeRust()` on exit.
 - **[`holders/`](../lib/holders)** has one `ChangeNotifier` per feature:
-  `RecipeListHolder` (folds the snapshot and diffs, and exposes `failures`
-  and `byId`), `BrewHolder`, `EditorHolder`, `SettingsHolder` (each replaces
+  `RecipeListHolder` (folds the snapshot and diffs, and exposes `failures`,
+  `undoOffers` (`UndoOffer`: recipe id and notice) and `byId`), `BrewHolder`, `EditorHolder`, `SettingsHolder` (each replaces
   its state) and `BootHolder` (sends `Boot` and holds the boot failure).
 - **[`effects/`](../lib/effects)** has `PlatformEffectPerformer`, which runs
   one plugin call per `PlatformEffect`, in order. `EffectPlugins` is the
@@ -336,7 +345,8 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
   notification on identical updates.
 - [`effects/`](../test/effects) tests one plugin call per effect, order, and
   that a failure does not block later effects.
-- [`pages/`](../test/pages) tests the list page's snackbars and the editor
+- [`pages/`](../test/pages) tests the list page's snackbars (failures and
+  the undo offer) and the editor
   page: open, field errors, pop on `Closed`, notices, and the delete dialog.
 - [`widgets/`](../test/widgets) tests the display widgets, including the
   ring's restart key.

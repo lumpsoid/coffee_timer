@@ -287,7 +287,7 @@ class _EditorPageState extends State<EditorPage> {
         builder: (ctx) => AlertDialog(
           title: const Text('Delete recipe'),
           content: Text(
-            'Delete "${saved.name}"? This action cannot be undone.',
+            'Delete "${saved.name}"?',
           ),
           actions: [
             TextButton(

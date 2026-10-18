@@ -34,7 +34,7 @@ and not on each other. Dart sees only the generated signal classes.
 
 | Controller | State object | Owns |
 |---|---|---|
-| [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>` | the recipe list and its persistence (shared) |
+| [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>`, plus the last `RemovedRecipe` | the recipe list and its persistence, and the one removal that can be undone (shared) |
 | [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme and accent, and their persistence |
 | [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` | the open recipe and its timer |
 | [`EditorController`](../native/core/src/editor/editor_controller.rs) | [`EditorState`](../native/core/src/editor/editor_state.rs): `Closed` / `Open(Draft)` | one draft, new or of an existing recipe |
@@ -106,9 +106,27 @@ the catalog. An edit shows the new version, idle, and stops a running or
 paused brew.
 A delete shows "Empty recipe".
 
-Three intents produce a change: the editor's save, the editor's delete, and
-the list's `RemoveRecipe`. `RemoveRecipe` calls `RecipeCatalog::remove`
-directly, without opening a draft.
+Four intents produce a change: the editor's save, the editor's delete, the
+list's `RemoveRecipe`, and `UndoRemoveRecipe`. `RemoveRecipe` calls
+`RecipeCatalog::remove` directly, without opening a draft.
+
+**Undoing a delete.** Both deletes go through `RecipeCatalog::remove`,
+which keeps the removed recipe, whole, with its index, as a
+[`RemovedRecipe`](../native/core/src/catalog/removed_recipe.rs). It is
+catalog data, so it lives in the catalog rather than in a controller of its
+own: only the catalog sees every removal, and a restore is a catalog write
+like any other. The next removal of a listed recipe replaces it,
+`restore(id)` uses it up, and it is never stored, so a restart drops it.
+`RecipeListUpdate::of` reads `catalog.restorable(id)` for a `Removed`
+change and sends its text as `Removed { undo_notice: "Deleted V60" }`;
+`RecipeListHolder` passes that on as an `UndoOffer`, and the list page shows
+a snackbar with an **Undo**. Flutter picks only how long it stays up. Undo
+sends `UndoRemoveRecipe { recipe_id }`; `restore` writes the recipe back at
+its index (`RecipeStore::insert_at`) and returns `Upserted(id)`, which goes
+through `pass_on` like any change. The list diff `Upserted` carries the
+row's index, so Dart inserts a restored row at its old place. An id that is
+not the last removal, or one already back, is `RestoreError::NothingToUndo`
+and changes nothing.
 
 ## Effects
 
@@ -273,8 +291,10 @@ feature's state as usual. The user sees an error only in these cases:
   field errors (`Enter a recipe name`, `Enter seconds`, `0–5999 seconds`)
   are already on the draft.
 - **`RecipeListUpdate::Failed { message }`.** This is a one-shot notice when
-  a list `RemoveRecipe` fails in the store. The message is core's
-  `DeleteError::Store` text, `Failed to delete recipe: …`. The list is
+  a list `RemoveRecipe` fails in the store, or an `UndoRemoveRecipe` fails.
+  The message is core's `DeleteError::Store` text, `Failed to delete
+  recipe: …`, or its `RestoreError` text, `Nothing to undo` or `Failed to
+  restore recipe: …`. The list is
   unchanged. `RecipeListHolder` forwards the message on its `failures`
   stream, and the list page shows a snackbar for each one.
 - **`BootFailed`.** See [Startup](#startup-and-shutdown).

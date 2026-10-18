@@ -17,7 +17,10 @@ to.
   each drawn as a coffee-bag label. Short brews get a dark roast label, long
   ones a light crema label, and each recipe has its own paper texture.
   Tap a recipe to brew it. Long-press it to edit or delete it. The `+` button
-  creates a recipe.
+  creates a recipe. After a delete, from the list or the editor, a
+  `Deleted V60` snackbar offers **Undo** for a few seconds; it puts the
+  whole recipe back where it was. Only the last delete can be undone, and
+  a restart forgets it.
 - **Brew page.** Shows the recipe printed on its own coffee-bag label (the
   same look as its list card), a timer dial and the steps. Tap the dial to
   start the brew from step 1. Tap it while it runs to pause, and again to
@@ -142,6 +145,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   an `@`; `@GRAMS` is the water the step pours. A blank name is saved as
   `Step N`.
 - Use `--help` on any command for its options.
+- There is no undo command. The removed recipe is held in memory only, and
+  each CLI run is one command, so nothing is left to undo by the next run;
+  core's `catalog_test.rs` covers delete → undo instead.
 
 ## Contents
 

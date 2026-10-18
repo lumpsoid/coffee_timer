@@ -247,7 +247,7 @@ void main() {
     await tester.tap(find.byTooltip('Delete'));
     await tester.pumpAndSettle();
     expect(
-      find.text('Delete "V60"? This action cannot be undone.'),
+      find.text('Delete "V60"?'),
       findsOneWidget,
     );
   });

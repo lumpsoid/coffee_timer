@@ -340,6 +340,43 @@ fn failed_upsert_leaves_the_store_unchanged() -> TestResult {
 }
 
 #[test]
+fn insert_at_puts_a_recipe_back_in_its_place_with_its_steps() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.upsert(&recipe("r1", "V60", Vec::new())?)?;
+    let removed = store
+        .load_all()?
+        .into_iter()
+        .find(|r| r.id().as_str() == "pourover-uuid")
+        .ok_or("no pour over")?;
+    store.remove(removed.id())?;
+
+    store.insert_at(&removed, 1)?;
+
+    let loaded = store.load_all()?;
+    assert_eq!(ids(&loaded), ["espresso-uuid", "pourover-uuid", "r1"]);
+    assert_eq!(loaded.get(1), Some(&removed));
+    store.upsert(&recipe("r2", "Aeropress", Vec::new())?)?;
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["espresso-uuid", "pourover-uuid", "r1", "r2"],
+        "later upserts still append"
+    );
+    Ok(())
+}
+
+#[test]
+fn insert_at_the_front_or_past_the_end() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.insert_at(&recipe("first", "V60", Vec::new())?, 0)?;
+    store.insert_at(&recipe("last", "Aeropress", Vec::new())?, 99)?;
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["first", "espresso-uuid", "pourover-uuid", "last"]
+    );
+    Ok(())
+}
+
+#[test]
 fn remove_deletes_the_recipe_and_its_steps() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
