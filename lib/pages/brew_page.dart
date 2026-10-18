@@ -17,8 +17,10 @@ import 'package:flutter/services.dart';
 /// The brew page: the open recipe printed on its own label, its timer dial
 /// and its method. Once
 /// subscribed it opens [recipeId] ([OpenBrew]) and shows the brew states
-/// that follow. Tapping the dial starts or resets the brew; long-pressing a
-/// step starts from it. Leaving the page tells Rust ([LeaveBrew]).
+/// that follow. Tapping the dial starts, pauses or resumes the brew, and the
+/// Reset button under it (shown while a brew runs or is paused) stops it;
+/// long-pressing a step starts from it. Leaving the page tells Rust
+/// ([LeaveBrew]).
 class BrewPage extends StatefulWidget {
   const BrewPage({
     required this.recipeId,
@@ -91,7 +93,8 @@ class _BrewPageState extends State<BrewPage> {
           listenable: widget.brew,
           builder: (_, _) => switch (widget.brew.state) {
             BrewUpdateIdle(:final recipe) ||
-            BrewUpdateRunning(:final recipe) => _RatioSheet(
+            BrewUpdateRunning(:final recipe) ||
+            BrewUpdatePaused(:final recipe) => _RatioSheet(
               recipe: recipe,
               colors: colors,
             ),
@@ -117,8 +120,26 @@ class _BrewPageState extends State<BrewPage> {
     return PopScope(
       onPopInvokedWithResult: (_, _) => _leave(),
       child: switch (_state) {
-        BrewUpdateIdle(:final recipe) => _page(recipe, null),
-        BrewUpdateRunning(:final recipe, :final timer) => _page(recipe, timer),
+        BrewUpdateIdle(:final recipe) => _page(
+          recipe,
+          null,
+          onDial: () => _start(0),
+          face: (colors) => _IdleFace(recipe: recipe, colors: colors),
+        ),
+        BrewUpdateRunning(:final recipe, :final timer) => _page(
+          recipe,
+          timer,
+          onDial: () => const PauseBrew().sendSignalToRust(),
+          face: (colors) =>
+              _TimerFace(timer: timer, colors: colors, paused: false),
+        ),
+        BrewUpdatePaused(:final recipe, :final timer) => _page(
+          recipe,
+          timer,
+          onDial: () => const ResumeBrew().sendSignalToRust(),
+          face: (colors) =>
+              _TimerFace(timer: timer, colors: colors, paused: true),
+        ),
         BrewUpdateEmpty(:final label) => Scaffold(
           appBar: AppBar(),
           body: Center(child: Text(label)),
@@ -131,8 +152,13 @@ class _BrewPageState extends State<BrewPage> {
   }
 
   /// The open recipe, printed on its own label paper; [timer] is null
-  /// while idle.
-  Widget _page(BrewRecipe recipe, BrewTimer? timer) {
+  /// while idle. Tapping the dial calls [onDial]; [face] is its centre.
+  Widget _page(
+    BrewRecipe recipe,
+    BrewTimer? timer, {
+    required VoidCallback onDial,
+    required Widget Function(LabelColors colors) face,
+  }) {
     final colors = LabelColors.of(recipe.label, Theme.of(context).brightness);
     final paperBrightness = ThemeData.estimateBrightnessForColor(colors.paper);
     final sweep = timer?.sweepSeconds;
@@ -212,21 +238,36 @@ class _BrewPageState extends State<BrewPage> {
                   constraints: const BoxConstraints(maxWidth: 300),
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: timer == null
-                        ? () => _start(0)
-                        : () => const ResetBrew().sendSignalToRust(),
+                    onTap: onDial,
                     child: BrewDial(
                       sweep: sweep == null ? null : Duration(seconds: sweep),
                       restartKey: (timer?.run, timer?.stepIndex),
                       steps: recipe.steps,
                       colors: colors,
-                      child: timer == null
-                          ? _IdleFace(recipe: recipe, colors: colors)
-                          : _RunningFace(timer: timer, colors: colors),
+                      child: face(colors),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
+                // The slot stays while idle, so the page does not jump when
+                // a brew starts.
+                SizedBox(
+                  height: 44,
+                  child: timer == null
+                      ? null
+                      : TextButton.icon(
+                          onPressed: () => const ResetBrew().sendSignalToRust(),
+                          style: TextButton.styleFrom(
+                            foregroundColor: colors.ink,
+                          ),
+                          icon: const Icon(Icons.replay, size: 18),
+                          label: Text(
+                            'RESET',
+                            style: _caption(colors, size: 12).copyWith(
+                              color: colors.ink,
+                            ),
+                          ),
+                        ),
+                ),
                 _MethodHeading(colors: colors),
                 const SizedBox(height: 6),
                 for (final (i, step) in recipe.steps.indexed)
@@ -312,13 +353,18 @@ class _IdleFace extends StatelessWidget {
   }
 }
 
-/// The dial's centre while running: which step, its name, and its
-/// `MM:SS` countdown.
-class _RunningFace extends StatelessWidget {
-  const _RunningFace({required this.timer, required this.colors});
+/// The dial's centre while running or [paused]: which step, its name, and
+/// its `MM:SS` countdown, faded while paused, with what a tap does.
+class _TimerFace extends StatelessWidget {
+  const _TimerFace({
+    required this.timer,
+    required this.colors,
+    required this.paused,
+  });
 
   final BrewTimer timer;
   final LabelColors colors;
+  final bool paused;
 
   @override
   Widget build(BuildContext context) {
@@ -343,14 +389,35 @@ class _RunningFace extends StatelessWidget {
               color: colors.ink,
             ),
           ),
-          Text(timer.remainingLabel, style: _bigFigure(colors)),
-          const SizedBox(height: 4),
           Text(
-            'TAP TO RESET',
-            style: _caption(colors, size: 11).copyWith(
-              color: colors.ink.withValues(alpha: 0.55),
+            timer.remainingLabel,
+            style: _bigFigure(colors).copyWith(
+              color: paused ? colors.ink.withValues(alpha: 0.45) : colors.ink,
             ),
           ),
+          const SizedBox(height: 4),
+          if (paused)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.play_arrow, size: 14, color: colors.accent),
+                const SizedBox(width: 4),
+                Text(
+                  'TAP TO RESUME',
+                  style: _caption(
+                    colors,
+                    size: 11,
+                  ).copyWith(color: colors.accent),
+                ),
+              ],
+            )
+          else
+            Text(
+              'TAP TO PAUSE',
+              style: _caption(colors, size: 11).copyWith(
+                color: colors.ink.withValues(alpha: 0.55),
+              ),
+            ),
         ],
       ),
     );

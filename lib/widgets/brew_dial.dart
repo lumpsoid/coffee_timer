@@ -11,7 +11,9 @@ import 'package:flutter/material.dart';
 /// The sweep repeats once per [sweep]; a null [sweep] holds it still. It
 /// starts over whenever [restartKey] changes (a new step, or a fresh start
 /// of the same one). The track's arcs and their states come from [steps]
-/// as Rust sent them.
+/// as Rust sent them. While a step is `paused` the sweep stops where it is,
+/// drawn in faded ink instead of the accent, and goes on from there once
+/// the step is current again.
 class BrewDial extends StatelessWidget {
   const BrewDial({
     required this.sweep,
@@ -71,10 +73,19 @@ class _SweepingDialState extends State<_SweepingDial>
     duration: widget.sweep,
   );
 
+  static bool _held(List<BrewStep> steps) =>
+      steps.any((s) => s.status == BrewStepStatus.paused);
+
+  /// Sweeps on from where the ring stands, unless there is nothing to sweep
+  /// or the brew is paused.
+  void _sweepOn() {
+    if (widget.sweep != null && !_held(widget.steps)) _controller.repeat();
+  }
+
   @override
   void initState() {
     super.initState();
-    if (widget.sweep != null) _controller.repeat();
+    _sweepOn();
   }
 
   @override
@@ -84,7 +95,10 @@ class _SweepingDialState extends State<_SweepingDial>
       _controller
         ..duration = widget.sweep
         ..reset();
-      if (widget.sweep != null) _controller.repeat();
+      _sweepOn();
+    } else if (_held(oldWidget.steps) != _held(widget.steps)) {
+      _controller.stop();
+      _sweepOn();
     }
   }
 
@@ -110,7 +124,8 @@ class _SweepingDialState extends State<_SweepingDial>
 }
 
 /// Paints the dial. [progress] is how far the sweep has come through the
-/// current step, `0..1`; with no current step in [steps] nothing sweeps.
+/// current (or paused) step, `0..1`; with neither in [steps] nothing
+/// sweeps. A paused step's sweep is faded ink rather than the accent.
 class BrewDialPainter extends CustomPainter {
   const BrewDialPainter({
     required this.progress,
@@ -127,7 +142,13 @@ class BrewDialPainter extends CustomPainter {
   /// Gap left between neighbouring arcs on the step track, in turns.
   static const _trackGap = 0.012;
 
-  bool get _running => steps.any((s) => s.status == BrewStepStatus.current);
+  static bool _isOn(BrewStep step) =>
+      step.status == BrewStepStatus.current ||
+      step.status == BrewStepStatus.paused;
+
+  bool get _running => steps.any(_isOn);
+
+  bool get _paused => steps.any((s) => s.status == BrewStepStatus.paused);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -135,6 +156,7 @@ class BrewDialPainter extends CustomPainter {
     // Measures are in a 300-unit dial, scaled to fit.
     final unit = size.shortestSide / 300;
     final ink = colors.ink;
+    final swept = _paused ? ink.withValues(alpha: 0.45) : colors.accent;
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
@@ -161,9 +183,7 @@ class BrewDialPainter extends CustomPainter {
         _at(center, (long ? 112 : 117) * unit, i / _ticks),
         stroke
           ..strokeWidth = (long ? 2 : 1.2) * unit
-          ..color = lit
-              ? colors.accent
-              : ink.withValues(alpha: long ? 0.55 : 0.28),
+          ..color = lit ? swept : ink.withValues(alpha: long ? 0.55 : 0.28),
       );
     }
 
@@ -184,13 +204,13 @@ class BrewDialPainter extends CustomPainter {
             alpha: step.status == BrewStepStatus.done ? 0.8 : 0.18,
           ),
       );
-      if (step.status == BrewStepStatus.current && progress > 0) {
+      if (_isOn(step) && progress > 0) {
         _arc(
           canvas,
           track,
           start,
           length * progress,
-          stroke..color = colors.accent,
+          stroke..color = swept,
         );
       }
     }
@@ -204,7 +224,7 @@ class BrewDialPainter extends CustomPainter {
         progress,
         stroke
           ..strokeWidth = 7 * unit
-          ..color = colors.accent,
+          ..color = swept,
       );
     }
   }

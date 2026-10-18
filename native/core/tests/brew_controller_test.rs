@@ -813,3 +813,185 @@ fn adjusting_with_no_recipe_open_is_an_error() {
     );
     assert_eq!(brew.state(), &BrewState::Empty);
 }
+
+// pause and resume
+
+/// `(held step index, remaining MM:SS)` while paused; `None` otherwise.
+fn held(brew: &BrewController) -> Option<(usize, String)> {
+    brew.state()
+        .paused()
+        .map(|step| (step.index(), step.remaining_label()))
+}
+
+#[test]
+fn pause_holds_the_step_and_its_time_and_lets_the_screen_sleep() -> TestResult {
+    let (mut brew, _catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.tick();
+
+    assert_eq!(
+        brew.pause()?,
+        [SCREEN_OFF, show("Step 1 · 00:02 · Paused", Some("Step 2"))]
+    );
+    assert!(!brew.state().is_running());
+    assert_eq!(timer(&brew), None);
+    assert_eq!(held(&brew), running(0, "00:02"));
+    assert_eq!(statuses(&brew), [StepStatus::Paused, Pending]);
+    Ok(())
+}
+
+#[test]
+fn ticks_while_paused_do_nothing() -> TestResult {
+    let (mut brew, _catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.pause()?;
+    let before = brew.state().clone();
+    assert_eq!(brew.tick(), []);
+    assert_eq!(brew.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn resume_counts_down_from_where_it_was_held_in_the_same_run() -> TestResult {
+    let (mut brew, _catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.tick();
+    let first = run(&brew);
+    brew.pause()?;
+
+    assert_eq!(
+        brew.resume()?,
+        [SCREEN_ON, show("Step 1 · 00:02", Some("Step 2"))]
+    );
+    assert_eq!(timer(&brew), running(0, "00:02"));
+    assert_eq!(held(&brew), None);
+    assert_eq!(run(&brew), first, "resuming is not a new run");
+    assert_eq!(statuses(&brew), [Current, Pending]);
+
+    brew.tick();
+    assert_eq!(
+        brew.tick(),
+        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:02", None)]
+    );
+    Ok(())
+}
+
+#[test]
+fn pause_unless_running_is_an_error_and_changes_nothing() -> TestResult {
+    let mut empty = BrewController::new();
+    assert_eq!(empty.pause(), Err(BrewError::NotRunning));
+    assert_eq!(empty.state(), &BrewState::Empty);
+
+    let (mut brew, _catalog) = opened(&[3])?;
+    assert_eq!(brew.pause(), Err(BrewError::NotRunning));
+    assert!(is_idle(&brew));
+
+    brew.start(0)?;
+    brew.pause()?;
+    let before = brew.state().clone();
+    assert_eq!(brew.pause(), Err(BrewError::NotRunning));
+    assert_eq!(brew.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn resume_unless_paused_is_an_error_and_changes_nothing() -> TestResult {
+    let (mut brew, _catalog) = opened(&[3])?;
+    assert_eq!(brew.resume(), Err(BrewError::NotPaused));
+    assert!(is_idle(&brew));
+
+    brew.start(0)?;
+    let before = brew.state().clone();
+    assert_eq!(brew.resume(), Err(BrewError::NotPaused));
+    assert_eq!(brew.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn reset_while_paused_goes_idle_and_hides_the_notification() -> TestResult {
+    let (mut brew, _catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.pause()?;
+    assert_eq!(brew.reset(), [HIDE], "the screen already sleeps");
+    assert!(is_idle(&brew));
+    assert_eq!(statuses(&brew), [Pending, Pending]);
+    Ok(())
+}
+
+#[test]
+fn leave_or_open_while_paused_stops_silently() -> TestResult {
+    let (mut brew, catalog) = opened(&[3])?;
+    brew.start(0)?;
+    brew.pause()?;
+    assert_eq!(brew.open(&id("b")?, &catalog), [HIDE]);
+    assert!(is_idle(&brew));
+
+    brew.start(0)?;
+    brew.pause()?;
+    assert_eq!(brew.leave(), [HIDE]);
+    assert_eq!(brew.state(), &BrewState::Empty);
+    Ok(())
+}
+
+#[test]
+fn start_while_paused_restarts_from_the_chosen_step_as_a_new_run() -> TestResult {
+    let (mut brew, _catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.pause()?;
+    let first = brew.state().paused().map(|step| step.run());
+
+    assert_eq!(brew.start(1)?, [SCREEN_ON, show("Step 2 · 00:02", None)]);
+    assert_eq!(timer(&brew), running(1, "00:02"));
+    assert_eq!(run(&brew), first.map(|r| r + 1));
+    Ok(())
+}
+
+#[test]
+fn adjusting_while_paused_keeps_it_paused() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30, 10])?;
+    brew.start(0)?;
+    brew.tick();
+    brew.pause()?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    assert_eq!(held(&brew), running(0, "00:29"));
+    assert_eq!(dose(&brew), shown("20g", "110g", "1:5.5"));
+    Ok(())
+}
+
+#[test]
+fn an_edit_to_the_open_recipe_while_paused_resets_to_the_new_version() -> TestResult {
+    let (mut brew, mut catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.pause()?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+
+    let change = catalog.upsert(dosed("a", 10, 160, &[10])?)?;
+    assert_eq!(brew.on_catalog_change(&change, &catalog), [HIDE]);
+    assert!(is_idle(&brew));
+    assert_eq!(statuses(&brew), [Pending]);
+    assert_eq!(dose(&brew), shown("10g", "55g", "1:5.5"));
+    Ok(())
+}
+
+#[test]
+fn deleting_the_open_recipe_while_paused_shows_empty_recipe() -> TestResult {
+    let (mut brew, mut catalog) = opened(&[3, 2])?;
+    brew.start(0)?;
+    brew.pause()?;
+    let change = catalog.remove(id("a")?)?;
+    assert_eq!(brew.on_catalog_change(&change, &catalog), [HIDE]);
+    assert_eq!(brew.state(), &BrewState::Empty);
+    Ok(())
+}
+
+#[test]
+fn a_change_to_another_recipe_leaves_a_paused_brew_alone() -> TestResult {
+    let (mut brew, mut catalog) = opened(&[3])?;
+    brew.start(0)?;
+    brew.pause()?;
+    let before = brew.state().clone();
+    let change = catalog.remove(id("b")?)?;
+    assert_eq!(brew.on_catalog_change(&change, &catalog), []);
+    assert_eq!(brew.state(), &before);
+    Ok(())
+}

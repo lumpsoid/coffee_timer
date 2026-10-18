@@ -1,6 +1,6 @@
 use crate::model::{RecipeStep, StepDuration};
 
-/// The step a running brew is on, and how long it has left.
+/// The step a running or paused brew is on, and how long it has left.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunningStep {
     run: u64,

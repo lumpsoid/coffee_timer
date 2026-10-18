@@ -21,6 +21,7 @@ use coffee_timer_store::SqliteStore;
 
 use crate::args::Command;
 use crate::cli_error::CliError;
+use crate::commands::BrewPause;
 
 /// Every controller, built and loaded from one store.
 pub struct Controllers {
@@ -61,11 +62,21 @@ pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Resu
         Command::Delete { id } => {
             commands::delete(id, &mut c.editor, &mut c.catalog, &mut c.brew, out)
         }
-        Command::Brew { id, from, fast } => {
+        Command::Brew {
+            id,
+            from,
+            fast,
+            pause_at,
+            pause_for,
+        } => {
             let mut skip = || {};
             let mut sleep = || thread::sleep(Duration::from_secs(1));
             let wait: &mut dyn FnMut() = if *fast { &mut skip } else { &mut sleep };
-            commands::brew(id, *from, wait, &mut c.brew, &c.catalog, out)
+            let pause = pause_at.map(|at| BrewPause {
+                at,
+                seconds: *pause_for,
+            });
+            commands::brew(id, *from, pause, wait, &mut c.brew, &c.catalog, out)
         }
         Command::Settings { action } => commands::settings(action.as_ref(), &mut c.settings, out),
     }

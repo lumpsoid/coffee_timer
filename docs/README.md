@@ -20,9 +20,13 @@ to.
   creates a recipe.
 - **Brew page.** Shows the recipe printed on its own coffee-bag label (the
   same look as its list card), a timer dial and the steps. Tap the dial to
-  start the brew from step 1, or tap it again to reset. Long-press a step to
-  start from that step. The dial sweeps through the current step, and its
-  outer track and the step list mark each step done, current or pending.
+  start the brew from step 1. Tap it while it runs to pause, and again to
+  resume where it left off. The Reset button under the dial, shown while a
+  brew runs or is paused, stops it. Long-press a step to start from that
+  step, paused or not. The dial sweeps through the current step, and its
+  outer track and the step list mark each step done, current, paused or
+  pending. While paused the sweep stops and fades, the countdown fades, the
+  screen may sleep again, and the brew notification reads `Paused`.
   The coffee, water and ratio are the recipe's stored grams.
   Tap the coffee/water/ratio figures to change the ratio for this brew in
   steps of 0.5. The coffee stays the same and the water follows. Leaving the
@@ -100,6 +104,7 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --ratio-step
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
     --coffee 15 --water 250 --step Bloom=30 --step Pour=120
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew espresso-uuid --pause-at 10 --pause-for 5
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings theme dark
@@ -114,7 +119,10 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AA
   countdown, each step's status and the effects (`[vibrate 100ms]`,
   `[sound]`, `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`).
   `--fast` skips the waits.
-  `--from N` starts at a 0-based step.
+  `--from N` starts at a 0-based step. `--pause-at N` pauses after tick
+  `N` (ignored if the brew has ended by then) and `--pause-for S` stays
+  paused `S` seconds without ticking, then resumes; it prints `pause` and
+  `resume` lines with their effects.
 - `list` and `show` print each recipe's coffee and water grams; `show` also
   prints the ratio.
 - `new --coffee GRAMS --water GRAMS` sets the dose (1–200 g and

@@ -47,6 +47,13 @@ void main() {
       expect(find.text('2'), findsNothing);
     });
 
+    testWidgets('a paused step shows a pause sign', (tester) async {
+      await pumpTile(tester, BrewStepStatus.paused);
+      expect(find.byIcon(Icons.pause), findsOneWidget);
+      expect(find.byIcon(Icons.play_arrow), findsNothing);
+      expect(find.text('2'), findsNothing);
+    });
+
     testWidgets('a done step shows a check', (tester) async {
       await pumpTile(tester, BrewStepStatus.done);
       expect(find.byIcon(Icons.check), findsOneWidget);
@@ -159,18 +166,21 @@ void main() {
                 as BrewDialPainter)
             .progress;
 
-    Widget timer({required Duration? sweep, required Object restartKey}) =>
-        _host(
-          BrewDial(
-            sweep: sweep,
-            restartKey: restartKey,
-            steps: brewRecipe(
-              statuses: [BrewStepStatus.current, BrewStepStatus.pending],
-            ).steps,
-            colors: _colors,
-            child: const Text('inside'),
-          ),
-        );
+    Widget timer({
+      required Duration? sweep,
+      required Object restartKey,
+      BrewStepStatus first = BrewStepStatus.current,
+    }) => _host(
+      BrewDial(
+        sweep: sweep,
+        restartKey: restartKey,
+        steps: brewRecipe(
+          statuses: [first, BrewStepStatus.pending],
+        ).steps,
+        colors: _colors,
+        child: const Text('inside'),
+      ),
+    );
 
     testWidgets('sweeps over the duration and repeats', (tester) async {
       await tester.pumpWidget(
@@ -213,6 +223,28 @@ void main() {
       await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (0, 0)));
       await tester.pump(const Duration(seconds: 1));
       expect(ring(tester), closeTo(0.6, 0.01));
+    });
+
+    testWidgets('a pause holds the sweep and a resume goes on from there', (
+      tester,
+    ) async {
+      const tenSeconds = Duration(seconds: 10);
+      await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (1, 0)));
+      await tester.pump(const Duration(seconds: 3));
+
+      await tester.pumpWidget(
+        timer(
+          sweep: tenSeconds,
+          restartKey: (1, 0),
+          first: BrewStepStatus.paused,
+        ),
+      );
+      await tester.pump(const Duration(seconds: 5));
+      expect(ring(tester), closeTo(0.3, 0.01));
+
+      await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (1, 0)));
+      await tester.pump(const Duration(seconds: 2));
+      expect(ring(tester), closeTo(0.5, 0.01));
     });
   });
 }

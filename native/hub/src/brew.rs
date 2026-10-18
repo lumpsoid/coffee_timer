@@ -25,6 +25,10 @@ impl From<&BrewState> for BrewUpdate {
                 recipe: recipe(view, steps()),
                 timer: timer(view, step),
             },
+            BrewState::Paused(view, step) => Self::Paused {
+                recipe: recipe(view, steps()),
+                timer: timer(view, step),
+            },
         }
     }
 }
@@ -81,6 +85,7 @@ impl From<StepStatus> for BrewStepStatus {
         match status {
             StepStatus::Done => Self::Done,
             StepStatus::Current => Self::Current,
+            StepStatus::Paused => Self::Paused,
             StepStatus::Pending => Self::Pending,
         }
     }
@@ -158,6 +163,7 @@ mod tests {
             .map(|s| match s.status {
                 BrewStepStatus::Done => "done",
                 BrewStepStatus::Current => "current",
+                BrewStepStatus::Paused => "paused",
                 BrewStepStatus::Pending => "pending",
             })
             .collect()
@@ -239,6 +245,22 @@ mod tests {
         assert_eq!(statuses(&recipe), ["done", "current"]);
         assert_eq!(timer.step_index, 1);
         assert_eq!(timer.sweep_seconds, None);
+        Ok(())
+    }
+
+    #[test]
+    fn paused_carries_the_held_step_and_its_status() -> TestResult {
+        let mut brew = opened()?;
+        let _effects = brew.start(0)?;
+        let _effects = brew.tick();
+        let _effects = brew.pause()?;
+        let BrewUpdate::Paused { recipe, timer } = BrewUpdate::from(brew.state()) else {
+            return Err("not paused".into());
+        };
+        assert_eq!(statuses(&recipe), ["paused", "pending"]);
+        assert_eq!(timer.run, 1);
+        assert_eq!(timer.step_index, 0);
+        assert_eq!(timer.remaining_label, "00:29");
         Ok(())
     }
 }

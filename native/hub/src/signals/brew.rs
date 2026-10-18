@@ -19,9 +19,17 @@ pub struct StartBrew {
     pub from: u32,
 }
 
-/// Stop the running brew; the recipe stays open.
+/// Stop the running or paused brew; the recipe stays open.
 #[derive(Deserialize, DartSignal)]
 pub struct ResetBrew;
+
+/// Hold the running brew on its step, with the time it has left.
+#[derive(Deserialize, DartSignal)]
+pub struct PauseBrew;
+
+/// Count the paused brew down again from where it was held.
+#[derive(Deserialize, DartSignal)]
+pub struct ResumeBrew;
 
 /// Change the open recipe's ratio for this brew only; the coffee stays and
 /// the water follows.
@@ -53,6 +61,12 @@ pub enum BrewUpdate {
     Idle { recipe: BrewRecipe },
     /// The timer is counting down `timer.step_index`.
     Running {
+        recipe: BrewRecipe,
+        timer: BrewTimer,
+    },
+    /// The timer is held on `timer.step_index` with `timer.remaining_label`
+    /// left; that step's status is `Paused`.
+    Paused {
         recipe: BrewRecipe,
         timer: BrewTimer,
     },
@@ -105,11 +119,14 @@ pub enum BrewRatioSetting {
 #[derive(Serialize, SignalPiece)]
 pub enum BrewStepStatus {
     Done,
+    /// Being counted down.
     Current,
+    /// The step a paused brew is held on.
+    Paused,
     Pending,
 }
 
-/// The step being counted down.
+/// The step being counted down, or held while paused.
 #[derive(Serialize, SignalPiece)]
 pub struct BrewTimer {
     /// Start number of this brew: grows with every accepted `StartBrew`,

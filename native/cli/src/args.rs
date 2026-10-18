@@ -53,6 +53,19 @@ pub enum Command {
         /// Tick without waiting a second between ticks.
         #[arg(long)]
         fast: bool,
+        /// Pause after this many ticks, as tapping the running dial does;
+        /// ignored if the brew has ended by then.
+        #[arg(long, value_name = "SECONDS")]
+        pause_at: Option<u32>,
+        /// Stay paused this many seconds, then resume (no wait with
+        /// `--fast`).
+        #[arg(
+            long,
+            value_name = "SECONDS",
+            default_value_t = 0,
+            requires = "pause_at"
+        )]
+        pause_for: u32,
     },
     /// Show settings, or change the theme or accent.
     Settings {

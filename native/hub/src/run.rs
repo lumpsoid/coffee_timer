@@ -21,10 +21,10 @@ use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, EditRecipe,
-    EditorReady, EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PlatformEffect, RecipeListReady,
-    RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, SaveRecipe, SetAccent, SetRecipeCoffee,
-    SetRecipeDescription, SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName, SetTheme,
-    SettingsReady, SettingsUpdate, StartBrew,
+    EditorReady, EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PauseBrew, PlatformEffect,
+    RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveRecipe,
+    SetAccent, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater,
+    SetStepDuration, SetStepName, SetTheme, SettingsReady, SettingsUpdate, StartBrew,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -63,6 +63,8 @@ pub async fn run(mut c: Controllers) {
     let open_brew = OpenBrew::get_dart_signal_receiver();
     let start_brew = StartBrew::get_dart_signal_receiver();
     let reset_brew = ResetBrew::get_dart_signal_receiver();
+    let pause_brew = PauseBrew::get_dart_signal_receiver();
+    let resume_brew = ResumeBrew::get_dart_signal_receiver();
     let leave_brew = LeaveBrew::get_dart_signal_receiver();
     let adjust_brew_ratio = AdjustBrewRatio::get_dart_signal_receiver();
     let editor_ready = EditorReady::get_dart_signal_receiver();
@@ -117,6 +119,19 @@ pub async fn run(mut c: Controllers) {
             Some(_) = reset_brew.recv() => {
                 let effects = c.brew.reset();
                 show_brew(&c.brew, &effects);
+            }
+            // Pausing needs no ticker work: it is dropped below once the
+            // brew no longer runs.
+            Some(_) = pause_brew.recv() => {
+                let effects = report(c.brew.pause());
+                show_brew(&c.brew, &effects.unwrap_or_default());
+            }
+            Some(_) = resume_brew.recv() => {
+                let effects = report(c.brew.resume());
+                if effects.is_some() {
+                    ticker = Some(every_second());
+                }
+                show_brew(&c.brew, &effects.unwrap_or_default());
             }
             Some(pack) = adjust_brew_ratio.recv() => {
                 report(c.brew.adjust_ratio(pack.message.change.into()));

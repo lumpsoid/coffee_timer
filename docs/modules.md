@@ -120,22 +120,22 @@ Test:
 [`native/core/src/brew`](../native/core/src/brew)
 
 - `BrewController` owns `BrewState` and runs the timer state machine. It
-  provides `open`, `start`, `tick`, `reset`, `leave`, `adjust_ratio` and
-  `on_catalog_change`.
-- `BrewState` is `Empty`, `Idle(BrewView)` or `Running(BrewView,
-  RunningStep)`.
+  provides `open`, `start`, `tick`, `pause`, `resume`, `reset`, `leave`,
+  `adjust_ratio` and `on_catalog_change`.
+- `BrewState` is `Empty`, `Idle(BrewView)`, `Running(BrewView,
+  RunningStep)` or `Paused(BrewView, RunningStep)`.
 - `BrewView` is the open recipe with its labels, its `LabelStyle` (the
   brew page wears the list card's label) and `Step N of M` positions. Its
   `RatioSetting` is `Recipe` or `Adjusted`; `RatioChange` is
   one press of the page's ratio controls.
-- `RunningStep` is the current step, the time left, the run number, and the
-  dial's sweep.
-- `StepRow` and `StepStatus` (`Done` / `Current` / `Pending`) describe the
+- `RunningStep` is the current (or paused) step, the time left, the run
+  number, and the dial's sweep.
+- `StepRow` and `StepStatus` (`Done` / `Current` / `Paused` / `Pending`) describe the
   step list. Each row also carries its arc on the dial's step track, as
   fractions of the whole brew.
 - `Effect` is a platform command. `BrewNotice` is the content of the brew
   notification.
-- `BrewError` is a rejected start or ratio change.
+- `BrewError` is a rejected start, pause, resume or ratio change.
 
 Test:
 [`brew_controller_test.rs`](../native/core/tests/brew_controller_test.rs),
@@ -260,7 +260,7 @@ makes no business decisions.
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted` / `Removed` / `Failed`) |
-| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running`), `PlatformEffect` |
+| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `AddStep`, `RemoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
 
@@ -299,7 +299,8 @@ The GUI renders, sends intents, and performs effects. It holds no business
   row, and `RoastMeter` draws the beans. `RecipeSummaryTile` is a list row
   on its own label; the brew page lays the whole page on one. `BrewDial` is
   the brew timer: bezel ticks, an inner arc that sweeps per step and
-  restarts on `restartKey`, and an outer track with each step's arc.
+  restarts on `restartKey` (it stops and fades while a step is `paused`,
+  and goes on from there), and an outer track with each step's arc.
   `StepListTile` is one step of the brew page's method.
 - `src/bindings/` holds the generated, gitignored signal classes. Run
   `rinf gen` to create them.

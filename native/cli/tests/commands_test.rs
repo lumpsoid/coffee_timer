@@ -240,6 +240,47 @@ tick 4   idle 0:03  |  1:pending 2:pending 3:pending
 }
 
 #[test]
+fn brew_pauses_at_the_chosen_tick_and_resumes_where_it_was() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["new", "Short", "--step", "A=3", "--step", "B=1"])?;
+    assert_eq!(
+        session.run(&[
+            "brew",
+            "r1",
+            "--fast",
+            "--pause-at",
+            "1",
+            "--pause-for",
+            "5"
+        ])?,
+        "\
+start    00:03 A  |  1:current 2:pending
+[screen on]
+[notify A · 00:03 | Next: B]
+tick 1   00:02 A  |  1:current 2:pending
+[notify A · 00:02 | Next: B]
+pause    paused 00:02 A  |  1:paused 2:pending
+[screen off]
+[notify A · 00:02 · Paused | Next: B]
+resume   00:02 A  |  1:current 2:pending
+[screen on]
+[notify A · 00:02 | Next: B]
+tick 2   00:01 A  |  1:current 2:pending
+[notify A · 00:01 | Next: B]
+tick 3   00:01 B  |  1:done 2:current
+[vibrate 100ms]
+[sound]
+[notify B · 00:01]
+tick 4   idle 0:04  |  1:pending 2:pending
+[screen off]
+[vibrate 100ms]
+[notify off]
+"
+    );
+    Ok(())
+}
+
+#[test]
 fn brew_from_a_later_step_starts_there() -> TestResult {
     let out = Session::new()?.run(&["brew", "espresso-uuid", "--from", "1", "--fast"])?;
     let lines: Vec<&str> = out.lines().collect();

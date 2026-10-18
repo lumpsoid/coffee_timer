@@ -36,7 +36,7 @@ and not on each other. Dart sees only the generated signal classes.
 |---|---|---|
 | [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>` | the recipe list and its persistence (shared) |
 | [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme and accent, and their persistence |
-| [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` | the open recipe and its timer |
+| [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` | the open recipe and its timer |
 | [`EditorController`](../native/core/src/editor/editor_controller.rs) | [`EditorState`](../native/core/src/editor/editor_state.rs): `Closed` / `Open(Draft)` | one draft, new or of an existing recipe |
 
 An action takes plain values and mutates the state. It returns only what
@@ -99,7 +99,8 @@ function:
 
 `BrewController::on_catalog_change` ignores a change to any recipe that is
 not open. If the change hits the open recipe, the controller reopens it from
-the catalog. An edit shows the new version, idle, and stops a running brew.
+the catalog. An edit shows the new version, idle, and stops a running or
+paused brew.
 A delete shows "Empty recipe".
 
 Three intents produce a change: the editor's save, the editor's delete, and
@@ -122,7 +123,11 @@ Pour]` and `[notify off]`.
 [`BrewNotice`](../native/core/src/brew/brew_notice.rs) is the running step
 and its countdown, `Bloom · 00:35`, and the next step, `Next: Pour`, which
 is left out on the last step. A running brew shows it from start to stop,
-refreshed on every tick. On Android,
+refreshed on every tick. A paused brew keeps it, reading
+`Bloom · 00:35 · Paused`: the foreground service then keeps the paused
+brew alive in the background and one tap from the app. (It still holds its
+partial wake lock while paused; nothing ticks, so that costs little, and
+releasing it would need a second notification kind for no visible gain.) On Android,
 [`BrewService`](../android/app/src/main/kotlin/com/example/coffee_timer/BrewService.kt)
 performs it as a foreground service that holds a partial wake lock. That
 keeps the process alive and the CPU awake, so the hub keeps ticking and the
@@ -141,7 +146,16 @@ clock. Time arrives as `tick()`, one call per second while
 - `start(from)` begins step `from` with its full duration and returns
   `KeepScreenOn(true)` + `ShowBrewNotification`. If no recipe is open, or `from` is out of range, it
   returns `Err(BrewError)` and changes nothing. Starting while a brew is
-  running restarts it.
+  running or paused restarts it, as a new run.
+- `pause()` holds a running brew on its step with the time it has left
+  (`Paused`) and returns `KeepScreenOn(false)` + the `Paused`
+  notification. The screen may sleep: nothing on it moves until resumed,
+  and a forgotten pause should not keep the display lit. `resume()` counts
+  down again from there, in the same run, and returns `KeepScreenOn(true)`
+  + the running notification. Neither vibrates or plays the sound. Pausing
+  anything but a running brew (`NotRunning`), or resuming anything but a
+  paused one (`NotPaused`), is an `Err` that changes nothing. `tick()` does
+  nothing while paused, and the shell does not tick then.
 - `tick()` takes one second off the current step, and never goes below zero.
   Every tick that leaves the brew running returns `ShowBrewNotification`
   last. When a step reaches zero, the next step begins and the tick returns
@@ -152,13 +166,15 @@ clock. Time arrives as `tick()`, one call per second while
   tick.
 - `reset()` stops the brew and keeps the recipe open. `leave()` stops the
   brew and empties the page. `open(id)` stops any running brew. All three
-  return `KeepScreenOn(false)` + `HideBrewNotification` only when a brew was
-  running, and never
-  vibrate or play the sound.
+  return `KeepScreenOn(false)` + `HideBrewNotification` when a brew was
+  running, only `HideBrewNotification` when it was paused (the screen
+  already sleeps), nothing otherwise, and never vibrate or play the
+  sound.
 - `adjust_ratio(change)` changes the open recipe's ratio for this brew
   only: one step of 0.5 more or less water per gram of coffee, within
   `1:1..=1:30`, or back to the recipe's own. The coffee stays and the water
-  follows. It returns no effects and leaves a running timer alone. `open`
+  follows. It returns no effects and leaves a running or paused timer
+  alone. `open`
   and `leave` drop the adjustment. An edit to the open recipe keeps it,
   applied to the edited recipe's coffee. Every recipe has coffee
   (`CoffeeDose` is at least 1 g), so every recipe has a ratio to change.
@@ -172,9 +188,14 @@ clock. Time arrives as `tick()`, one call per second while
 accepted `StartBrew` replaces it with a new interval whose first beat lands
 exactly one second later (`interval_at`, `MissedTickBehavior::Delay`). Each
 beat calls `tick()`. After every loop iteration, the hub drops the interval
-if the brew is no longer running. While there is no interval, the tick arm
+if the brew is no longer running, so a pause drops it too. An accepted
+`ResumeBrew` creates a new one, like `StartBrew`: the first tick after a
+resume lands a full second later, so the part of a second already counted
+before the pause is given back. While there is no interval, the tick arm
 of `select!` stays pending. The CLI's `brew` command does the same with a
-one-second sleep, or no wait at all with `--fast`.
+one-second sleep, or no wait at all with `--fast`; with `--pause-at` it
+pauses after that tick, waits `--pause-for` seconds without ticking, then
+resumes.
 
 ## The hub task
 

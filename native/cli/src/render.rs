@@ -53,13 +53,16 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
     Ok(())
 }
 
-/// One line of the timer: the countdown and step while running, the total
-/// while idle; then every step's status.
+/// One line of the timer: the countdown and step while running or paused,
+/// the total while idle; then every step's status.
 pub fn timer_line(state: &BrewState) -> String {
     let timer = match state {
         BrewState::Empty => BrewState::EMPTY_LABEL.to_owned(),
         BrewState::Idle(view) => format!("idle {}", view.duration_label()),
         BrewState::Running(_, step) => format!("{} {}", step.remaining_label(), step.name()),
+        BrewState::Paused(_, step) => {
+            format!("paused {} {}", step.remaining_label(), step.name())
+        }
     };
     format!("{timer}  |  {}", statuses(&state.step_rows()))
 }
@@ -144,6 +147,7 @@ fn status(status: StepStatus) -> &'static str {
     match status {
         StepStatus::Done => "done",
         StepStatus::Current => "current",
+        StepStatus::Paused => "paused",
         StepStatus::Pending => "pending",
     }
 }

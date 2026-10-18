@@ -192,6 +192,16 @@ Deliberate changes to behavior the port had kept.
   database seeds Espresso 18 g / 36 g and Pour Over 15 g / 250 g. Because a
   dose is never 0 g, the brew page's "no coffee, no ratio" case
   (`RatioSetting::NoCoffee`, `BrewError::NoCoffee`) is gone.
+- **Pause and resume.** Legacy (and the port) reset a running brew when the
+  dial was tapped. Tapping it now pauses (`BrewState::Paused`, keeping the
+  step and its time left) and tapping again resumes. Reset moved to a Reset
+  button under the dial, shown while a brew runs or is paused, rather than
+  to a long-press on the dial: long-press already means "start from here"
+  on the steps, and a visible button is discoverable where a second
+  gesture on the same dial is not. While paused the screen may sleep and
+  the notification stays, reading `Paused`. Every rule about stopping
+  (reset, leave, open, an edit or delete of the open recipe) treats a
+  paused brew like a running one.
 
 ## Phases
 

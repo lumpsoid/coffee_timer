@@ -99,11 +99,21 @@ pub fn delete(
     pass_on(&change, brew, catalog, out)
 }
 
+/// When `brew` pauses: after tick `at`, for `seconds` waits, during which
+/// it does not tick (as the app's shell does not).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BrewPause {
+    pub at: u32,
+    pub seconds: u32,
+}
+
 /// Opens the recipe, starts it at `from`, then ticks while it runs, calling
 /// `wait` before each tick (a one-second sleep, or nothing with `--fast`).
+/// With `pause`, pauses and later resumes the brew as the dial does.
 pub fn brew(
     id: &str,
     from: usize,
+    pause: Option<BrewPause>,
     wait: &mut dyn FnMut(),
     brew: &mut BrewController,
     catalog: &RecipeCatalog,
@@ -116,6 +126,17 @@ pub fn brew(
     render::effects(out, &started)?;
     let mut tick: u32 = 0;
     while brew.state().is_running() {
+        if let Some(pause) = pause.filter(|pause| pause.at == tick) {
+            let paused = brew.pause()?;
+            writeln!(out, "pause    {}", render::timer_line(brew.state()))?;
+            render::effects(out, &paused)?;
+            for _ in 0..pause.seconds {
+                wait();
+            }
+            let resumed = brew.resume()?;
+            writeln!(out, "resume   {}", render::timer_line(brew.state()))?;
+            render::effects(out, &resumed)?;
+        }
         wait();
         let effects = brew.tick();
         tick = tick.saturating_add(1);

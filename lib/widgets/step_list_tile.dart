@@ -5,8 +5,9 @@ import 'package:flutter/material.dart';
 /// One line of the brew page's method: a round stamp, the step's name, a
 /// dotted leader and its duration, printed in the recipe label's [colors].
 /// The stamp follows [BrewStep.status]: a check when done, a play arrow when
-/// current, the step's number while pending. The current line is picked out
-/// in the accent; done lines fade.
+/// current, a pause sign when paused, the step's number while pending. The
+/// current line is picked out in the accent, a paused one in faded ink; done
+/// lines fade.
 class StepListTile extends StatelessWidget {
   const StepListTile({
     required this.step,
@@ -23,9 +24,11 @@ class StepListTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = step.status;
     final current = status == BrewStepStatus.current;
+    final paused = status == BrewStepStatus.paused;
     final stampFill = switch (status) {
       BrewStepStatus.done => colors.ink,
       BrewStepStatus.current => colors.accent,
+      BrewStepStatus.paused => colors.ink.withValues(alpha: 0.55),
       BrewStepStatus.pending => null,
     };
     final stamp = switch (status) {
@@ -38,6 +41,12 @@ class StepListTile extends StatelessWidget {
       BrewStepStatus.current => Icon(
         Icons.play_arrow,
         key: const ValueKey('play'),
+        size: 16,
+        color: colors.paper,
+      ),
+      BrewStepStatus.paused => Icon(
+        Icons.pause,
+        key: const ValueKey('pause'),
         size: 16,
         color: colors.paper,
       ),
@@ -63,9 +72,12 @@ class StepListTile extends StatelessWidget {
           duration: const Duration(milliseconds: 300),
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
           decoration: BoxDecoration(
-            color: current
-                ? colors.accent.withValues(alpha: 0.18)
-                : colors.accent.withValues(alpha: 0),
+            color: switch (status) {
+              BrewStepStatus.current => colors.accent.withValues(alpha: 0.18),
+              BrewStepStatus.paused => colors.ink.withValues(alpha: 0.08),
+              BrewStepStatus.done ||
+              BrewStepStatus.pending => colors.accent.withValues(alpha: 0),
+            },
             borderRadius: BorderRadius.circular(6),
           ),
           child: Row(
@@ -108,7 +120,9 @@ class StepListTile extends StatelessWidget {
                             fontSize: 17,
                             height: 1.2,
                             fontVariations: [
-                              FontVariation.weight(current ? 600 : 400),
+                              FontVariation.weight(
+                                current || paused ? 600 : 400,
+                              ),
                               const FontVariation.opticalSize(17),
                             ],
                             color: colors.ink,

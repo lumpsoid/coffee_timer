@@ -63,13 +63,14 @@ impl BrewView {
         self.recipe.steps().len()
     }
 
-    /// Every step with its status: before `current` done, at it current,
-    /// after it pending. With no current step, all pending.
+    /// Every step with its status: before the `current` index done, at it
+    /// the given status (`Current`, or `Paused`), after it pending. With no
+    /// current step, all pending.
     ///
     /// Each step also gets its share of the whole brew, laid end to end from
     /// 0 to 1, for the dial's step track. A brew of 0-second steps shares it
     /// equally.
-    pub(crate) fn step_rows(&self, current: Option<usize>) -> Vec<StepRow> {
+    pub(crate) fn step_rows(&self, current: Option<(usize, StepStatus)>) -> Vec<StepRow> {
         let steps = self.recipe.steps();
         let seconds: Vec<u32> = steps.iter().map(|s| s.duration().seconds()).collect();
         let weights = if seconds.iter().all(|&s| s == 0) {
@@ -90,10 +91,10 @@ impl BrewView {
                     number_label: (index + 1).to_string(),
                     name: step.name().to_owned(),
                     duration_label: step.duration().seconds_label(),
-                    status: match current.map(|c| index.cmp(&c)) {
-                        Some(Ordering::Less) => StepStatus::Done,
-                        Some(Ordering::Equal) => StepStatus::Current,
-                        Some(Ordering::Greater) | None => StepStatus::Pending,
+                    status: match current.map(|(c, status)| (index.cmp(&c), status)) {
+                        Some((Ordering::Less, _)) => StepStatus::Done,
+                        Some((Ordering::Equal, status)) => status,
+                        Some((Ordering::Greater, _)) | None => StepStatus::Pending,
                     },
                     track_start: f64::from(start) / whole,
                     track_end: f64::from(elapsed) / whole,
