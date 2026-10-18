@@ -157,8 +157,9 @@ which runs the timer tick by tick.
 - `EditorController` owns `EditorState` (`Closed` / `Open(Draft)`) and an
   `IdGen`. It provides `new_draft`, `edit`, the field setters (including
   `set_step_water`), `add_step`
-  (which returns the new row's `StepId`), `remove_step`, `save`, `delete` and
-  `close`.
+  (which returns the new row's `StepId`), `remove_step`, `move_step(row, to)`
+  (`to` is the 0-based index the row ends at; past the last row is
+  `EditError::StepPositionOutOfRange`), `save`, `delete` and `close`.
 - `Draft` is the whole editor view: the raw text of each field (name,
   description, coffee and water grams, a new draft starting at 15 g to
   250 g), at least one
@@ -275,7 +276,7 @@ makes no business decisions.
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe` | `RecipeListUpdate` (`Snapshot` / `Upserted` / `Removed` / `Failed`) |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused`), `PlatformEffect` |
-| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
+| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetStepName`, `SetStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent` | `SettingsUpdate` |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial
@@ -305,7 +306,11 @@ The GUI renders, sends intents, and performs effects. It holds no business
   test border, and `PluginEffects` is the production implementation.
 - **[`pages/`](../lib/pages)** has `RecipeListPage`, `BrewPage`,
   `EditorPage` and `SettingsPage`. Each page reads holders and sends
-  signals; none of them computes a label.
+  signals; none of them computes a label. The editor's steps are a
+  `SliverReorderableList`: a drop sends `MoveStep` (row id and final index,
+  from `onReorderItem`) and the order changes only when Rust's draft comes
+  back. The list re-creates a moved card, whose fields start from the text
+  Rust holds for that row.
 - **[`widgets/`](../lib/widgets)** has the display widgets. Recipes are
   drawn as printed labels: `LabelColors` maps the `RecipeLabel` to colours
   (dimmed in dark theme), `LabelPaperPainter` paints the paper, texture,

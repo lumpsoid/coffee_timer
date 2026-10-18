@@ -21,7 +21,7 @@ use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::signals::{
     AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, EditRecipe,
-    EditorReady, EditorUpdate, LeaveBrew, NewDraft, OpenBrew, PauseBrew, PlatformEffect,
+    EditorReady, EditorUpdate, LeaveBrew, MoveStep, NewDraft, OpenBrew, PauseBrew, PlatformEffect,
     RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveRecipe,
     SetAccent, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater,
     SetStepDuration, SetStepName, SetStepWater, SetTheme, SettingsReady, SettingsUpdate, StartBrew,
@@ -79,6 +79,7 @@ pub async fn run(mut c: Controllers) {
     let set_step_water = SetStepWater::get_dart_signal_receiver();
     let add_step = AddStep::get_dart_signal_receiver();
     let remove_step = RemoveStep::get_dart_signal_receiver();
+    let move_step = MoveStep::get_dart_signal_receiver();
     let save_recipe = SaveRecipe::get_dart_signal_receiver();
     let delete_recipe = DeleteRecipe::get_dart_signal_receiver();
     let close_editor = CloseEditor::get_dart_signal_receiver();
@@ -190,6 +191,11 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = remove_step.recv() => {
                 report(on_row(&pack.message.row, |row| c.editor.remove_step(row)));
+                show_editor(&c.editor);
+            }
+            Some(pack) = move_step.recv() => {
+                let to = usize::try_from(pack.message.to).unwrap_or(usize::MAX);
+                report(on_row(&pack.message.row, |row| c.editor.move_step(row, to)));
                 show_editor(&c.editor);
             }
             Some(_) = save_recipe.recv() => {

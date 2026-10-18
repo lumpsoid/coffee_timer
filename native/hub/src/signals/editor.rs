@@ -70,6 +70,14 @@ pub struct RemoveStep {
     pub row: String,
 }
 
+/// Move the row to position `to` (0-based, counted after the move: the
+/// index it will have). `row` is an `EditorStep::id`.
+#[derive(Deserialize, DartSignal)]
+pub struct MoveStep {
+    pub row: String,
+    pub to: u32,
+}
+
 #[derive(Deserialize, DartSignal)]
 pub struct SaveRecipe;
 
@@ -126,7 +134,7 @@ pub struct EditorDraft {
 #[derive(Serialize, SignalPiece)]
 pub struct EditorStep {
     /// Row key: send it back in `SetStepName`, `SetStepDuration`,
-    /// `SetStepWater`, `RemoveStep`.
+    /// `SetStepWater`, `RemoveStep`, `MoveStep`.
     pub id: String,
     /// `Step N name`.
     pub name_label: String,

@@ -134,6 +134,62 @@ void main() {
     expect(find.byTooltip('Delete'), findsNothing);
   });
 
+  // The reorderable list re-creates a moved card (its item key includes the
+  // index), so a field keyed by position would keep the old row's text here.
+  testWidgets('a step order from Rust moves each card with its own fields', (
+    tester,
+  ) async {
+    EditorStep step(String id, int position, String name) => EditorStep(
+      id: id,
+      nameLabel: 'Step $position name',
+      name: name,
+      durationText: '0',
+      durationLabel: '00:00',
+      waterText: '',
+    );
+    FormFieldState<String> nameField(String id) => tester.state(
+      find
+          .descendant(
+            of: find.byKey(ValueKey(id)),
+            matching: find.byType(TextFormField),
+          )
+          .first,
+    );
+
+    await pumpEditor(tester);
+    editor.apply(
+      EditorUpdateOpen(
+        draft: draft().copyWith(
+          steps: [step('s1', 1, 'Bloom'), step('s2', 2, 'Pour')],
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.byIcon(Icons.drag_handle), findsNWidgets(2));
+
+    editor.apply(
+      EditorUpdateOpen(
+        draft: draft().copyWith(
+          steps: [step('s2', 1, 'Pour'), step('s1', 2, 'Bloom')],
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(nameField('s1').value, 'Bloom');
+    expect(nameField('s2').value, 'Pour');
+    final labels = tester
+        .widgetList<TextField>(find.byType(TextField))
+        .map((field) => field.decoration?.labelText)
+        .where((label) => label?.endsWith(' name') ?? false)
+        .toList();
+    expect(labels, ['Recipe name', 'Step 1 name', 'Step 2 name']);
+    expect(
+      tester.getTopLeft(find.byKey(const ValueKey('s2'))).dy,
+      lessThan(tester.getTopLeft(find.byKey(const ValueKey('s1'))).dy),
+    );
+  });
+
   testWidgets('pops when Rust answers its opening with Closed', (
     tester,
   ) async {

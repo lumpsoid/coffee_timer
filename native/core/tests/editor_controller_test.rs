@@ -683,6 +683,116 @@ fn edits_address_a_row_not_a_position() -> TestResult {
     Ok(())
 }
 
+// Moving rows
+
+/// A new draft with rows `s1`, `s2`, `s3`, each named after its id.
+fn three_rows() -> Result<EditorController, Box<dyn std::error::Error>> {
+    let mut editor = new_draft();
+    editor.add_step(StepPreset::Blank)?;
+    editor.add_step(StepPreset::Blank)?;
+    for id in ["s1", "s2", "s3"] {
+        editor.set_step_name(&sid(id)?, id)?;
+    }
+    Ok(editor)
+}
+
+#[test]
+fn move_up_puts_the_row_at_the_position() -> TestResult {
+    let mut editor = three_rows()?;
+    editor.move_step(&sid("s3")?, 0)?;
+    assert_eq!(row_ids(&editor)?, ["s3", "s1", "s2"]);
+    Ok(())
+}
+
+#[test]
+fn move_down_counts_the_position_after_the_move() -> TestResult {
+    let mut editor = three_rows()?;
+    editor.move_step(&sid("s1")?, 1)?;
+    assert_eq!(row_ids(&editor)?, ["s2", "s1", "s3"]);
+    editor.move_step(&sid("s2")?, 2)?;
+    assert_eq!(row_ids(&editor)?, ["s1", "s3", "s2"]);
+    Ok(())
+}
+
+#[test]
+fn move_to_its_own_position_changes_nothing() -> TestResult {
+    let mut editor = three_rows()?;
+    let before = editor.state().clone();
+    editor.move_step(&sid("s2")?, 1)?;
+    assert_eq!(editor.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn move_past_the_last_row_is_an_error_and_changes_nothing() -> TestResult {
+    let mut editor = three_rows()?;
+    let before = editor.state().clone();
+    assert_eq!(
+        editor.move_step(&sid("s1")?, 3),
+        Err(EditError::StepPositionOutOfRange { to: 3, rows: 3 })
+    );
+    assert_eq!(editor.state(), &before);
+    Ok(())
+}
+
+#[test]
+fn move_of_an_unknown_row_or_without_a_draft_is_an_error() -> TestResult {
+    let mut editor = three_rows()?;
+    let before = editor.state().clone();
+    let missing = sid("missing")?;
+    assert_eq!(
+        editor.move_step(&missing, 0),
+        Err(EditError::UnknownStep(missing.clone()))
+    );
+    assert_eq!(editor.state(), &before);
+    assert_eq!(
+        self::editor().move_step(&missing, 0),
+        Err(EditError::NoDraft)
+    );
+    Ok(())
+}
+
+#[test]
+fn a_moved_row_keeps_its_text_errors_and_pour_and_labels_follow_positions() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = three_rows()?;
+    editor.set_step_duration(&sid("s3")?, "abc")?;
+    editor.set_step_water(&sid("s3")?, "60")?;
+    editor.set_step_water(&sid("s1")?, "0")?;
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+
+    editor.move_step(&sid("s3")?, 0)?;
+
+    let moved = row(&editor, "s3")?;
+    assert_eq!(moved.name_label, "Step 1 name");
+    assert_eq!(moved.name, "s3");
+    assert_eq!(moved.duration_text, "abc");
+    assert_eq!(moved.duration_error.as_deref(), Some(ENTER_SECONDS));
+    assert_eq!(moved.water_text, "60");
+    assert_eq!(moved.water_error, None);
+    let pushed = row(&editor, "s1")?;
+    assert_eq!(pushed.name_label, "Step 2 name");
+    assert_eq!(pushed.water_text, "0");
+    assert_eq!(pushed.water_error.as_deref(), Some("1–2000 g"));
+    assert_eq!(row(&editor, "s2")?.duration_error, None);
+    Ok(())
+}
+
+#[test]
+fn save_keeps_the_moved_order() -> TestResult {
+    let mut catalog = catalog(vec![v60()?])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    editor.add_step(StepPreset::AddWater)?;
+    editor.move_step(&sid("s1")?, 0)?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("recipe-1")?).ok_or("missing")?;
+    assert_eq!(
+        saved_steps(saved),
+        [("s1", "Add water", 0), ("step-1", "Bloom", 30)]
+    );
+    Ok(())
+}
+
 // Presets
 
 #[test]

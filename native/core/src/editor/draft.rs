@@ -130,13 +130,23 @@ impl Draft {
         row: &StepId,
         ids: &mut dyn IdGen,
     ) -> Result<(), EditError> {
-        let index = self
-            .steps
-            .iter()
-            .position(|step| step.id() == row)
-            .ok_or_else(|| EditError::UnknownStep(row.clone()))?;
+        let index = self.index_of(row)?;
         self.steps.remove(index);
         self.keep_a_step(ids);
+        Ok(())
+    }
+
+    /// Moves the row to position `to` (0-based, counted after the move),
+    /// carrying its typed text and errors; the other rows keep their order.
+    /// Moving to its own position changes nothing.
+    pub(crate) fn move_step(&mut self, row: &StepId, to: usize) -> Result<(), EditError> {
+        let from = self.index_of(row)?;
+        let rows = self.steps.len();
+        if to >= rows {
+            return Err(EditError::StepPositionOutOfRange { to, rows });
+        }
+        let step = self.steps.remove(from);
+        self.steps.insert(to, step);
         Ok(())
     }
 
@@ -271,6 +281,13 @@ impl Draft {
 
     fn shown(&self, error: Option<&ModelError>) -> Option<String> {
         error.filter(|_| self.errors_shown).map(ToString::to_string)
+    }
+
+    fn index_of(&self, row: &StepId) -> Result<usize, EditError> {
+        self.steps
+            .iter()
+            .position(|step| step.id() == row)
+            .ok_or_else(|| EditError::UnknownStep(row.clone()))
     }
 
     fn step_mut(&mut self, row: &StepId) -> Result<&mut DraftStep, EditError> {

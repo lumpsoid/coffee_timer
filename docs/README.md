@@ -42,8 +42,10 @@ to.
   grams (1–2000 g; blank pours nothing). When the step pours do not add up
   to the recipe's water, a hint says so; it is not an error, and the two
   are saved as typed. Preset buttons add "Add coffee", "Add water", "Wait"
-  or blank steps, each with a blank pour. Field errors appear from the
-  first save attempt onward.
+  or blank steps, each with a blank pour. Drag a step by its handle to
+  reorder it; it keeps its text, pour and errors, and the `Step N name`
+  labels follow the new order. Field errors appear from the first save
+  attempt onward.
 - **Settings.** Sets the theme (light, dark or system) and one of ten accent
   colours.
 

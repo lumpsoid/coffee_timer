@@ -18,7 +18,7 @@ pub use brew::{
 };
 pub use editor::{
     AddStep, AddStepButton, CloseEditor, DeleteRecipe, EditRecipe, EditorDraft, EditorReady,
-    EditorStep, EditorUpdate, NewDraft, RemoveStep, SaveRecipe, SetRecipeCoffee,
+    EditorStep, EditorUpdate, MoveStep, NewDraft, RemoveStep, SaveRecipe, SetRecipeCoffee,
     SetRecipeDescription, SetRecipeName, SetRecipeWater, SetStepDuration, SetStepName,
     SetStepWater, StepPresetChoice,
 };

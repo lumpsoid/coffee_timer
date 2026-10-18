@@ -7,8 +7,8 @@ import 'package:flutter/material.dart';
 
 /// The recipe editor. Once subscribed it sends its opening intent ([open]:
 /// [NewDraft] or [EditRecipe]) and shows the drafts that follow. Every
-/// keystroke and button is an intent; labels, errors and the total come
-/// back in the draft.
+/// keystroke, button and step drag is an intent; labels, errors, the total
+/// and the step order come back in the draft.
 ///
 /// The page pops when Rust sends `Closed` (after a save or delete, or in
 /// answer to [CloseEditor] when the user backs out), so Rust decides when
@@ -142,102 +142,140 @@ class _EditorPageState extends State<EditorPage> {
           ),
         ],
       ),
-      body: ListView(
+      body: CustomScrollView(
         // A new draft gets fresh fields; within a draft, fields keep their
         // own text while Rust echoes it back.
         key: ValueKey(draft.id),
-        padding: const EdgeInsets.all(16),
-        children: [
-          TextFormField(
-            initialValue: draft.name,
-            decoration: InputDecoration(
-              labelText: 'Recipe name',
-              errorText: draft.nameError,
-            ),
-            onChanged: (raw) => SetRecipeName(raw: raw).sendSignalToRust(),
+        slivers: [
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            sliver: SliverList.list(children: _header(draft)),
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            initialValue: draft.description,
-            decoration: const InputDecoration(labelText: 'Description'),
-            maxLines: 3,
-            onChanged: (raw) =>
-                SetRecipeDescription(raw: raw).sendSignalToRust(),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextFormField(
-                  initialValue: draft.coffee,
-                  decoration: InputDecoration(
-                    labelText: 'Coffee (g)',
-                    errorText: draft.coffeeError,
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (raw) =>
-                      SetRecipeCoffee(raw: raw).sendSignalToRust(),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  initialValue: draft.water,
-                  decoration: InputDecoration(
-                    labelText: 'Water (g)',
-                    errorText: draft.waterError,
-                  ),
-                  keyboardType: TextInputType.number,
-                  onChanged: (raw) =>
-                      SetRecipeWater(raw: raw).sendSignalToRust(),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Text('Total duration: ${draft.totalLabel}'),
-          if (draft.pourHint case final hint?)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                hint,
-                style: TextStyle(
-                  fontStyle: FontStyle.italic,
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+          SliverPadding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            sliver: SliverReorderableList(
+              itemCount: draft.steps.length,
+              // Keyed by row id. The list re-creates a card that moved (its
+              // item key includes the index); the new fields start from the
+              // text Rust holds for that row, so typed text follows its row.
+              itemBuilder: (context, index) {
+                final step = draft.steps[index];
+                return _StepCard(
+                  key: ValueKey(step.id),
+                  step: step,
+                  index: index,
+                );
+              },
+              // The order changes only when Rust sends it back.
+              onReorderItem: (from, to) => MoveStep(
+                row: draft.steps[from].id,
+                to: to,
+              ).sendSignalToRust(),
+              // The dragged card floats in an overlay, outside the page's
+              // Material; its text fields need one of their own.
+              proxyDecorator: (child, _, _) => Material(
+                type: MaterialType.transparency,
+                child: child,
               ),
             ),
-          const SizedBox(height: 20),
-          const Text('Steps', style: TextStyle(fontSize: 16)),
-          const SizedBox(height: 8),
-          for (final step in draft.steps)
-            _StepCard(key: ValueKey(step.id), step: step),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Wrap(
-              runSpacing: 4,
-              spacing: 4,
-              children: [
-                for (final button in draft.addStepButtons)
-                  TextButton.icon(
-                    onPressed: () =>
-                        AddStep(preset: button.preset).sendSignalToRust(),
-                    icon: const Icon(Icons.add),
-                    label: Text(button.label),
-                  ),
-              ],
-            ),
           ),
-          const SizedBox(height: 20),
-          ElevatedButton(
-            onPressed: () => const SaveRecipe().sendSignalToRust(),
-            child: const Text('Save Recipe'),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            sliver: SliverList.list(children: _footer(draft)),
           ),
         ],
       ),
     );
   }
+
+  /// The recipe's own fields, the live total and the steps heading.
+  List<Widget> _header(EditorDraft draft) => [
+    TextFormField(
+      initialValue: draft.name,
+      decoration: InputDecoration(
+        labelText: 'Recipe name',
+        errorText: draft.nameError,
+      ),
+      onChanged: (raw) => SetRecipeName(raw: raw).sendSignalToRust(),
+    ),
+    const SizedBox(height: 12),
+    TextFormField(
+      initialValue: draft.description,
+      decoration: const InputDecoration(labelText: 'Description'),
+      maxLines: 3,
+      onChanged: (raw) => SetRecipeDescription(raw: raw).sendSignalToRust(),
+    ),
+    const SizedBox(height: 12),
+    Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: TextFormField(
+            initialValue: draft.coffee,
+            decoration: InputDecoration(
+              labelText: 'Coffee (g)',
+              errorText: draft.coffeeError,
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (raw) => SetRecipeCoffee(raw: raw).sendSignalToRust(),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: TextFormField(
+            initialValue: draft.water,
+            decoration: InputDecoration(
+              labelText: 'Water (g)',
+              errorText: draft.waterError,
+            ),
+            keyboardType: TextInputType.number,
+            onChanged: (raw) => SetRecipeWater(raw: raw).sendSignalToRust(),
+          ),
+        ),
+      ],
+    ),
+    const SizedBox(height: 20),
+    Text('Total duration: ${draft.totalLabel}'),
+    if (draft.pourHint case final hint?)
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text(
+          hint,
+          style: TextStyle(
+            fontStyle: FontStyle.italic,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ),
+    const SizedBox(height: 20),
+    const Text('Steps', style: TextStyle(fontSize: 16)),
+    const SizedBox(height: 8),
+  ];
+
+  /// The add-step buttons and the save button, below the steps.
+  List<Widget> _footer(EditorDraft draft) => [
+    Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Wrap(
+        runSpacing: 4,
+        spacing: 4,
+        children: [
+          for (final button in draft.addStepButtons)
+            TextButton.icon(
+              onPressed: () =>
+                  AddStep(preset: button.preset).sendSignalToRust(),
+              icon: const Icon(Icons.add),
+              label: Text(button.label),
+            ),
+        ],
+      ),
+    ),
+    const SizedBox(height: 20),
+    ElevatedButton(
+      onPressed: () => const SaveRecipe().sendSignalToRust(),
+      child: const Text('Save Recipe'),
+    ),
+  ];
 
   /// Asks before deleting, naming the recipe as saved, not as typed.
   void _confirmDelete(String recipeId) {
@@ -271,11 +309,15 @@ class _EditorPageState extends State<EditorPage> {
 }
 
 /// One step's name, duration and pour inputs, keyed by its row id so its fields
-/// keep their text as other rows come and go.
+/// keep their row's text as rows come, go and move. Its drag handle starts a
+/// move.
 class _StepCard extends StatelessWidget {
-  const _StepCard({required this.step, super.key});
+  const _StepCard({required this.step, required this.index, super.key});
 
   final EditorStep step;
+
+  /// The card's position in the list, for the drag handle.
+  final int index;
 
   @override
   Widget build(BuildContext context) {
@@ -287,6 +329,16 @@ class _StepCard extends StatelessWidget {
           children: [
             Row(
               children: [
+                ReorderableDragStartListener(
+                  index: index,
+                  child: const Padding(
+                    padding: EdgeInsets.only(right: 8),
+                    child: Icon(
+                      Icons.drag_handle,
+                      semanticLabel: 'Drag to reorder step',
+                    ),
+                  ),
+                ),
                 Expanded(
                   child: TextFormField(
                     initialValue: step.name,

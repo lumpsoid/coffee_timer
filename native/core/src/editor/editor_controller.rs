@@ -94,6 +94,14 @@ impl EditorController {
         draft.remove_step(row, self.ids.as_mut())
     }
 
+    /// Moves the row to position `to` (0-based, counted after the move),
+    /// with its typed text, errors and pour; step labels follow the new
+    /// positions. An unknown row or a position past the last row is an error
+    /// and changes nothing.
+    pub fn move_step(&mut self, row: &StepId, to: usize) -> Result<(), EditError> {
+        self.draft_mut()?.move_step(row, to)
+    }
+
     /// Saves the draft to `catalog` and closes it. Field errors show from
     /// the first attempt on. On `Err` the catalog is unchanged and the draft
     /// stays open: [`SaveError::Invalid`] while a field is invalid,
