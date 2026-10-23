@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:flutter/material.dart';
 
 /// The recipe editor. Once subscribed it sends its opening intent ([open]:
@@ -141,18 +142,18 @@ class _EditorPageState extends State<EditorPage> {
   Widget _page(EditorDraft draft) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(draft.title),
+        title: Text(draft.title.toUpperCase()),
         actions: [
           if (draft.canDelete)
             IconButton(
               tooltip: 'Delete',
               onPressed: () => _confirmDelete(draft.id),
-              icon: const Icon(Icons.delete),
+              icon: const Icon(Icons.delete_outline),
             ),
           IconButton(
             tooltip: 'Save',
             onPressed: () => const SaveRecipe().sendSignalToRust(),
-            icon: const Icon(Icons.save),
+            icon: const Icon(Icons.save_outlined),
           ),
         ],
       ),
@@ -274,7 +275,10 @@ class _EditorPageState extends State<EditorPage> {
         ),
       ),
     const SizedBox(height: 20),
-    const Text('Steps', style: TextStyle(fontSize: 16)),
+    RuledHeading(
+      text: 'Steps',
+      ink: Theme.of(context).colorScheme.onSurface,
+    ),
     const SizedBox(height: 8),
   ];
 
@@ -299,7 +303,7 @@ class _EditorPageState extends State<EditorPage> {
     const SizedBox(height: 20),
     ElevatedButton(
       onPressed: () => const SaveRecipe().sendSignalToRust(),
-      child: const Text('Save Recipe'),
+      child: const Text('SAVE RECIPE'),
     ),
   ];
 
@@ -387,7 +391,7 @@ class _StepCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Remove step',
                   onPressed: () => RemoveStep(row: step.id).sendSignalToRust(),
-                  icon: const Icon(Icons.delete, color: Colors.red),
+                  icon: const Icon(Icons.delete_outline, color: Colors.red),
                 ),
               ],
             ),

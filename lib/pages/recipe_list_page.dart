@@ -128,13 +128,13 @@ class _RecipeListPageState extends State<RecipeListPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Recipes'),
+        title: const Text('RECIPES'),
         actions: [
           IconButton(
             tooltip: 'Settings',
             onPressed: () =>
                 Navigator.of(context).push(SettingsPage.route(settings)),
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined),
           ),
           PopupMenuButton<_ListAction>(
             tooltip: 'More',
@@ -157,10 +157,11 @@ class _RecipeListPageState extends State<RecipeListPage> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         tooltip: 'New recipe',
         onPressed: () => _openCreate(context),
-        child: const Icon(Icons.add),
+        icon: const Icon(Icons.add),
+        label: const Text('NEW RECIPE'),
       ),
       body: ListenableBuilder(
         listenable: recipes,
@@ -198,7 +199,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: const Icon(Icons.edit),
+                  leading: const Icon(Icons.edit_outlined),
                   title: const Text('Edit'),
                   onTap: () {
                     Navigator.of(ctx).pop();
@@ -206,7 +207,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.copy),
+                  leading: const Icon(Icons.copy_outlined),
                   title: const Text('Duplicate'),
                   onTap: () {
                     Navigator.of(ctx).pop();
@@ -236,7 +237,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.delete, color: Colors.red),
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
                   title: const Text(
                     'Delete',
                     style: TextStyle(color: Colors.red),
