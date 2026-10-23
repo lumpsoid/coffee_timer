@@ -112,7 +112,7 @@ to.
 | [`test/`](../test) | Flutter tests: holders, pages, widgets and the effect performer. |
 | [`assets/sounds/`](../assets/sounds) | The step-change sound. |
 | [`assets/fonts/`](../assets/fonts) | Oswald and Fraunces (SIL OFL 1.1) for the recipe labels and, through the app theme, the rest of the UI; with their licences. |
-| [`assets/icon/`](../assets/icon) | The launcher icon's SVG source; not bundled. |
+| [`assets/icon/`](../assets/icon) | The launcher icon's SVG sources (adaptive foreground and legacy round icon); not bundled. |
 | [`docs/mockups/`](mockups) | The HTML mockup the recipe labels were designed from. |
 
 [modules.md](modules.md) describes each module.
@@ -140,12 +140,19 @@ flutter run
 
 The app keeps its database at `<app documents>/coffee_timer.db`.
 
-The Android launcher icons are rendered from `assets/icon/launcher.svg`:
+The Android launcher icon is adaptive (Android 8+): the roast paper colour
+(`res/values/ic_launcher_background.xml`) behind
+`assets/icon/launcher_foreground.svg`, masked by the launcher to its own
+shape. `assets/icon/launcher.svg` is the round icon for older Android.
+Render both:
 
 ```shell
-for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
-  rsvg-convert -w ${d#*:} -h ${d#*:} assets/icon/launcher.svg \
-    -o android/app/src/main/res/mipmap-${d%%:*}/ic_launcher.png
+res=android/app/src/main/res
+for d in mdpi:48:108 hdpi:72:162 xhdpi:96:216 xxhdpi:144:324 xxxhdpi:192:432; do
+  IFS=: read n l f <<< "$d"
+  rsvg-convert -w $l -h $l assets/icon/launcher.svg -o $res/mipmap-$n/ic_launcher.png
+  rsvg-convert -w $f -h $f assets/icon/launcher_foreground.svg \
+    -o $res/mipmap-$n/ic_launcher_foreground.png
 done
 ```
 

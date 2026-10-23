@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Adaptive launcher icon foreground (Android 8+): the brew dial with a
+     coffee bean at its centre, on a transparent 108 dp canvas, sized to the
+     66 dp safe circle. The background layer is the roast label's paper,
+     #3D2A1F (res/values/ic_launcher_background.xml). Render with
+     rsvg-convert; see docs/README.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" width="108" height="108">
+<g transform="translate(54 54) scale(0.5) translate(-96 -96)"><g stroke="#F2E4CF" stroke-linecap="round" transform="translate(96 96)"><line y1="-50" y2="-40" stroke-width="4" transform="rotate(0)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(30)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(60)"/><line y1="-50" y2="-40" stroke-width="4" transform="rotate(90)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(120)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(150)"/><line y1="-50" y2="-40" stroke-width="4" transform="rotate(180)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(210)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(240)"/><line y1="-50" y2="-40" stroke-width="4" transform="rotate(270)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(300)"/><line y1="-50" y2="-44" stroke-width="3" transform="rotate(330)"/></g><circle cx="96" cy="96" r="62" fill="none" stroke="#F2E4CF" stroke-opacity="0.25" stroke-width="8"/><path d="M96 34A62 62 0 1 1 34 96" fill="none" stroke="#D39A58" stroke-width="8" stroke-linecap="round"/><g transform="translate(96 96) rotate(-30) scale(0.62)"><ellipse rx="30" ry="42" fill="#D39A58"/><path d="M2 -38C-16 -16 16 14 -2 38" fill="none" stroke="#3D2A1F" stroke-width="6" stroke-linecap="round"/></g></g>
+</svg>
