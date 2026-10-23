@@ -110,6 +110,8 @@ void main() {
           coffeeError: '1–200 g',
           water: 'x',
           waterError: 'Enter grams',
+          pourSpeed: '40',
+          pourSpeedError: '0.5–30 g/s',
           totalLabel: '0:00',
           steps: [
             EditorStep(
@@ -137,6 +139,7 @@ void main() {
     expect(find.text('Enter grams'), findsOneWidget);
     expect(find.text('Enter seconds'), findsOneWidget);
     expect(find.text('1–2000 g'), findsOneWidget);
+    expect(find.text('0.5–30 g/s'), findsOneWidget);
     expect(find.text('Step pours add up to 0 g of 250 g'), findsOneWidget);
     expect(find.byTooltip('Delete'), findsNothing);
   });
@@ -257,6 +260,45 @@ void main() {
     await tester.pump();
     expect(durationValue(), '320');
     expect(find.text('320'), findsOneWidget);
+  });
+
+  testWidgets('a pour timed by Rust reloads the duration, not the grams', (
+    tester,
+  ) async {
+    EditorStep step(String grams, String seconds, int revision) => EditorStep(
+      id: 's1',
+      nameLabel: 'Step 1 name',
+      name: 'Pour',
+      durationText: seconds,
+      durationLabel: '00:00',
+      durationRevision: revision,
+      waterText: grams,
+    );
+    String? value(String label) => tester
+        .state<FormFieldState<String>>(
+          find.widgetWithText(TextFormField, label),
+        )
+        .value;
+
+    await pumpEditor(tester);
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('', '0', 0)])),
+    );
+    await tester.pump();
+    expect(value('Pour speed (g/s)'), '5');
+
+    // Typing the grams; Rust answers with the pour's time at a new revision.
+    tester
+        .state<FormFieldState<String>>(
+          find.widgetWithText(TextFormField, 'Pour (g)'),
+        )
+        .didChange('250');
+    editor.apply(
+      EditorUpdateOpen(draft: draft().copyWith(steps: [step('250', '50', 1)])),
+    );
+    await tester.pump();
+    expect(value('Duration (seconds)'), '50');
+    expect(value('Pour (g)'), '250');
   });
 
   testWidgets('pops when Rust answers its opening with Closed', (

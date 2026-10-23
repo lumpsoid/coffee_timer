@@ -42,6 +42,11 @@ const MIGRATIONS: &[Migration] = &[
         sql: V4_RECIPE_PIN,
         fresh: None,
     },
+    Migration {
+        version: 5,
+        sql: V5_RECIPE_POUR_SPEED,
+        fresh: None,
+    },
 ];
 
 /// v1: tables, plus the two example recipes. Seeding is part of creating the
@@ -121,6 +126,13 @@ const V4_RECIPE_PIN: &str = "
 ALTER TABLE recipe ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;
 ";
 
+/// v5: a recipe stores how fast it pours, in tenths of a gram per second.
+/// Every recipe before v5 gets the default, 5 g/s; the core reads the value
+/// leniently (clamped into its bounds).
+const V5_RECIPE_POUR_SPEED: &str = "
+ALTER TABLE recipe ADD COLUMN pour_speed_tenths INTEGER NOT NULL DEFAULT 50;
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -172,10 +184,10 @@ mod tests {
     }
 
     #[test]
-    fn fresh_database_ends_at_v4() -> TestResult {
+    fn fresh_database_ends_at_v5() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         Ok(())
     }
 
@@ -209,7 +221,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 1)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         assert_eq!(
             doses(&conn)?,
             [
@@ -251,7 +263,7 @@ mod tests {
         conn.execute_batch(V2_RECIPE_DOSE)?;
         conn.pragma_update(None, "user_version", 2)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         assert!(pours(&conn)?.iter().all(|(_, water)| water.is_none()));
         Ok(())
     }
@@ -273,7 +285,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 3)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         assert_eq!(
             pins(&conn)?,
             [
@@ -286,20 +298,38 @@ mod tests {
     }
 
     #[test]
+    fn v4_recipes_pour_at_five_grams_a_second() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA_AND_SEED)?;
+        conn.execute_batch(V2_RECIPE_DOSE)?;
+        conn.execute_batch(V3_STEP_WATER)?;
+        conn.execute_batch(V4_RECIPE_PIN)?;
+        conn.pragma_update(None, "user_version", 4)?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 5);
+        let speeds: Vec<i64> = conn
+            .prepare("SELECT pour_speed_tenths FROM recipe ORDER BY position")?
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        assert_eq!(speeds, [50, 50]);
+        Ok(())
+    }
+
+    #[test]
     fn migrating_twice_does_not_reseed() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
         migrate(&mut conn)?;
         let recipes: i64 = conn.query_row("SELECT COUNT(*) FROM recipe", [], |r| r.get(0))?;
         assert_eq!(recipes, 2);
-        assert_eq!(user_version(&conn)?, 4);
+        assert_eq!(user_version(&conn)?, 5);
         Ok(())
     }
 
     #[test]
     fn newer_database_is_refused() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 5)?;
+        conn.pragma_update(None, "user_version", 6)?;
         assert!(migrate(&mut conn).is_err());
         Ok(())
     }

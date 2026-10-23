@@ -25,9 +25,10 @@ use crate::signals::{
     EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes, LeaveBrew, MoveStep,
     NewDraft, NudgeStepDuration, OpenBrew, PauseBrew, PinRecipe, PlatformEffect, RecipeListReady,
     RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe,
-    SetAccent, SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeName, SetRecipeWater,
-    SetSound, SetStepDuration, SetStepName, SetStepWater, SetTheme, SetVibration, SettingsReady,
-    SettingsUpdate, StartBrew, UndoRemoveRecipe, UnpinRecipe,
+    SetAccent, SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeName,
+    SetRecipePourSpeed, SetRecipeWater, SetSound, SetStepDuration, SetStepName, SetStepWater,
+    SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew, UndoRemoveRecipe,
+    UnpinRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -84,6 +85,7 @@ pub async fn run(mut c: Controllers) {
     let set_recipe_description = SetRecipeDescription::get_dart_signal_receiver();
     let set_recipe_coffee = SetRecipeCoffee::get_dart_signal_receiver();
     let set_recipe_water = SetRecipeWater::get_dart_signal_receiver();
+    let set_recipe_pour_speed = SetRecipePourSpeed::get_dart_signal_receiver();
     let set_step_name = SetStepName::get_dart_signal_receiver();
     let set_step_duration = SetStepDuration::get_dart_signal_receiver();
     let nudge_step_duration = NudgeStepDuration::get_dart_signal_receiver();
@@ -204,6 +206,10 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = set_recipe_water.recv() => {
                 report(c.editor.set_water(&pack.message.raw));
+                show_editor(&c.editor);
+            }
+            Some(pack) = set_recipe_pour_speed.recv() => {
+                report(c.editor.set_pour_speed(&pack.message.raw));
                 show_editor(&c.editor);
             }
             Some(pack) = set_step_name.recv() => {

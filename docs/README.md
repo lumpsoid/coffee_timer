@@ -209,9 +209,11 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
   next step, as in `00:30 Bloom (Pour to 50g)  Next: Pour · 2:00 · 200g`.
 - `new --coffee GRAMS --water GRAMS` sets the dose (1–200 g and
   1–2000 g). Without them the recipe gets the editor's 15 g and 250 g.
+  `--pour-speed G/S` sets how fast it pours (0.5–30 g/s, default 5).
 - `--step NAME=SECONDS[@GRAMS]` splits at the last `=`, then the seconds at
-  an `@`; `@GRAMS` is the water the step pours. A blank name is saved as
-  `Step N`.
+  an `@`; `@GRAMS` is the water the step pours. `NAME=@GRAMS` leaves the
+  seconds out: the step lasts as long as its pour takes at the pour speed.
+  A blank name is saved as `Step N`.
 - `duplicate <id> [--name NAME]` saves a copy at once, at the end of the
   list, and prints `upserted <new id>`. Without `--name` it is named
   `<name> copy`. The copy is unpinned.

@@ -88,6 +88,13 @@ impl EditorController {
         Ok(())
     }
 
+    /// The pour speed in g/s as typed (`5`, `4.5`). Existing step
+    /// durations are kept; see [`EditorController::set_step_water`].
+    pub fn set_pour_speed(&mut self, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_pour_speed(raw);
+        Ok(())
+    }
+
     pub fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_step_name(row, raw)
     }
@@ -109,7 +116,11 @@ impl EditorController {
         self.draft_mut()?.nudge_step_duration(row, nudge)
     }
 
-    /// The grams the step pours, as typed; blank is no pour.
+    /// The grams the step pours, as typed; blank is no pour. Valid grams
+    /// while the pour speed is valid also set the row's duration to the time
+    /// the pour takes at that speed, rounded up to a second (`250` at
+    /// `5 g/s` is `50`), and move its `duration_revision` on. Blank or
+    /// invalid grams, or an invalid speed, leave the duration alone.
     pub fn set_step_water(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_step_water(row, raw)
     }

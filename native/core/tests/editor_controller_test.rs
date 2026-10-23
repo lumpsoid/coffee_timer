@@ -903,8 +903,8 @@ fn move_of_an_unknown_row_or_without_a_draft_is_an_error() -> TestResult {
 fn a_moved_row_keeps_its_text_errors_and_pour_and_labels_follow_positions() -> TestResult {
     let mut catalog = catalog(vec![])?;
     let mut editor = three_rows()?;
-    editor.set_step_duration(&sid("s3")?, "abc")?;
     editor.set_step_water(&sid("s3")?, "60")?;
+    editor.set_step_duration(&sid("s3")?, "abc")?;
     editor.set_step_water(&sid("s1")?, "0")?;
     assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
 
@@ -1515,5 +1515,101 @@ fn closing_a_duplicate_leaves_the_catalog_unchanged() -> TestResult {
     editor.close();
     assert!(is_closed(&editor));
     assert_eq!(catalog.state(), before.as_slice());
+    Ok(())
+}
+
+// Pour speed
+
+#[test]
+fn a_new_draft_pours_at_the_default_speed() -> TestResult {
+    let editor = new_draft();
+    assert_eq!(draft(&editor)?.pour_speed(), "5");
+    assert_eq!(draft(&editor)?.pour_speed_error(), None);
+    Ok(())
+}
+
+#[test]
+fn typed_grams_time_the_step_at_the_pour_speed() -> TestResult {
+    let mut editor = new_draft();
+    let before = row(&editor, "s1")?.duration_revision;
+    editor.set_step_water(&sid("s1")?, "250")?;
+    let poured = row(&editor, "s1")?;
+    assert_eq!(poured.duration_text, "50");
+    assert_eq!(poured.duration_label, "00:50");
+    assert_ne!(poured.duration_revision, before, "the field reloads");
+    assert_eq!(draft(&editor)?.total_label(), "0:50");
+
+    editor.set_pour_speed("4")?;
+    assert_eq!(
+        row(&editor, "s1")?.duration_text,
+        "50",
+        "a new speed keeps the durations"
+    );
+    editor.set_step_water(&sid("s1")?, "250")?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "63", "62.5 s rounds up");
+    Ok(())
+}
+
+#[test]
+fn blank_or_invalid_grams_or_speed_keep_the_duration() -> TestResult {
+    let mut editor = new_draft();
+    editor.set_step_duration(&sid("s1")?, "45")?;
+    for grams in ["", "lots", "0"] {
+        editor.set_step_water(&sid("s1")?, grams)?;
+        assert_eq!(row(&editor, "s1")?.duration_text, "45", "{grams:?}");
+    }
+    editor.set_pour_speed("fast")?;
+    editor.set_step_water(&sid("s1")?, "100")?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "45");
+    Ok(())
+}
+
+#[test]
+fn a_typed_duration_after_the_grams_wins() -> TestResult {
+    let mut editor = new_draft();
+    editor.set_step_water(&sid("s1")?, "50")?;
+    editor.set_step_duration(&sid("s1")?, "45")?;
+    assert_eq!(row(&editor, "s1")?.duration_text, "45");
+    Ok(())
+}
+
+#[test]
+fn the_pour_speed_saves_and_reopens() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_pour_speed(" 4.5 ")?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("r1")?).ok_or("not saved")?;
+    assert_eq!(saved.pour_speed().label(), "4.5 g/s");
+
+    editor.edit(&rid("r1")?, &catalog)?;
+    assert_eq!(draft(&editor)?.pour_speed(), "4.5");
+    editor.duplicate(&rid("r1")?, &catalog)?;
+    assert_eq!(draft(&editor)?.pour_speed(), "4.5", "a copy keeps it");
+    Ok(())
+}
+
+#[test]
+fn pour_speed_errors_show_from_the_first_save() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_pour_speed("40")?;
+    assert_eq!(
+        draft(&editor)?.pour_speed_error(),
+        None,
+        "hidden before save"
+    );
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert_eq!(
+        draft(&editor)?.pour_speed_error().as_deref(),
+        Some("0.5–30 g/s")
+    );
+    editor.set_pour_speed("")?;
+    assert_eq!(
+        draft(&editor)?.pour_speed_error().as_deref(),
+        Some("Enter g/s")
+    );
     Ok(())
 }

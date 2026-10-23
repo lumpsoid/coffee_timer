@@ -1,5 +1,5 @@
 use crate::model::{
-    CoffeeDose, ModelError, Recipe, RecipeName, RecipeStep, StepDuration, WaterAmount,
+    CoffeeDose, ModelError, PourSpeed, Recipe, RecipeName, RecipeStep, StepDuration, WaterAmount,
 };
 use crate::transfer::wire::{Document, Header, RecipeWire, StepWire};
 use crate::transfer::{DocumentError, ExportError, ImportedRecipe, ImportedStep, RecipeExport};
@@ -9,11 +9,13 @@ use crate::transfer::{DocumentError, ExportError, ImportedRecipe, ImportedStep, 
 /// ```json
 /// {"format": "coffee-timer-recipes", "version": 1, "recipes": [
 ///   {"name": "V60", "description": "", "coffee_grams": 15, "water_grams": 250,
+///    "pour_grams_per_second": 5.0,
 ///    "steps": [{"name": "Bloom", "seconds": 30, "water_grams": 50}]}]}
 /// ```
 ///
 /// It carries what a recipe brews, not where the user keeps it: no recipe
-/// or step ids and no pin. A step that pours nothing has no `water_grams`.
+/// or step ids and no pin. A step that pours nothing has no `water_grams`;
+/// a recipe without `pour_grams_per_second` pours at the default speed.
 pub struct RecipeDocument;
 
 impl RecipeDocument {
@@ -71,6 +73,7 @@ fn recipe_wire(recipe: &Recipe) -> RecipeWire {
         description: recipe.description().to_owned(),
         coffee_grams: i64::from(recipe.coffee().grams()),
         water_grams: i64::from(recipe.water().grams()),
+        pour_grams_per_second: Some(recipe.pour_speed().grams_per_second()),
         steps: recipe.steps().iter().map(step_wire).collect(),
     }
 }
@@ -96,6 +99,12 @@ fn imported_recipe(position: usize, recipe: RecipeWire) -> Result<ImportedRecipe
     let name = RecipeName::try_parse(&recipe.name).map_err(invalid("name"))?;
     let coffee = CoffeeDose::try_parse(recipe.coffee_grams).map_err(invalid("coffee_grams"))?;
     let water = WaterAmount::try_parse(recipe.water_grams).map_err(invalid("water_grams"))?;
+    let pour_speed = recipe
+        .pour_grams_per_second
+        .map(PourSpeed::try_parse)
+        .transpose()
+        .map_err(invalid("pour_grams_per_second"))?
+        .unwrap_or_default();
     if recipe.steps.is_empty() {
         return Err(DocumentError::NoSteps { recipe: position });
     }
@@ -108,6 +117,7 @@ fn imported_recipe(position: usize, recipe: RecipeWire) -> Result<ImportedRecipe
         recipe.description,
         coffee,
         water,
+        pour_speed,
         steps,
     ))
 }

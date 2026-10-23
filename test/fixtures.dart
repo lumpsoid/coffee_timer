@@ -36,6 +36,7 @@ EditorDraft draft({
   description: '',
   coffee: '15',
   water: '250',
+  pourSpeed: '5',
   totalLabel: '0:30',
   steps: const [
     EditorStep(

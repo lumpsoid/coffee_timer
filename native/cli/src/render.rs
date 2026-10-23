@@ -171,6 +171,9 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
     let water = draft
         .water_error()
         .map(|error| format!("Water \"{}\": {error}", draft.water()));
+    let pour_speed = draft
+        .pour_speed_error()
+        .map(|error| format!("Pour speed \"{}\": {error}", draft.pour_speed()));
     let steps = draft.step_rows().into_iter().flat_map(|row| {
         let duration = row.duration_error.map(|error| {
             format!(
@@ -189,6 +192,7 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
     name.into_iter()
         .chain(coffee)
         .chain(water)
+        .chain(pour_speed)
         .chain(steps)
         .collect()
 }

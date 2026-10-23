@@ -31,9 +31,15 @@ impl From<&Draft> for EditorDraft {
             coffee_error: draft.coffee_error(),
             water: draft.water().to_owned(),
             water_error: draft.water_error(),
+            pour_speed: draft.pour_speed().to_owned(),
+            pour_speed_error: draft.pour_speed_error(),
             total_label: draft.total_label(),
             pour_hint: draft.pour_hint(),
-            steps: draft.step_rows().into_iter().map(EditorStep::from).collect(),
+            steps: draft
+                .step_rows()
+                .into_iter()
+                .map(EditorStep::from)
+                .collect(),
             add_step_buttons: StepPreset::ALL
                 .into_iter()
                 .map(|preset| AddStepButton {

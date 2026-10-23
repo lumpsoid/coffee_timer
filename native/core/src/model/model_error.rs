@@ -16,6 +16,8 @@ pub enum ModelError {
     CoffeeDoseOutOfRange(i64),
     WaterAmountNotANumber(String),
     WaterAmountOutOfRange(i64),
+    PourSpeedNotANumber(String),
+    PourSpeedOutOfRange(String),
     AccentOutOfRange(i64),
     MalformedAccentHex(String),
     UnknownTheme(String),
@@ -50,6 +52,13 @@ impl fmt::Display for ModelError {
                 "{}–{} g",
                 crate::model::WaterAmount::MIN_GRAMS,
                 crate::model::WaterAmount::MAX_GRAMS
+            ),
+            Self::PourSpeedNotANumber(_) => write!(f, "Enter g/s"),
+            Self::PourSpeedOutOfRange(_) => write!(
+                f,
+                "{}–{} g/s",
+                crate::model::PourSpeed::MIN.text(),
+                crate::model::PourSpeed::MAX.text()
             ),
             Self::AccentOutOfRange(value) => {
                 write!(f, "Accent {value} is not a 32-bit ARGB value")

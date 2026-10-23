@@ -131,10 +131,15 @@ pub struct NewRecipe {
     /// Water in grams, 1–2000. [default: the editor's, 250]
     #[arg(long, value_name = "GRAMS")]
     pub water: Option<String>,
+    /// How fast the recipe pours, in grams per second, 0.5–30.
+    /// [default: 5]
+    #[arg(long, value_name = "G/S")]
+    pub pour_speed: Option<String>,
     /// A step as NAME=SECONDS, or NAME=SECONDS@GRAMS for a step that pours
     /// that much water (e.g. "Grind=30", "Bloom=30@50"); repeat in brew
-    /// order. A blank NAME saves as "Step N". Without any, the recipe gets
-    /// one blank 0-second step.
+    /// order. NAME=@GRAMS leaves out the seconds: the step lasts as long as
+    /// its pour takes at the pour speed. A blank NAME saves as "Step N".
+    /// Without any, the recipe gets one blank 0-second step.
     #[arg(long = "step", value_name = "NAME=SECONDS[@GRAMS]", value_parser = StepArg::parse)]
     pub steps: Vec<StepArg>,
 }

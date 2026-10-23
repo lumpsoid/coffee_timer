@@ -1,5 +1,5 @@
 use crate::model::{
-    CoffeeDose, ModelError, PourScale, RecipeId, RecipeName, RecipeStep, WaterAmount,
+    CoffeeDose, ModelError, PourScale, PourSpeed, RecipeId, RecipeName, RecipeStep, WaterAmount,
     WaterScaleError,
 };
 
@@ -16,10 +16,13 @@ pub struct Recipe {
     description: String,
     coffee: CoffeeDose,
     water: WaterAmount,
+    pour_speed: PourSpeed,
     steps: Vec<RecipeStep>,
 }
 
 impl Recipe {
+    /// Pours at [`PourSpeed::DEFAULT`] until given its own speed
+    /// ([`Recipe::with_pour_speed`]).
     pub fn new(
         id: RecipeId,
         name: RecipeName,
@@ -34,6 +37,7 @@ impl Recipe {
             description,
             coffee,
             water,
+            pour_speed: PourSpeed::DEFAULT,
             steps,
         }
     }
@@ -52,6 +56,10 @@ impl Recipe {
             description,
             ..self
         }
+    }
+
+    pub fn with_pour_speed(self, pour_speed: PourSpeed) -> Self {
+        Self { pour_speed, ..self }
     }
 
     pub fn with_step_added(mut self, step: RecipeStep) -> Self {
@@ -127,6 +135,11 @@ impl Recipe {
     /// Water the whole recipe uses.
     pub fn water(&self) -> WaterAmount {
         self.water
+    }
+
+    /// How fast the recipe pours: what the editor times a step's pour by.
+    pub fn pour_speed(&self) -> PourSpeed {
+        self.pour_speed
     }
 
     pub fn steps(&self) -> &[RecipeStep] {

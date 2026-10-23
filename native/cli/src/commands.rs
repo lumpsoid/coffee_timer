@@ -91,6 +91,9 @@ pub fn new_recipe(
     if let Some(water) = &recipe.water {
         editor.set_water(water)?;
     }
+    if let Some(pour_speed) = &recipe.pour_speed {
+        editor.set_pour_speed(pour_speed)?;
+    }
     let mut steps = recipe.steps.iter();
     if let Some(step) = steps.next() {
         let first_row = editor
@@ -113,11 +116,15 @@ pub fn new_recipe(
 }
 
 /// Types `step` into the draft's `row`, as the editor's step card would.
+/// The grams go first, so typed seconds win over the time the pour takes;
+/// a pouring step without seconds keeps that time.
 fn fill_step(editor: &mut EditorController, row: &StepId, step: &StepArg) -> Result<(), CliError> {
     editor.set_step_name(row, &step.name)?;
-    editor.set_step_duration(row, &step.seconds)?;
     if let Some(water) = &step.water {
         editor.set_step_water(row, water)?;
+    }
+    if step.water.is_none() || !step.seconds.is_empty() {
+        editor.set_step_duration(row, &step.seconds)?;
     }
     Ok(())
 }
