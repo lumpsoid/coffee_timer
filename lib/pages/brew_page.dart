@@ -197,7 +197,8 @@ class _BrewPageState extends State<BrewPage> {
           title: RoastMeter.of(recipe.label.tone, colors),
           actions: [
             IconButton(
-              icon: const Icon(Icons.edit),
+              tooltip: 'Edit',
+              icon: const Icon(Icons.edit_outlined),
               onPressed: () => _edit(recipe.id),
             ),
             const SizedBox(width: 8),
@@ -298,7 +299,7 @@ class _BrewPageState extends State<BrewPage> {
                           ),
                         ),
                 ),
-                _MethodHeading(colors: colors),
+                RuledHeading(text: 'Method', ink: colors.ink),
                 const SizedBox(height: 6),
                 for (final (i, step) in recipe.steps.indexed)
                   StepListTile(
@@ -596,39 +597,17 @@ class _RatioSheet extends StatelessWidget {
   }
 }
 
-/// "METHOD" between two hairlines, over the step list.
-class _MethodHeading extends StatelessWidget {
-  const _MethodHeading({required this.colors});
-
-  final LabelColors colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(child: _Rule(colors: colors, alpha: 0.35)),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          child: Text('METHOD', style: _caption(colors, size: 11)),
-        ),
-        Expanded(child: _Rule(colors: colors, alpha: 0.35)),
-      ],
-    );
-  }
-}
-
 class _Rule extends StatelessWidget {
-  const _Rule({required this.colors, this.alpha = 0.3});
+  const _Rule({required this.colors});
 
   final LabelColors colors;
-  final double alpha;
 
   @override
   Widget build(BuildContext context) {
     return Divider(
       height: 1,
       thickness: 1,
-      color: colors.ink.withValues(alpha: alpha),
+      color: colors.ink.withValues(alpha: 0.3),
     );
   }
 }

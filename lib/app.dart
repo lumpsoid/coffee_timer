@@ -1,5 +1,6 @@
 import 'dart:ui' show AppExitResponse;
 
+import 'package:coffee_timer/app_theme.dart';
 import 'package:coffee_timer/holders/boot_holder.dart';
 import 'package:coffee_timer/holders/brew_holder.dart';
 import 'package:coffee_timer/holders/editor_holder.dart';
@@ -60,10 +61,14 @@ class _CoffeeTimerAppState extends State<CoffeeTimerApp> {
       builder: (context, _) {
         final settings = widget.settings.state;
         return MaterialApp(
-          title: 'Recipe App',
+          title: 'Coffee Timer',
           themeMode: settings == null ? null : _mode(settings.theme),
-          theme: settings == null ? null : _light(Color(settings.accent)),
-          darkTheme: settings == null ? null : _dark(Color(settings.accent)),
+          theme: settings == null
+              ? null
+              : appTheme(Color(settings.accent), Brightness.light),
+          darkTheme: settings == null
+              ? null
+              : appTheme(Color(settings.accent), Brightness.dark),
           home: _Home(
             boot: widget.boot,
             recipes: widget.recipes,
@@ -81,17 +86,6 @@ class _CoffeeTimerAppState extends State<CoffeeTimerApp> {
     ThemeChoice.dark => ThemeMode.dark,
     ThemeChoice.system => ThemeMode.system,
   };
-
-  static ThemeData _light(Color seed) => ThemeData.light().copyWith(
-    colorScheme: ColorScheme.fromSeed(seedColor: seed),
-  );
-
-  static ThemeData _dark(Color seed) => ThemeData.dark().copyWith(
-    colorScheme: ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.dark,
-    ),
-  );
 }
 
 /// The boot failure, a spinner, or the recipe list once both it and the

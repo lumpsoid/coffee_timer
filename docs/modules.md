@@ -422,7 +422,9 @@ The GUI renders, sends intents, and performs effects. It holds no business
 - [`main.dart`](../lib/main.dart) starts Rust, connects the effect
   performer and every holder, then boots Rust.
 - [`app.dart`](../lib/app.dart) holds `CoffeeTimerApp`, which builds the
-  theme from settings, shows the spinner, the boot failure with Retry, or
+  theme from settings ([`app_theme.dart`](../lib/app_theme.dart): the
+  accent seeds the colours, and the label type sets the chrome: tracked
+  Oswald titles, buttons and captions, Fraunces body text), shows the spinner, the boot failure with Retry, or
   the recipe list, and calls `finalizeRust()` on exit.
 - **[`holders/`](../lib/holders)** has one `ChangeNotifier` per feature:
   `RecipeListHolder` (folds the snapshot and diffs, and exposes `failures`,
@@ -451,7 +453,8 @@ The GUI renders, sends intents, and performs effects. It holds no business
   drawn as printed labels: `LabelColors` maps the `RecipeLabel` to colours
   (dimmed in dark theme), `LabelPaperPainter` paints the paper, texture,
   stain and frame, `label_parts.dart` has the name badge, tagline, spec
-  row and `LabelPinMark` (the small accent push pin a pinned card shows in
+  row, `RuledHeading` (a caption between hairlines, heading the brew
+  page's method and the editor's and settings' sections) and `LabelPinMark` (the small accent push pin a pinned card shows in
   its top-left corner, opposite the meter), and `RoastMeter` draws the beans. `RecipeSummaryTile` is a list row
   on its own label; the brew page lays the whole page on one. `BrewDial` is
   the brew timer: bezel ticks, an inner arc that sweeps per step and

@@ -70,7 +70,7 @@ void main() {
 
     editor.apply(EditorUpdateOpen(draft: draft()));
     await tester.pump();
-    expect(find.text('Edit Recipe'), findsOneWidget);
+    expect(find.text('EDIT RECIPE'), findsOneWidget);
     expect(find.text('Total duration: 0:30'), findsOneWidget);
     expect(find.text('Step 1 name'), findsOneWidget);
     expect(find.text('MM:SS — 00:30'), findsOneWidget);

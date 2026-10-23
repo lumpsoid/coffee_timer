@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:flutter/material.dart';
 
 /// The theme picker, the accent colour picker and the brew's cues (sound,
@@ -25,7 +26,7 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text('SETTINGS')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: ListenableBuilder(
@@ -40,14 +41,12 @@ class SettingsPage extends StatelessWidget {
   }
 
   Widget _settings(BuildContext context, SettingsUpdate state) {
+    final ink = Theme.of(context).colorScheme.onSurface;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Theme',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
+        RuledHeading(text: 'Theme', ink: ink),
+        const SizedBox(height: 16),
         DropdownButtonFormField<ThemeChoice>(
           // Follows Rust's state, which may differ from what was picked.
           key: ValueKey(state.theme),
@@ -79,10 +78,8 @@ class SettingsPage extends StatelessWidget {
           onTap: () => _showAccentColorPicker(context, state),
         ),
         const SizedBox(height: 20),
-        const Text(
-          'Brew cues',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
+        RuledHeading(text: 'Brew cues', ink: ink),
+        const SizedBox(height: 8),
         SwitchListTile(
           title: const Text('Sound'),
           subtitle: const Text('Play a sound at each step'),

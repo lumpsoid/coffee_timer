@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Launcher icon source: a roast recipe label (notched ticket corners, dark
+     chocolate paper, crema ink, caramel accent) printed with the brew dial.
+     Render the Android mipmaps with rsvg-convert; see docs/README.md. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <path fill="#3D2A1F"
+        d="M26 8H166A18 18 0 0 0 184 26V166A18 18 0 0 0 166 184H26A18 18 0 0 0 8 166V26A18 18 0 0 0 26 8Z"/>
+  <!-- The badge's accent rules, top and bottom. -->
+  <g stroke="#D39A58" stroke-width="3">
+    <line x1="40" y1="22" x2="152" y2="22"/>
+    <line x1="40" y1="170" x2="152" y2="170"/>
+  </g>
+  <!-- Twelve ticks of the dial's bezel, every third one longer. -->
+  <g stroke="#F2E4CF" stroke-linecap="round" transform="translate(96 96)">
+    <line y1="-50" y2="-40" stroke-width="4"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(30)"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(60)"/>
+    <line y1="-50" y2="-40" stroke-width="4" transform="rotate(90)"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(120)"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(150)"/>
+    <line y1="-50" y2="-40" stroke-width="4" transform="rotate(180)"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(210)"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(240)"/>
+    <line y1="-50" y2="-40" stroke-width="4" transform="rotate(270)"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(300)"/>
+    <line y1="-50" y2="-44" stroke-width="3" transform="rotate(330)"/>
+  </g>
+  <!-- The outer track: faint whole ring, the brew so far in the accent. -->
+  <circle cx="96" cy="96" r="62" fill="none" stroke="#F2E4CF" stroke-opacity="0.25" stroke-width="8"/>
+  <path d="M96 34A62 62 0 1 1 34 96" fill="none" stroke="#D39A58" stroke-width="8" stroke-linecap="round"/>
+  <!-- The badge's diamond at the centre. -->
+  <rect x="84" y="84" width="24" height="24" fill="#D39A58" transform="rotate(45 96 96)"/>
+</svg>

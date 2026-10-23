@@ -114,6 +114,45 @@ class LabelTagline extends StatelessWidget {
   }
 }
 
+/// A spaced caption between two hairlines, heading a section: the brew
+/// page's method, and the sections of the app's own pages in [ink].
+class RuledHeading extends StatelessWidget {
+  const RuledHeading({required this.text, required this.ink, super.key});
+
+  final String text;
+  final Color ink;
+
+  @override
+  Widget build(BuildContext context) {
+    final rule = Divider(
+      height: 1,
+      thickness: 1,
+      color: ink.withValues(alpha: 0.35),
+    );
+    return Row(
+      children: [
+        Expanded(child: rule),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Text(
+            text.toUpperCase(),
+            style: TextStyle(
+              fontFamily: 'Oswald',
+              fontSize: 11,
+              height: 1,
+              letterSpacing: 11 * 0.24,
+              fontWeight: FontWeight.w500,
+              fontVariations: const [FontVariation.weight(500)],
+              color: ink.withValues(alpha: 0.7),
+            ),
+          ),
+        ),
+        Expanded(child: rule),
+      ],
+    );
+  }
+}
+
 /// One figure in a [LabelSpecs] row: a small caption over its value.
 typedef LabelSpec = ({String caption, String value, bool highlight});
 
