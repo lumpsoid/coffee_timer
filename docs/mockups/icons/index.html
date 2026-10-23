@@ -1,0 +1,102 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Coffee Timer — launcher icon variants</title>
+<style>
+@font-face { font-family: Oswald; src: url(../../../assets/fonts/Oswald.ttf); }
+@font-face { font-family: Fraunces; src: url(../../../assets/fonts/Fraunces.ttf); }
+body { margin: 0; padding: 32px; background: #EAD7B4; color: #4A2E1B; font-family: Fraunces, serif; }
+h1 { font-family: Oswald; letter-spacing: .3em; text-transform: uppercase; text-align: center;
+     border-block: 2px solid #B06F36; width: max-content; margin: 0 auto 8px; padding: 4px 12px; }
+.lede { text-align: center; font-style: italic; margin-bottom: 32px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 24px; }
+.card { background: #F4E7D6; padding: 20px; border-radius: 4px; box-shadow: 0 1px 3px #0002; }
+.card h2 { font-family: Oswald; letter-spacing: .2em; text-transform: uppercase; margin: 0; font-size: 18px; }
+.card p { font-style: italic; margin: 6px 0 14px; min-height: 2.6em; }
+.sizes { display: flex; align-items: flex-end; gap: 16px; }
+.homes { display: flex; gap: 10px; margin: 14px 0 10px; }
+.home { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 0;
+        border-radius: 10px; font: 12px sans-serif; }
+.home img { width: 56px; height: 56px; }
+.light { background: linear-gradient(#cfe0f4, #f7eee2); color: #222; }
+.dark { background: linear-gradient(#1b1f2a, #3a2f2a); color: #eee; }
+.mask { background: #555; color: #eee; }
+.mask img { clip-path: circle(46%); }
+code { font-size: 12px; opacity: .7; }
+</style>
+<h1>Launcher icon</h1>
+<p class="lede">Pick a variant by its file name. Each one is shown at 192, 96 and 48 px, then on light and dark home screens and under a circle mask.</p>
+<div class="grid">
+<section class="card">
+  <h2>Roast bean</h2><p>A single roasted bean stamped on the dark-chocolate label, between the badge's caramel rules.</p>
+  <div class="sizes"><img src="roast-bean.svg" width="192" height="192" alt=""><img src="roast-bean.svg" width="96" height="96" alt=""><img src="roast-bean.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="roast-bean.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="roast-bean.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="roast-bean.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>roast-bean.svg</code>
+</section><section class="card">
+  <h2>Bean dial · chosen</h2><p>The brew dial (bezel ticks, caramel track), with a coffee bean where the needle pivots.</p>
+  <div class="sizes"><img src="bean-dial.svg" width="192" height="192" alt=""><img src="bean-dial.svg" width="96" height="96" alt=""><img src="bean-dial.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="bean-dial.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="bean-dial.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="bean-dial.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>bean-dial.svg</code>
+</section><section class="card">
+  <h2>Crema cup</h2><p>A cup seen from above: latte-art heart in the crema, saucer ringed by the timer's track.</p>
+  <div class="sizes"><img src="crema-cup.svg" width="192" height="192" alt=""><img src="crema-cup.svg" width="96" height="96" alt=""><img src="crema-cup.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="crema-cup.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="crema-cup.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="crema-cup.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>crema-cup.svg</code>
+</section><section class="card">
+  <h2>Pour-over</h2><p>A ribbed V60 cone dripping into a cup, printed in brown on the crema label.</p>
+  <div class="sizes"><img src="pour-over.svg" width="192" height="192" alt=""><img src="pour-over.svg" width="96" height="96" alt=""><img src="pour-over.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="pour-over.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="pour-over.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="pour-over.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>pour-over.svg</code>
+</section><section class="card">
+  <h2>Steaming mug</h2><p>A mug with three curls of steam on the caramel label: warm and plain.</p>
+  <div class="sizes"><img src="steaming-mug.svg" width="192" height="192" alt=""><img src="steaming-mug.svg" width="96" height="96" alt=""><img src="steaming-mug.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="steaming-mug.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="steaming-mug.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="steaming-mug.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>steaming-mug.svg</code>
+</section><section class="card">
+  <h2>Stopwatch bean</h2><p>A stopwatch whose face is a coffee bean: the timer and the coffee in one mark.</p>
+  <div class="sizes"><img src="stopwatch-bean.svg" width="192" height="192" alt=""><img src="stopwatch-bean.svg" width="96" height="96" alt=""><img src="stopwatch-bean.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="stopwatch-bean.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="stopwatch-bean.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="stopwatch-bean.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>stopwatch-bean.svg</code>
+</section><section class="card">
+  <h2>Coffee bag</h2><p>A crimp-topped bag wearing a miniature recipe label: badge rules, diamond, bean.</p>
+  <div class="sizes"><img src="coffee-bag.svg" width="192" height="192" alt=""><img src="coffee-bag.svg" width="96" height="96" alt=""><img src="coffee-bag.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="coffee-bag.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="coffee-bag.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="coffee-bag.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>coffee-bag.svg</code>
+</section><section class="card">
+  <h2>Latte round</h2><p>A round crema icon: cup from above with a heart, no frame. Suits circular launchers.</p>
+  <div class="sizes"><img src="latte-round.svg" width="192" height="192" alt=""><img src="latte-round.svg" width="96" height="96" alt=""><img src="latte-round.svg" width="48" height="48" alt=""></div>
+  <div class="homes">
+    <div class="home light"><img src="latte-round.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home dark"><img src="latte-round.svg" alt=""><span>Coffee Timer</span></div>
+    <div class="home mask"><img src="latte-round.svg" alt=""><span>circle mask</span></div>
+  </div>
+  <code>latte-round.svg</code>
+</section>
+</div>
