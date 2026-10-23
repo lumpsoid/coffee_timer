@@ -249,6 +249,17 @@ class _EditorPageState extends State<EditorPage> {
         ),
       ],
     ),
+    const SizedBox(height: 12),
+    TextFormField(
+      initialValue: draft.pourSpeed,
+      decoration: InputDecoration(
+        labelText: 'Pour speed (g/s)',
+        helperText: 'Times each step pour as you type its grams',
+        errorText: draft.pourSpeedError,
+      ),
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (raw) => SetRecipePourSpeed(raw: raw).sendSignalToRust(),
+    ),
     const SizedBox(height: 20),
     Text('Total duration: ${draft.totalLabel}'),
     if (draft.pourHint case final hint?)

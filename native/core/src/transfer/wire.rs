@@ -29,6 +29,10 @@ pub(super) struct RecipeWire {
     pub(super) description: String,
     pub(super) coffee_grams: i64,
     pub(super) water_grams: i64,
+    /// Missing is the default speed: documents written before recipes had
+    /// one still read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) pour_grams_per_second: Option<f64>,
     pub(super) steps: Vec<StepWire>,
 }
 

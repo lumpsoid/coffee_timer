@@ -4,7 +4,8 @@ use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
 use crate::editor::{DraftMode, DurationNudge, EditError, EditorStepRow, StepPreset};
 use crate::model::{
-    BrewMetrics, CoffeeDose, ModelError, Recipe, RecipeId, RecipeName, StepId, WaterAmount,
+    BrewMetrics, CoffeeDose, ModelError, PourSpeed, Recipe, RecipeId, RecipeName, StepId,
+    WaterAmount,
 };
 use crate::ports::IdGen;
 
@@ -22,6 +23,7 @@ pub struct Draft {
     description: String,
     coffee: Field<CoffeeDose>,
     water: Field<WaterAmount>,
+    pour_speed: Field<PourSpeed>,
     steps: Vec<DraftStep>,
     errors_shown: bool,
     notice: Option<String>,
@@ -44,6 +46,7 @@ impl Draft {
             description: String::new(),
             coffee: Field::parse(Self::NEW_COFFEE_TEXT, CoffeeDose::try_parse_text),
             water: Field::parse(Self::NEW_WATER_TEXT, WaterAmount::try_parse_text),
+            pour_speed: Field::parse(&PourSpeed::DEFAULT.text(), PourSpeed::try_parse_text),
             steps: vec![DraftStep::new(ids.step_id(), StepPreset::Blank.step_name())],
             errors_shown: false,
             notice: None,
@@ -66,6 +69,7 @@ impl Draft {
                 &recipe.water().grams().to_string(),
                 WaterAmount::try_parse_text,
             ),
+            pour_speed: Field::parse(&recipe.pour_speed().text(), PourSpeed::try_parse_text),
             steps: recipe.steps().iter().map(DraftStep::of).collect(),
             errors_shown: false,
             notice: None,
@@ -116,6 +120,12 @@ impl Draft {
         self.water = Field::parse(raw, WaterAmount::try_parse_text);
     }
 
+    /// The pour speed as typed. Steps keep their durations: only a pour
+    /// typed from now on is timed at the new speed.
+    pub(crate) fn set_pour_speed(&mut self, raw: &str) {
+        self.pour_speed = Field::parse(raw, PourSpeed::try_parse_text);
+    }
+
     pub(crate) fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.step_mut(row)?.set_name(raw);
         Ok(())
@@ -136,7 +146,8 @@ impl Draft {
     }
 
     pub(crate) fn set_step_water(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
-        self.step_mut(row)?.set_water(raw);
+        let speed = self.pour_speed.value().copied();
+        self.step_mut(row)?.set_water(raw, speed);
         Ok(())
     }
 
@@ -182,20 +193,24 @@ impl Draft {
         let name = self.name.value()?.clone();
         let coffee = *self.coffee.value()?;
         let water = *self.water.value()?;
+        let pour_speed = *self.pour_speed.value()?;
         let steps = self
             .steps
             .iter()
             .enumerate()
             .map(|(index, step)| step.to_step(index + 1))
             .collect::<Option<Vec<_>>>()?;
-        Some(Recipe::new(
-            self.id.clone(),
-            name,
-            self.description.trim().to_owned(),
-            coffee,
-            water,
-            steps,
-        ))
+        Some(
+            Recipe::new(
+                self.id.clone(),
+                name,
+                self.description.trim().to_owned(),
+                coffee,
+                water,
+                steps,
+            )
+            .with_pour_speed(pour_speed),
+        )
     }
 
     pub fn id(&self) -> &RecipeId {
@@ -252,6 +267,16 @@ impl Draft {
     /// `Enter grams` or `1–2000 g`, once errors are shown.
     pub fn water_error(&self) -> Option<String> {
         self.shown(self.water.error())
+    }
+
+    /// The pour speed in g/s as typed.
+    pub fn pour_speed(&self) -> &str {
+        self.pour_speed.raw()
+    }
+
+    /// `Enter g/s` or `0.5–30 g/s`, once errors are shown.
+    pub fn pour_speed_error(&self) -> Option<String> {
+        self.shown(self.pour_speed.error())
     }
 
     /// Live `M:SS` total of the typed durations, read leniently and capped

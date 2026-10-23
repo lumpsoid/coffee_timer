@@ -207,6 +207,43 @@ fn new_without_steps_or_dose_saves_the_editors_defaults() -> TestResult {
 }
 
 #[test]
+fn new_times_a_pour_without_seconds_at_the_pour_speed() -> TestResult {
+    let mut session = Session::new()?;
+    let out = session.run(&[
+        "new",
+        "Timed",
+        "--pour-speed",
+        "4",
+        "--step",
+        "Bloom=@50",
+        "--step",
+        "Pour=20@200",
+    ])?;
+    assert_eq!(out, "upserted r1\n");
+    let shown = session.run(&["show", "r1"])?;
+    assert!(shown.contains("  1. Bloom  13s  50g  pending\n"), "{shown}");
+    assert!(
+        shown.contains("  2. Pour  20s  200g  pending\n"),
+        "typed seconds win: {shown}"
+    );
+    Ok(())
+}
+
+#[test]
+fn new_with_an_invalid_pour_speed_prints_its_error() -> TestResult {
+    let mut session = Session::new()?;
+    let error = session
+        .run(&["new", "Fast", "--pour-speed", "31"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(
+        error,
+        "Fix the highlighted fields\n  Pour speed \"31\": 0.5–30 g/s"
+    );
+    Ok(())
+}
+
+#[test]
 fn new_with_invalid_fields_prints_the_field_errors_and_saves_nothing() -> TestResult {
     let mut session = Session::new()?;
     let error = session

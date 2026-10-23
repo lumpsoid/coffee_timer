@@ -1,12 +1,13 @@
-//! `SqliteStore`: schema v4 and seed, recipe doses, step pours, recipe pins, recipe order, appending in one transaction, step replacement,
+//! `SqliteStore`: schema v5 and seed, recipe doses, pour speeds, step pours, recipe pins, recipe order, appending in one transaction, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, CoffeeDose, Pin, PreAlertLead, Recipe, RecipeId, RecipeName, RecipeStep, Settings,
-    StepDuration, StepId, StoredSettings, ThemeSelection, Toggle, WaterAmount,
+    AccentColor, CoffeeDose, Pin, PourSpeed, PreAlertLead, Recipe, RecipeId, RecipeName,
+    RecipeStep, Settings, StepDuration, StepId, StoredSettings, ThemeSelection, Toggle,
+    WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
 use coffee_timer_core::settings::SettingsController;
@@ -175,6 +176,42 @@ fn fresh_database_seeds_the_pour_over_pours() -> TestResult {
 }
 
 #[test]
+fn pour_speeds_round_trip_and_follow_an_upsert() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let first = recipe("r1", "V60", vec![step("s1", "Pour", 90)?])?;
+    store.upsert(&first)?;
+    let speed = |store: &SqliteStore| -> Outcome<Vec<String>> {
+        Ok(store
+            .load_all()?
+            .iter()
+            .map(|r| r.pour_speed().text())
+            .collect())
+    };
+    assert_eq!(speed(&store)?, ["5", "5", "5"], "seeds and new recipe");
+    store.upsert(&first.with_pour_speed(PourSpeed::try_parse_text("6.5")?))?;
+    assert_eq!(speed(&store)?, ["5", "5", "6.5"]);
+    Ok(())
+}
+
+#[test]
+fn stored_pour_speeds_out_of_range_are_clamped() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    drop(SqliteStore::open(&path)?);
+    Connection::open(&path)?.execute_batch(
+        "UPDATE recipe SET pour_speed_tenths = 0 WHERE id = 'espresso-uuid';
+         UPDATE recipe SET pour_speed_tenths = 99999 WHERE id = 'pourover-uuid';",
+    )?;
+    let speeds: Vec<_> = SqliteStore::open(&path)?
+        .load_all()?
+        .iter()
+        .map(Recipe::pour_speed)
+        .collect();
+    assert_eq!(speeds, [PourSpeed::MIN, PourSpeed::MAX]);
+    Ok(())
+}
+
+#[test]
 fn step_pours_round_trip() -> TestResult {
     let mut store = SqliteStore::open_in_memory()?;
     let bloom = RecipeStep::new(
@@ -225,13 +262,13 @@ fn stored_doses_out_of_range_are_clamped() -> TestResult {
 }
 
 #[test]
-fn opened_file_is_at_schema_v4() -> TestResult {
+fn opened_file_is_at_schema_v5() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
     SqliteStore::open(&path)?;
     let version: u32 =
         Connection::open(&path)?.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 4);
+    assert_eq!(version, 5);
     Ok(())
 }
 

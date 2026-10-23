@@ -1,5 +1,6 @@
 use coffee_timer_core::model::{
-    CoffeeDose, Pin, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId, WaterAmount,
+    CoffeeDose, Pin, PourSpeed, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
+    WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, StoreError};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -9,8 +10,8 @@ use crate::sqlite_store::{SqliteStore, db_error};
 /// Rows map to core types through the core's constructors, as legacy
 /// `sqlite_recipe_repository.dart:103-125` did: a row with a blank id is
 /// dropped, a blank name reads as `Untitled`, a duration is clamped. The
-/// coffee and water grams are clamped too, and a step's NULL water is no
-/// pour.
+/// coffee and water grams and the pour speed are clamped too, and a step's
+/// NULL water is no pour.
 impl RecipeStore for SqliteStore {
     fn load_all(&self) -> Result<Vec<Recipe>, StoreError> {
         load_all(&*self.conn()?).map_err(db_error)
@@ -56,12 +57,14 @@ struct RecipeRow {
     description: String,
     coffee_grams: i64,
     water_grams: i64,
+    pour_speed_tenths: i64,
 }
 
 fn load_all(conn: &Connection) -> rusqlite::Result<Vec<Recipe>> {
     let rows = conn
         .prepare(
-            "SELECT id, name, description, coffee_grams, water_grams FROM recipe ORDER BY position",
+            "SELECT id, name, description, coffee_grams, water_grams, pour_speed_tenths
+             FROM recipe ORDER BY position",
         )?
         .query_map([], |row| {
             Ok(RecipeRow {
@@ -70,6 +73,7 @@ fn load_all(conn: &Connection) -> rusqlite::Result<Vec<Recipe>> {
                 description: row.get(2)?,
                 coffee_grams: row.get(3)?,
                 water_grams: row.get(4)?,
+                pour_speed_tenths: row.get(5)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -81,14 +85,17 @@ fn load_all(conn: &Connection) -> rusqlite::Result<Vec<Recipe>> {
         };
         let steps = load_steps(conn, &id)?;
         let name = RecipeName::from_storage(&row.name);
-        recipes.push(Recipe::new(
-            id,
-            name,
-            row.description,
-            CoffeeDose::clamped(row.coffee_grams),
-            WaterAmount::clamped(row.water_grams),
-            steps,
-        ));
+        recipes.push(
+            Recipe::new(
+                id,
+                name,
+                row.description,
+                CoffeeDose::clamped(row.coffee_grams),
+                WaterAmount::clamped(row.water_grams),
+                steps,
+            )
+            .with_pour_speed(PourSpeed::clamped_tenths(row.pour_speed_tenths)),
+        );
     }
     Ok(recipes)
 }
@@ -141,18 +148,20 @@ fn upsert(conn: &mut Connection, recipe: &Recipe) -> rusqlite::Result<()> {
     let tx = conn.transaction()?;
     let id = recipe.id().as_str();
     tx.execute(
-        "INSERT INTO recipe (id, name, description, coffee_grams, water_grams)
-         VALUES (?1, ?2, ?3, ?4, ?5)
+        "INSERT INTO recipe (id, name, description, coffee_grams, water_grams, pour_speed_tenths)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)
          ON CONFLICT (id) DO UPDATE SET name = excluded.name,
              description = excluded.description,
              coffee_grams = excluded.coffee_grams,
-             water_grams = excluded.water_grams",
+             water_grams = excluded.water_grams,
+             pour_speed_tenths = excluded.pour_speed_tenths",
         params![
             id,
             recipe.name().as_str(),
             recipe.description(),
             recipe.coffee().grams(),
             recipe.water().grams(),
+            recipe.pour_speed().tenths(),
         ],
     )?;
     tx.execute("DELETE FROM step WHERE recipe_id = ?1", [id])?;
@@ -166,14 +175,16 @@ fn append_all(conn: &mut Connection, recipes: &[Recipe]) -> rusqlite::Result<()>
     let tx = conn.transaction()?;
     for recipe in recipes {
         tx.execute(
-            "INSERT INTO recipe (id, name, description, coffee_grams, water_grams)
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+            "INSERT INTO recipe
+                 (id, name, description, coffee_grams, water_grams, pour_speed_tenths)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![
                 recipe.id().as_str(),
                 recipe.name().as_str(),
                 recipe.description(),
                 recipe.coffee().grams(),
                 recipe.water().grams(),
+                recipe.pour_speed().tenths(),
             ],
         )?;
         insert_steps(&tx, recipe)?;
@@ -211,8 +222,10 @@ fn insert_at(
         )?;
     }
     tx.execute(
-        "INSERT INTO recipe (position, id, name, description, coffee_grams, water_grams, pinned)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO recipe
+             (position, id, name, description, coffee_grams, water_grams, pour_speed_tenths,
+              pinned)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             at,
             recipe.id().as_str(),
@@ -220,6 +233,7 @@ fn insert_at(
             recipe.description(),
             recipe.coffee().grams(),
             recipe.water().grams(),
+            recipe.pour_speed().tenths(),
             pin.is_pinned(),
         ],
     )?;

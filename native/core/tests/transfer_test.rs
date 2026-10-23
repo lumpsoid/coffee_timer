@@ -5,8 +5,8 @@ use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::EditorController;
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
-    CoffeeDose, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
-    WaterAmount,
+    CoffeeDose, ModelError, Pin, PourSpeed, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration,
+    StepId, WaterAmount,
 };
 use coffee_timer_core::transfer::{DocumentError, ImportError, RecipeDocument};
 
@@ -33,7 +33,8 @@ fn pour_over() -> Result<Recipe, ModelError> {
                 Some(WaterAmount::try_parse(50)?),
             ),
         ],
-    ))
+    )
+    .with_pour_speed(PourSpeed::try_parse_text("4.5")?))
 }
 
 /// A version-1 document holding one recipe, `recipe` (its JSON object).
@@ -68,6 +69,7 @@ fn encode_writes_the_versioned_document_without_ids() -> TestResult {
       "description": "Light and clean",
       "coffee_grams": 15,
       "water_grams": 250,
+      "pour_grams_per_second": 4.5,
       "steps": [
         {
           "name": "Grind",
@@ -106,6 +108,7 @@ fn encode_then_decode_is_the_same_recipe_apart_from_ids() -> TestResult {
     assert_eq!(back.description(), recipe.description());
     assert_eq!(back.coffee(), recipe.coffee());
     assert_eq!(back.water(), recipe.water());
+    assert_eq!(back.pour_speed(), recipe.pour_speed());
     let steps: Vec<_> = back
         .steps()
         .iter()
@@ -155,6 +158,11 @@ fn decode_ignores_fields_it_does_not_know_and_defaults_the_description() -> Test
     let recipes = RecipeDocument::decode(&document(recipe))?;
     let recipe = recipes.first().ok_or("no recipe")?;
     assert_eq!(recipe.description(), "");
+    assert_eq!(
+        recipe.pour_speed(),
+        PourSpeed::DEFAULT,
+        "a document from before pour speeds"
+    );
     assert_eq!(recipe.steps().first().map(|s| s.name()), Some("Step 1"));
     Ok(())
 }
@@ -191,6 +199,11 @@ fn decode_refuses_each_invalid_value_naming_where_it_is() -> TestResult {
             r#"{"name":"A","coffee_grams":15,"water_grams":250,
                "steps":[{"seconds":1,"water_grams":0}]}"#,
             "Recipe 2, step 1, water_grams: 1–2000 g",
+        ),
+        (
+            r#"{"name":"A","coffee_grams":15,"water_grams":250,"pour_grams_per_second":0.4,
+               "steps":[{"seconds":1}]}"#,
+            "Recipe 2, pour_grams_per_second: 0.5–30 g/s",
         ),
     ];
     for (second, want) in cases {

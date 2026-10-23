@@ -44,6 +44,12 @@ pub struct SetRecipeWater {
     pub raw: String,
 }
 
+/// The pour speed in g/s as typed (`5`, `4.5`).
+#[derive(Deserialize, DartSignal)]
+pub struct SetRecipePourSpeed {
+    pub raw: String,
+}
+
 /// `row` is an `EditorStep::id`.
 #[derive(Deserialize, DartSignal)]
 pub struct SetStepName {
@@ -66,8 +72,9 @@ pub struct NudgeStepDuration {
     pub nudge: DurationNudgeChoice,
 }
 
-/// The grams the step pours, as typed; blank is no pour. `row` is an
-/// `EditorStep::id`.
+/// The grams the step pours, as typed; blank is no pour. Valid grams also
+/// set the step's duration to the time the pour takes at the recipe's pour
+/// speed. `row` is an `EditorStep::id`.
 #[derive(Deserialize, DartSignal)]
 pub struct SetStepWater {
     pub row: String,
@@ -131,6 +138,10 @@ pub struct EditorDraft {
     pub water: String,
     /// `Enter grams` or `1–2000 g`, once a save was attempted.
     pub water_error: Option<String>,
+    /// The pour speed in g/s as typed.
+    pub pour_speed: String,
+    /// `Enter g/s` or `0.5–30 g/s`, once a save was attempted.
+    pub pour_speed_error: Option<String>,
     /// Live total, `M:SS`.
     pub total_label: String,
     /// `Step pours add up to 200 g of 250 g` when the typed step pours miss
@@ -161,7 +172,8 @@ pub struct EditorStep {
     pub duration_label: String,
     /// `Enter seconds` or `0–5999 seconds`, once a save was attempted.
     pub duration_error: Option<String>,
-    /// Moves on when Rust replaced `duration_text` (a nudge), never while
+    /// Moves on when Rust replaced `duration_text` (a nudge, or a pour
+    /// timed at the pour speed), never while
     /// it is typed: key the duration field by it so it reloads the text.
     pub duration_revision: u32,
     /// The grams poured as typed; blank is no pour.

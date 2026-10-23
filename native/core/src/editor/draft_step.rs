@@ -1,5 +1,5 @@
 use crate::editor::field::Field;
-use crate::model::{RecipeStep, StepDuration, StepId, WaterAmount};
+use crate::model::{PourSpeed, RecipeStep, StepDuration, StepId, WaterAmount};
 
 /// One step row of the draft, as typed. Its id is the row key and becomes
 /// the saved step's id: an existing step keeps its id, a new row gets a
@@ -65,17 +65,27 @@ impl DraftStep {
 
     /// Moves the duration by `delta` seconds from what its label shows
     /// (the lenient reading: text that is not a number counts as `0`, an
-    /// out-of-range number as its bound), clamped into range. The text
-    /// becomes the new value in seconds, so it is valid again, and the
-    /// revision moves on so the field shows the new text.
+    /// out-of-range number as its bound), clamped into range.
     pub(crate) fn nudge_duration(&mut self, delta: i64) {
-        let nudged = self.live_duration().nudged(delta);
-        self.set_duration(&nudged.seconds().to_string());
-        self.duration_revision = self.duration_revision.wrapping_add(1);
+        self.replace_duration(self.live_duration().nudged(delta));
     }
 
-    pub(crate) fn set_water(&mut self, raw: &str) {
+    /// The grams as typed. A valid pour at a known `speed` also replaces
+    /// the duration with the time the pour takes; blank or invalid grams,
+    /// or no speed, leave the duration as it is.
+    pub(crate) fn set_water(&mut self, raw: &str, speed: Option<PourSpeed>) {
         self.water = Field::parse(raw, WaterAmount::try_parse_optional_text);
+        if let (Some(Some(water)), Some(speed)) = (self.water.value().copied(), speed) {
+            self.replace_duration(speed.duration_of(water));
+        }
+    }
+
+    /// Core, not the user, sets the duration: the text becomes `duration`
+    /// in seconds, so it is valid again, and the revision moves on so the
+    /// field shows the new text.
+    fn replace_duration(&mut self, duration: StepDuration) {
+        self.set_duration(&duration.seconds().to_string());
+        self.duration_revision = self.duration_revision.wrapping_add(1);
     }
 
     /// The step to save at `position` (1-based); none while the duration or
