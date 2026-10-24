@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:coffee_timer/src/bindings/bindings.dart';
@@ -15,7 +16,9 @@ final _snapshot = SnapshotController(allowSnapshotting: true);
 /// of the same one). The track's arcs and their states come from [steps]
 /// as Rust sent them. While a step is `paused` the sweep stops where it is,
 /// drawn in faded ink instead of the accent, and goes on from there once
-/// the step is current again.
+/// the step is current again. The sweep moves on once per whole pixel its
+/// outer arc travels, not once per display frame: most frames of a long
+/// step would move it by a fraction of a pixel.
 class BrewDial extends StatelessWidget {
   const BrewDial({
     required this.sweep,
@@ -47,17 +50,30 @@ class BrewDial extends StatelessWidget {
             autoresize: true,
             child: CustomPaint(painter: _GroovePainter(colors: colors)),
           ),
-          _SweepingDial(
-            key: ValueKey(restartKey),
-            sweep: sweep,
-            steps: steps,
-            colors: colors,
+          LayoutBuilder(
+            builder: (context, box) => _SweepingDial(
+              key: ValueKey(restartKey),
+              sweep: sweep,
+              steps: steps,
+              colors: colors,
+              turnPixels: _turnPixels(
+                box.biggest.shortestSide *
+                    MediaQuery.devicePixelRatioOf(context),
+              ),
+            ),
           ),
           Center(child: child),
         ],
       ),
     );
   }
+
+  /// The physical pixels round the step track, the widest circle that
+  /// sweeps, on a dial [side] physical pixels across.
+  static int _turnPixels(double side) => math.max(
+    1,
+    (2 * math.pi * BrewDialPainter._trackRadius / 300 * side).round(),
+  );
 }
 
 class _SweepingDial extends StatefulWidget {
@@ -65,31 +81,50 @@ class _SweepingDial extends StatefulWidget {
     required this.sweep,
     required this.steps,
     required this.colors,
+    required this.turnPixels,
     super.key,
   });
 
   final Duration? sweep;
   final List<BrewStep> steps;
   final LabelColors colors;
+  final int turnPixels;
 
   @override
   State<_SweepingDial> createState() => _SweepingDialState();
 }
 
-class _SweepingDialState extends State<_SweepingDial>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: widget.sweep,
-  );
+class _SweepingDialState extends State<_SweepingDial> {
+  /// About one frame of a 120 Hz display: no point moving more often.
+  static const _shortestTick = Duration(milliseconds: 8);
+
+  Timer? _timer;
+  double _progress = 0;
 
   static bool _held(List<BrewStep> steps) =>
       steps.any((s) => s.status == BrewStepStatus.paused);
 
-  /// Sweeps on from where the ring stands, unless there is nothing to sweep
-  /// or the brew is paused.
+  /// Sweeps on from where the ring stands, a pixel at a time, unless there
+  /// is nothing to sweep or the brew is paused. The timer's tick count
+  /// includes ticks it missed, so the ring keeps to the clock.
   void _sweepOn() {
-    if (widget.sweep != null && !_held(widget.steps)) _controller.repeat();
+    final sweep = widget.sweep;
+    if (sweep == null || sweep <= Duration.zero || _held(widget.steps)) {
+      return;
+    }
+    final perPixel = sweep ~/ widget.turnPixels;
+    final tick = perPixel < _shortestTick ? _shortestTick : perPixel;
+    final perTick = tick.inMicroseconds / sweep.inMicroseconds;
+    final from = _progress;
+    _timer = Timer.periodic(
+      tick,
+      (timer) => setState(() => _progress = (from + timer.tick * perTick) % 1),
+    );
+  }
+
+  void _stop() {
+    _timer?.cancel();
+    _timer = null;
   }
 
   @override
@@ -102,32 +137,29 @@ class _SweepingDialState extends State<_SweepingDial>
   void didUpdateWidget(_SweepingDial oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.sweep != widget.sweep) {
-      _controller
-        ..duration = widget.sweep
-        ..reset();
+      _stop();
+      _progress = 0;
       _sweepOn();
-    } else if (_held(oldWidget.steps) != _held(widget.steps)) {
-      _controller.stop();
+    } else if (_held(oldWidget.steps) != _held(widget.steps) ||
+        oldWidget.turnPixels != widget.turnPixels) {
+      _stop();
       _sweepOn();
     }
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _stop();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, _) => CustomPaint(
-        painter: BrewDialPainter(
-          progress: _controller.value,
-          steps: widget.steps,
-          colors: widget.colors,
-        ),
+    return CustomPaint(
+      painter: BrewDialPainter(
+        progress: _progress,
+        steps: widget.steps,
+        colors: widget.colors,
       ),
     );
   }
@@ -184,6 +216,9 @@ class BrewDialPainter extends CustomPainter {
 
   static const _ticks = 60;
 
+  /// The step track's radius, in the 300-unit dial.
+  static const _trackRadius = 140.0;
+
   /// Gap left between neighbouring arcs on the step track, in turns.
   static const _trackGap = 0.012;
 
@@ -220,7 +255,7 @@ class BrewDialPainter extends CustomPainter {
     }
 
     // The step track.
-    final track = Rect.fromCircle(center: center, radius: 140 * unit);
+    final track = Rect.fromCircle(center: center, radius: _trackRadius * unit);
     stroke.strokeWidth = 5 * unit;
     for (final step in steps) {
       final start = step.trackStart + _trackGap / 2;
