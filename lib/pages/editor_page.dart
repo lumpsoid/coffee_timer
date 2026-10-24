@@ -182,11 +182,7 @@ class _EditorPageState extends State<EditorPage> {
                   nudges: draft.durationNudgeButtons,
                 );
               },
-              // The order changes only when Rust sends it back.
-              onReorderItem: (from, to) => MoveStep(
-                row: draft.steps[from].id,
-                to: to,
-              ).sendSignalToRust(),
+              onReorderItem: (from, to) => _moveStep(draft, from, to),
               // The dragged card floats in an overlay, outside the page's
               // Material; its text fields need one of their own.
               proxyDecorator: (child, _, _) => Material(
@@ -202,6 +198,18 @@ class _EditorPageState extends State<EditorPage> {
         ],
       ),
     );
+  }
+
+  /// Shows the dropped card in its new place at once, then asks Rust for the
+  /// move. Waiting for Rust's draft would show the old order for a frame or
+  /// more after the drop; Rust's draft still replaces this one when it
+  /// comes, with its order, labels and any refusal.
+  void _moveStep(EditorDraft draft, int from, int to) {
+    final steps = [...draft.steps];
+    final moved = steps.removeAt(from);
+    steps.insert(to, moved);
+    setState(() => _draft = draft.copyWith(steps: steps));
+    MoveStep(row: moved.id, to: to).sendSignalToRust();
   }
 
   /// The recipe's own fields, the live total and the steps heading.
