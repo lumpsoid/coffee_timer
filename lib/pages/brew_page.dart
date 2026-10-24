@@ -7,7 +7,7 @@ import 'package:coffee_timer/pages/editor_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/brew_dial.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
-import 'package:coffee_timer/widgets/label_paper_painter.dart';
+import 'package:coffee_timer/widgets/label_paper.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/roast_meter.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
@@ -178,12 +178,10 @@ class _BrewPageState extends State<BrewPage> {
     final paperBrightness = ThemeData.estimateBrightnessForColor(colors.paper);
     final sweep = timer?.sweepSeconds;
     final adjusted = recipe.ratio == BrewRatioSetting.adjusted;
-    return CustomPaint(
-      painter: LabelPaperPainter(
-        colors: colors,
-        texture: recipe.label.texture,
-        stain: recipe.label.stain,
-      ),
+    return LabelPaper(
+      colors: colors,
+      texture: recipe.label.texture,
+      stain: recipe.label.stain,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
