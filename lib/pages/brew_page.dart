@@ -253,12 +253,16 @@ class _BrewPageState extends State<BrewPage> {
                   child: GestureDetector(
                     behavior: HitTestBehavior.opaque,
                     onTap: onDial,
-                    child: BrewDial(
-                      sweep: sweep == null ? null : Duration(seconds: sweep),
-                      restartKey: (timer?.run, timer?.stepIndex),
-                      steps: recipe.steps,
-                      colors: colors,
-                      child: face(colors),
+                    // The sweep repaints the dial while the rest of the page
+                    // holds still.
+                    child: RepaintBoundary(
+                      child: BrewDial(
+                        sweep: sweep == null ? null : Duration(seconds: sweep),
+                        restartKey: (timer?.run, timer?.stepIndex),
+                        steps: recipe.steps,
+                        colors: colors,
+                        child: face(colors),
+                      ),
                     ),
                   ),
                 ),
