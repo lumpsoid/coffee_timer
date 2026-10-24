@@ -203,7 +203,10 @@ void main() {
                     .widget<CustomPaint>(
                       find.descendant(
                         of: find.byType(BrewDial),
-                        matching: find.byType(CustomPaint),
+                        matching: find.byWidgetPredicate(
+                          (w) =>
+                              w is CustomPaint && w.painter is BrewDialPainter,
+                        ),
                       ),
                     )
                     .painter!

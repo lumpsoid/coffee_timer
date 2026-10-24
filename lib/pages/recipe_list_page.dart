@@ -169,9 +169,15 @@ class _RecipeListPageState extends State<RecipeListPage> {
           final rows = recipes.recipes ?? const <RecipeSummary>[];
           return ListView.builder(
             itemCount: rows.length,
+            // A row that moved keeps its widgets (and its paper snapshot).
+            findChildIndexCallback: (key) {
+              final index = rows.indexWhere((r) => ValueKey(r.id) == key);
+              return index < 0 ? null : index;
+            },
             itemBuilder: (_, index) {
               final r = rows[index];
               return RecipeSummaryTile(
+                key: ValueKey(r.id),
                 name: r.name,
                 description: r.description,
                 coffeeLabel: r.coffeeLabel,

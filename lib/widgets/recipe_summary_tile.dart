@@ -1,6 +1,6 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
-import 'package:coffee_timer/widgets/label_paper_painter.dart';
+import 'package:coffee_timer/widgets/label_paper.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/roast_meter.dart';
 import 'package:flutter/material.dart';
@@ -48,12 +48,10 @@ class RecipeSummaryTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
         child: ClipPath(
           clipper: const _NotchedCorners(radius: 9),
-          child: CustomPaint(
-            painter: LabelPaperPainter(
-              colors: colors,
-              texture: label.texture,
-              stain: label.stain,
-            ),
+          child: LabelPaper(
+            colors: colors,
+            texture: label.texture,
+            stain: label.stain,
             child: Stack(
               children: [
                 Padding(
