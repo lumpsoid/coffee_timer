@@ -4,6 +4,8 @@ import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:flutter/material.dart';
 
+final _snapshot = SnapshotController(allowSnapshotting: true);
+
 /// The brew page's timer, drawn like the bezel of a kitchen scale: sixty
 /// second ticks, an inner arc sweeping the current step, and an outer track
 /// with one arc per step. [child] sits in the middle.
@@ -37,6 +39,14 @@ class BrewDial extends StatelessWidget {
       child: Stack(
         fit: StackFit.expand,
         children: [
+          // The groove and its dotted ring never move: drawn once, then
+          // reused under every sweep frame. A new look gets a new snapshot.
+          SnapshotWidget(
+            key: ValueKey(colors),
+            controller: _snapshot,
+            autoresize: true,
+            child: CustomPaint(painter: _GroovePainter(colors: colors)),
+          ),
           _SweepingDial(
             key: ValueKey(restartKey),
             sweep: sweep,
@@ -123,9 +133,44 @@ class _SweepingDialState extends State<_SweepingDial>
   }
 }
 
-/// Paints the dial. [progress] is how far the sweep has come through the
-/// current (or paused) step, `0..1`; with neither in [steps] nothing
-/// sweeps. A paused step's sweep is faded ink rather than the accent.
+/// The dial's fixed inner groove and the dotted ring inside it.
+class _GroovePainter extends CustomPainter {
+  const _GroovePainter({required this.colors});
+
+  final LabelColors colors;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final unit = size.shortestSide / 300;
+    final ink = colors.ink;
+    canvas.drawCircle(
+      center,
+      102 * unit,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 7 * unit
+        ..color = ink.withValues(alpha: 0.12),
+    );
+    final dots = Paint()..color = ink.withValues(alpha: 0.3);
+    for (var i = 0; i < 120; i++) {
+      canvas.drawCircle(
+        BrewDialPainter._at(center, 92 * unit, i / 120),
+        0.7 * unit,
+        dots,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_GroovePainter oldDelegate) =>
+      oldDelegate.colors != colors;
+}
+
+/// Paints the dial's moving parts over its groove. [progress] is how far
+/// the sweep has come through the current (or paused) step, `0..1`; with
+/// neither in [steps] nothing sweeps. A paused step's sweep is faded ink
+/// rather than the accent.
 class BrewDialPainter extends CustomPainter {
   const BrewDialPainter({
     required this.progress,
@@ -160,19 +205,6 @@ class BrewDialPainter extends CustomPainter {
     final stroke = Paint()
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round;
-
-    // Inner groove and the dotted ring inside it.
-    canvas.drawCircle(
-      center,
-      102 * unit,
-      stroke
-        ..strokeWidth = 7 * unit
-        ..color = ink.withValues(alpha: 0.12),
-    );
-    final dots = Paint()..color = ink.withValues(alpha: 0.3);
-    for (var i = 0; i < 120; i++) {
-      canvas.drawCircle(_at(center, 92 * unit, i / 120), 0.7 * unit, dots);
-    }
 
     // Bezel ticks, lit as the sweep passes them.
     for (var i = 0; i < _ticks; i++) {
