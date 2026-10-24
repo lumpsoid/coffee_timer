@@ -1,12 +1,12 @@
-//! `SqliteStore`: schema v5 and seed, recipe doses, pour speeds, step pours, recipe pins, recipe order, appending in one transaction, step replacement,
+//! `SqliteStore`: schema v6 and seed, recipe doses, pour speeds, grinds, step pours, recipe pins, recipe order, appending in one transaction, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, CoffeeDose, Pin, PourSpeed, PreAlertLead, Recipe, RecipeId, RecipeName,
-    RecipeStep, Settings, StepDuration, StepId, StoredSettings, ThemeSelection, Toggle,
+    AccentColor, CoffeeDose, GrindClicks, Pin, PourSpeed, PreAlertLead, Recipe, RecipeId,
+    RecipeName, RecipeStep, Settings, StepDuration, StepId, StoredSettings, ThemeSelection, Toggle,
     WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
@@ -212,6 +212,62 @@ fn stored_pour_speeds_out_of_range_are_clamped() -> TestResult {
 }
 
 #[test]
+fn grinds_round_trip_and_follow_an_upsert() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let first = recipe("r1", "V60", vec![step("s1", "Pour", 90)?])?;
+    store.upsert(&first)?;
+    let grinds = |store: &SqliteStore| -> Outcome<Vec<Option<u32>>> {
+        Ok(store
+            .load_all()?
+            .iter()
+            .map(|r| r.grind().map(GrindClicks::clicks))
+            .collect())
+    };
+    assert_eq!(grinds(&store)?, [None, None, None], "seeds and new recipe");
+    let ground = first.with_grind(Some(GrindClicks::try_parse(22)?));
+    store.upsert(&ground)?;
+    assert_eq!(grinds(&store)?, [None, None, Some(22)]);
+    store.upsert(&ground.with_grind(None))?;
+    assert_eq!(grinds(&store)?, [None, None, None], "cleared");
+    Ok(())
+}
+
+#[test]
+fn appended_and_reinserted_recipes_keep_their_grind() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let ground = |id: &str| -> Outcome<Recipe> {
+        Ok(recipe(id, "V60", Vec::new())?.with_grind(Some(GrindClicks::try_parse(18)?)))
+    };
+    store.append_all(&[ground("a")?])?;
+    store.insert_at(&ground("b")?, 0, Pin::Unpinned)?;
+    let grinds: Vec<_> = store
+        .load_all()?
+        .iter()
+        .map(|r| r.grind().map(GrindClicks::clicks))
+        .collect();
+    assert_eq!(grinds, [Some(18), None, None, Some(18)]);
+    Ok(())
+}
+
+#[test]
+fn stored_grinds_out_of_range_are_clamped() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    drop(SqliteStore::open(&path)?);
+    Connection::open(&path)?.execute_batch(
+        "UPDATE recipe SET grind_clicks = -3 WHERE id = 'espresso-uuid';
+         UPDATE recipe SET grind_clicks = 500 WHERE id = 'pourover-uuid';",
+    )?;
+    let grinds: Vec<_> = SqliteStore::open(&path)?
+        .load_all()?
+        .iter()
+        .map(|r| r.grind().map(GrindClicks::clicks))
+        .collect();
+    assert_eq!(grinds, [Some(0), Some(99)]);
+    Ok(())
+}
+
+#[test]
 fn step_pours_round_trip() -> TestResult {
     let mut store = SqliteStore::open_in_memory()?;
     let bloom = RecipeStep::new(
@@ -262,13 +318,13 @@ fn stored_doses_out_of_range_are_clamped() -> TestResult {
 }
 
 #[test]
-fn opened_file_is_at_schema_v5() -> TestResult {
+fn opened_file_is_at_schema_v6() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
     SqliteStore::open(&path)?;
     let version: u32 =
         Connection::open(&path)?.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 5);
+    assert_eq!(version, 6);
     Ok(())
 }
 

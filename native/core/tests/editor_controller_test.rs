@@ -10,8 +10,8 @@ use coffee_timer_core::editor::{
 };
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
-    CoffeeDose, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep, StepDuration, StepId,
-    WaterAmount,
+    CoffeeDose, GrindClicks, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep,
+    StepDuration, StepId, WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -1610,6 +1610,59 @@ fn pour_speed_errors_show_from_the_first_save() -> TestResult {
     assert_eq!(
         draft(&editor)?.pour_speed_error().as_deref(),
         Some("Enter g/s")
+    );
+    Ok(())
+}
+
+// Grind
+
+#[test]
+fn a_new_draft_has_no_grind() -> TestResult {
+    let editor = new_draft();
+    assert_eq!(draft(&editor)?.grind(), "");
+    assert_eq!(draft(&editor)?.grind_error(), None);
+    Ok(())
+}
+
+#[test]
+fn the_grind_saves_reopens_and_clears() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_grind(" 22 ")?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("r1")?).ok_or("not saved")?;
+    assert_eq!(saved.grind().map(GrindClicks::clicks), Some(22));
+
+    editor.edit(&rid("r1")?, &catalog)?;
+    assert_eq!(draft(&editor)?.grind(), "22");
+    editor.duplicate(&rid("r1")?, &catalog)?;
+    assert_eq!(draft(&editor)?.grind(), "22", "a copy keeps it");
+
+    editor.edit(&rid("r1")?, &catalog)?;
+    editor.set_grind("")?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("r1")?).ok_or("not saved")?;
+    assert_eq!(saved.grind(), None, "blank clears it");
+    Ok(())
+}
+
+#[test]
+fn grind_errors_show_from_the_first_save() -> TestResult {
+    let mut catalog = catalog(vec![])?;
+    let mut editor = new_draft();
+    editor.set_name("V60")?;
+    editor.set_grind("100")?;
+    assert_eq!(draft(&editor)?.grind_error(), None, "hidden before save");
+    assert_eq!(editor.save(&mut catalog), Err(SaveError::Invalid));
+    assert_eq!(
+        draft(&editor)?.grind_error().as_deref(),
+        Some("0–99 clicks")
+    );
+    editor.set_grind("fine")?;
+    assert_eq!(
+        draft(&editor)?.grind_error().as_deref(),
+        Some("Enter clicks")
     );
     Ok(())
 }

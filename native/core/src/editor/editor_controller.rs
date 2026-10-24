@@ -95,6 +95,12 @@ impl EditorController {
         Ok(())
     }
 
+    /// The grind in clicks as typed (`22`); blank is none.
+    pub fn set_grind(&mut self, raw: &str) -> Result<(), EditError> {
+        self.draft_mut()?.set_grind(raw);
+        Ok(())
+    }
+
     pub fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_step_name(row, raw)
     }

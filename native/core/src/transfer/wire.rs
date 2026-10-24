@@ -33,6 +33,9 @@ pub(super) struct RecipeWire {
     /// one still read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) pour_grams_per_second: Option<f64>,
+    /// Missing is no grind setting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) grind_clicks: Option<i64>,
     pub(super) steps: Vec<StepWire>,
 }
 

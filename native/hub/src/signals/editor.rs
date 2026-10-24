@@ -50,6 +50,12 @@ pub struct SetRecipePourSpeed {
     pub raw: String,
 }
 
+/// The grind in clicks as typed (`22`); blank is none.
+#[derive(Deserialize, DartSignal)]
+pub struct SetRecipeGrind {
+    pub raw: String,
+}
+
 /// `row` is an `EditorStep::id`.
 #[derive(Deserialize, DartSignal)]
 pub struct SetStepName {
@@ -142,6 +148,10 @@ pub struct EditorDraft {
     pub pour_speed: String,
     /// `Enter g/s` or `0.5–30 g/s`, once a save was attempted.
     pub pour_speed_error: Option<String>,
+    /// The grind in clicks as typed; blank is none.
+    pub grind: String,
+    /// `Enter clicks` or `0–99 clicks`, once a save was attempted.
+    pub grind_error: Option<String>,
     /// Live total, `M:SS`.
     pub total_label: String,
     /// `Step pours add up to 200 g of 250 g` when the typed step pours miss

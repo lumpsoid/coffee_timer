@@ -47,6 +47,11 @@ const MIGRATIONS: &[Migration] = &[
         sql: V5_RECIPE_POUR_SPEED,
         fresh: None,
     },
+    Migration {
+        version: 6,
+        sql: V6_RECIPE_GRIND,
+        fresh: None,
+    },
 ];
 
 /// v1: tables, plus the two example recipes. Seeding is part of creating the
@@ -133,6 +138,13 @@ const V5_RECIPE_POUR_SPEED: &str = "
 ALTER TABLE recipe ADD COLUMN pour_speed_tenths INTEGER NOT NULL DEFAULT 50;
 ";
 
+/// v6: a recipe may store where to set the grinder, in clicks. NULL is no
+/// grind setting, as every recipe before v6 has; the core reads the value
+/// leniently (clamped into its bounds).
+const V6_RECIPE_GRIND: &str = "
+ALTER TABLE recipe ADD COLUMN grind_clicks INTEGER;
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -184,10 +196,10 @@ mod tests {
     }
 
     #[test]
-    fn fresh_database_ends_at_v5() -> TestResult {
+    fn fresh_database_ends_at_v6() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         Ok(())
     }
 
@@ -221,7 +233,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 1)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         assert_eq!(
             doses(&conn)?,
             [
@@ -263,7 +275,7 @@ mod tests {
         conn.execute_batch(V2_RECIPE_DOSE)?;
         conn.pragma_update(None, "user_version", 2)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         assert!(pours(&conn)?.iter().all(|(_, water)| water.is_none()));
         Ok(())
     }
@@ -285,7 +297,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 3)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         assert_eq!(
             pins(&conn)?,
             [
@@ -306,12 +318,31 @@ mod tests {
         conn.execute_batch(V4_RECIPE_PIN)?;
         conn.pragma_update(None, "user_version", 4)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         let speeds: Vec<i64> = conn
             .prepare("SELECT pour_speed_tenths FROM recipe ORDER BY position")?
             .query_map([], |r| r.get(0))?
             .collect::<rusqlite::Result<_>>()?;
         assert_eq!(speeds, [50, 50]);
+        Ok(())
+    }
+
+    #[test]
+    fn v5_recipes_have_no_grind() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA_AND_SEED)?;
+        conn.execute_batch(V2_RECIPE_DOSE)?;
+        conn.execute_batch(V3_STEP_WATER)?;
+        conn.execute_batch(V4_RECIPE_PIN)?;
+        conn.execute_batch(V5_RECIPE_POUR_SPEED)?;
+        conn.pragma_update(None, "user_version", 5)?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 6);
+        let grinds: Vec<Option<i64>> = conn
+            .prepare("SELECT grind_clicks FROM recipe ORDER BY position")?
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        assert_eq!(grinds, [None, None]);
         Ok(())
     }
 
@@ -322,14 +353,14 @@ mod tests {
         migrate(&mut conn)?;
         let recipes: i64 = conn.query_row("SELECT COUNT(*) FROM recipe", [], |r| r.get(0))?;
         assert_eq!(recipes, 2);
-        assert_eq!(user_version(&conn)?, 5);
+        assert_eq!(user_version(&conn)?, 6);
         Ok(())
     }
 
     #[test]
     fn newer_database_is_refused() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 6)?;
+        conn.pragma_update(None, "user_version", 7)?;
         assert!(migrate(&mut conn).is_err());
         Ok(())
     }

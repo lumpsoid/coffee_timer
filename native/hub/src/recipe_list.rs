@@ -106,6 +106,7 @@ impl From<catalog::RecipeSummary> for RecipeSummary {
             coffee_label: s.coffee_label,
             water_label: s.water_label,
             time_label: s.time_label,
+            grind_label: s.grind_label,
             label: s.style.into(),
             pinned: s.pin.is_pinned(),
         }

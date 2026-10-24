@@ -244,6 +244,38 @@ fn new_with_an_invalid_pour_speed_prints_its_error() -> TestResult {
 }
 
 #[test]
+fn new_with_a_grind_lists_and_shows_it() -> TestResult {
+    let mut session = Session::new()?;
+    let out = session.run(&["new", "V60", "--grind", "22"])?;
+    assert_eq!(out, "upserted r1\n");
+    let list = session.reopened()?.run(&["list"])?;
+    assert!(
+        list.ends_with("r1  V60  Coffee: 15 g  Water: 250 g  Time: 0:00  Clicks: 22\n"),
+        "{list}"
+    );
+    let shown = session.run(&["show", "r1"])?;
+    assert!(
+        shown.contains("Ratio: 1:16.7  Time: 0:00  Clicks: 22\n"),
+        "{shown}"
+    );
+    Ok(())
+}
+
+#[test]
+fn new_with_an_invalid_grind_prints_its_error() -> TestResult {
+    let mut session = Session::new()?;
+    let error = session
+        .run(&["new", "V60", "--grind", "100"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(
+        error,
+        "Fix the highlighted fields\n  Grind \"100\": 0–99 clicks"
+    );
+    Ok(())
+}
+
+#[test]
 fn new_with_invalid_fields_prints_the_field_errors_and_saves_nothing() -> TestResult {
     let mut session = Session::new()?;
     let error = session

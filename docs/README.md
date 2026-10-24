@@ -227,6 +227,8 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
 - `new --coffee GRAMS --water GRAMS` sets the dose (1–200 g and
   1–2000 g). Without them the recipe gets the editor's 15 g and 250 g.
   `--pour-speed G/S` sets how fast it pours (0.5–30 g/s, default 5).
+  `--grind CLICKS` sets where to set the grinder (0–99, default none);
+  `list` and `show` then print `Clicks: 22`.
 - `--step NAME=SECONDS[@GRAMS]` splits at the last `=`, then the seconds at
   an `@`; `@GRAMS` is the water the step pours. `NAME=@GRAMS` leaves the
   seconds out: the step lasts as long as its pour takes at the pour speed.

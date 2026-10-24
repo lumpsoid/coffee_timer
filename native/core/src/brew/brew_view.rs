@@ -1,7 +1,9 @@
 use std::cmp::Ordering;
 
 use crate::brew::{FinishedBrew, RatioSetting, RunningStep, StepRow, StepStatus};
-use crate::model::{BrewMetrics, BrewRatio, LabelStyle, Pour, PourScale, Recipe, RecipeId};
+use crate::model::{
+    BrewMetrics, BrewRatio, GrindClicks, LabelStyle, Pour, PourScale, Recipe, RecipeId,
+};
 
 /// The open recipe as the brew page shows it. Built once per recipe version
 /// and ratio; the timer's position is kept beside it in
@@ -194,6 +196,12 @@ impl BrewView {
     /// Water grams at the ratio shown, `100g`.
     pub fn water_label(&self) -> &str {
         &self.water_label
+    }
+
+    /// Where to set the grinder, in clicks, `22`; none when the recipe does
+    /// not say.
+    pub fn grind_label(&self) -> Option<String> {
+        self.recipe.grind().map(GrindClicks::label)
     }
 
     /// Water per gram of coffee, `1:5`.

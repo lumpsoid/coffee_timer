@@ -242,6 +242,8 @@ class _BrewPageState extends State<BrewPage> {
                           value: recipe.ratioLabel,
                           highlight: adjusted,
                         ),
+                        if (recipe.grindLabel case final grind?)
+                          (caption: 'CLICKS', value: grind, highlight: false),
                       ],
                     ),
                   ),

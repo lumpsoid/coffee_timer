@@ -1,6 +1,6 @@
 use crate::model::{
-    CoffeeDose, ModelError, PourScale, PourSpeed, RecipeId, RecipeName, RecipeStep, WaterAmount,
-    WaterScaleError,
+    CoffeeDose, GrindClicks, ModelError, PourScale, PourSpeed, RecipeId, RecipeName, RecipeStep,
+    WaterAmount, WaterScaleError,
 };
 
 /// A brew recipe. Every field is a valid-by-construction value: the coffee
@@ -17,12 +17,14 @@ pub struct Recipe {
     coffee: CoffeeDose,
     water: WaterAmount,
     pour_speed: PourSpeed,
+    grind: Option<GrindClicks>,
     steps: Vec<RecipeStep>,
 }
 
 impl Recipe {
     /// Pours at [`PourSpeed::DEFAULT`] until given its own speed
-    /// ([`Recipe::with_pour_speed`]).
+    /// ([`Recipe::with_pour_speed`]), and has no grind setting until given
+    /// one ([`Recipe::with_grind`]).
     pub fn new(
         id: RecipeId,
         name: RecipeName,
@@ -38,6 +40,7 @@ impl Recipe {
             coffee,
             water,
             pour_speed: PourSpeed::DEFAULT,
+            grind: None,
             steps,
         }
     }
@@ -60,6 +63,10 @@ impl Recipe {
 
     pub fn with_pour_speed(self, pour_speed: PourSpeed) -> Self {
         Self { pour_speed, ..self }
+    }
+
+    pub fn with_grind(self, grind: Option<GrindClicks>) -> Self {
+        Self { grind, ..self }
     }
 
     pub fn with_step_added(mut self, step: RecipeStep) -> Self {
@@ -140,6 +147,11 @@ impl Recipe {
     /// How fast the recipe pours: what the editor times a step's pour by.
     pub fn pour_speed(&self) -> PourSpeed {
         self.pour_speed
+    }
+
+    /// Where to set the grinder; none when the recipe does not say.
+    pub fn grind(&self) -> Option<GrindClicks> {
+        self.grind
     }
 
     pub fn steps(&self) -> &[RecipeStep] {

@@ -138,6 +138,27 @@ void main() {
       expect((taps, longPresses), (1, 1));
     });
 
+    testWidgets('shows a CLICKS spec only for a recipe with a grind', (
+      tester,
+    ) async {
+      Widget tile({String? grind}) => _host(
+        RecipeSummaryTile(
+          name: 'V60',
+          description: 'clean',
+          coffeeLabel: '20 g',
+          waterLabel: '100 g',
+          timeLabel: '1:35',
+          grindLabel: grind,
+          label: label(),
+        ),
+      );
+      await tester.pumpWidget(tile());
+      expect(find.text('CLICKS'), findsNothing);
+      await tester.pumpWidget(tile(grind: '22'));
+      expect(find.text('CLICKS'), findsOneWidget);
+      expect(find.text('22'), findsOneWidget);
+    });
+
     testWidgets('shows the pin marker only when pinned', (tester) async {
       Widget tile({required bool pinned}) => _host(
         RecipeSummaryTile(

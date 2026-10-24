@@ -94,6 +94,9 @@ pub fn new_recipe(
     if let Some(pour_speed) = &recipe.pour_speed {
         editor.set_pour_speed(pour_speed)?;
     }
+    if let Some(grind) = &recipe.grind {
+        editor.set_grind(grind)?;
+    }
     let mut steps = recipe.steps.iter();
     if let Some(step) = steps.next() {
         let first_row = editor

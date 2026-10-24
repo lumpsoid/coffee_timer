@@ -18,12 +18,13 @@ pub fn summary(out: &mut impl Write, summary: &RecipeSummary) -> io::Result<()> 
         ""
     };
     let line = format!(
-        "{}  {}{pinned}  Coffee: {}  Water: {}  Time: {}  {}",
+        "{}  {}{pinned}  Coffee: {}  Water: {}  Time: {}{}  {}",
         summary.id.as_str(),
         summary.name,
         summary.coffee_label,
         summary.water_label,
         summary.time_label,
+        grind(summary.grind_label.as_deref()),
         summary.description,
     );
     writeln!(out, "{}", line.trim_end())
@@ -42,11 +43,12 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
     };
     writeln!(
         out,
-        "Coffee: {}  Water: {}  Ratio: {}{adjusted}  Time: {}",
+        "Coffee: {}  Water: {}  Ratio: {}{adjusted}  Time: {}{}",
         view.coffee_label(),
         view.water_label(),
         view.ratio_label(),
-        view.duration_label()
+        view.duration_label(),
+        grind(view.grind_label().as_deref()),
     )?;
     for row in state.step_rows() {
         let pour = row
@@ -174,6 +176,9 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
     let pour_speed = draft
         .pour_speed_error()
         .map(|error| format!("Pour speed \"{}\": {error}", draft.pour_speed()));
+    let grind = draft
+        .grind_error()
+        .map(|error| format!("Grind \"{}\": {error}", draft.grind()));
     let steps = draft.step_rows().into_iter().flat_map(|row| {
         let duration = row.duration_error.map(|error| {
             format!(
@@ -193,8 +198,14 @@ pub fn field_errors(state: &EditorState) -> Vec<String> {
         .chain(coffee)
         .chain(water)
         .chain(pour_speed)
+        .chain(grind)
         .chain(steps)
         .collect()
+}
+
+/// `  Clicks: 22`, or nothing for a recipe without a grind.
+fn grind(label: Option<&str>) -> String {
+    label.map_or_else(String::new, |label| format!("  Clicks: {label}"))
 }
 
 fn statuses(rows: &[StepRow]) -> String {
