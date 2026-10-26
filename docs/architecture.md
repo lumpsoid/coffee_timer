@@ -211,7 +211,7 @@ The hub also sends `PlatformEffect::CopyToClipboard { text }` itself for
 an export (see [importing and exporting](#the-catalogchange-flow)).
 Dart's [`PlatformEffectPerformer`](../lib/effects/platform_effect_performer.dart)
 makes one plugin call per effect. The CLI prints effects as `[vibrate 100ms]`
-(`[vibrate 40ms]` for the pre-alert),
+(`[vibrate pattern 0/50/100/50ms]` for the pre-alert),
 `[vibrate pattern 0/400/200/400ms]`, `[sound]`, `[screen on]`, `[screen off]`, `[notify Bloom · 00:35 | Next:
 Pour]` and `[notify off]`.
 
@@ -256,8 +256,9 @@ clock. Time arrives as `tick()`, one call per second while
   Every tick that leaves the brew running returns `ShowBrewNotification`
   last. When a step reaches zero, the next step begins and the tick returns
   `Vibrate` + `PlayStepSound` before it. The tick that leaves a step
-  exactly the pre-alert lead (3 s by default) returns `Vibrate { ms: 40 }`
-  before the notification: a lighter cue that the step is about to end.
+  exactly the pre-alert lead (3 s by default) returns
+  `VibratePattern [0, 50, 100, 50]` before the notification: two quick
+  taps, unlike a step boundary's single buzz, that the step is about to end.
   Its rule is [`CuePolicy`](../native/core/src/brew/cue_policy.rs), named
   config built from the user's settings. Since the countdown only falls and a pause keeps it, the
   moment comes once per step: pausing and resuming around it never

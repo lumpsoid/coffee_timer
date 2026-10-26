@@ -2,7 +2,7 @@ use crate::brew::{Effect, RunningStep};
 use crate::model::{PreAlertLead, Settings, Toggle};
 
 /// The cues a brew gives, as named config: the buzz and sound at a step
-/// boundary and at the finish, and the lighter pre-alert buzz a few
+/// boundary and at the finish, and the pre-alert's two quick taps a few
 /// seconds before a step ends. Built from the user's [`Settings`] on every
 /// tick ([`crate::brew::BrewController::tick`]), so muting is decided
 /// here: with sound off no cue plays the sound, with vibration off none
@@ -19,9 +19,10 @@ impl CuePolicy {
     /// `Vibration.vibrate(duration: 100)`).
     pub const STEP_BUZZ_MS: u32 = 100;
 
-    /// The pre-alert's buzz, shorter than a step boundary's 100 ms so the
-    /// two feel different.
-    pub const PRE_ALERT_MS: u32 = 40;
+    /// The pre-alert: two quick taps, so it feels unlike a step boundary's
+    /// single buzz and the finish's two long ones. Pause and buzz lengths
+    /// in ms, starting with a pause.
+    pub const PRE_ALERT_PATTERN_MS: [u32; 4] = [0, 50, 100, 50];
 
     /// The end of a brew: two long buzzes, so it does not feel like one more
     /// step boundary. Pause and buzz lengths in ms, starting with a pause.
@@ -46,8 +47,8 @@ impl CuePolicy {
         let lead = self.pre_alert.seconds();
         let due =
             lead > 0 && step.duration().seconds() > lead && step.remaining().seconds() == lead;
-        (due && self.vibration.is_on()).then_some(Effect::Vibrate {
-            ms: Self::PRE_ALERT_MS,
+        (due && self.vibration.is_on()).then(|| Effect::VibratePattern {
+            pattern_ms: Self::PRE_ALERT_PATTERN_MS.to_vec(),
         })
     }
 

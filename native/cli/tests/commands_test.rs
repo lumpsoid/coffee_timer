@@ -600,7 +600,7 @@ fn brew_prints_the_pre_alert_before_a_step_ends() -> TestResult {
         Some(
             &[
                 "tick 1   00:03 A  Next: B · 0:01  |  1:current 2:pending",
-                "[vibrate 40ms]",
+                "[vibrate pattern 0/50/100/50ms]",
                 "[notify A · 00:03 | Next: B]",
             ][..]
         ),
@@ -609,7 +609,7 @@ fn brew_prints_the_pre_alert_before_a_step_ends() -> TestResult {
     assert_eq!(
         lines
             .iter()
-            .filter(|&&line| line == "[vibrate 40ms]")
+            .filter(|&&line| line == "[vibrate pattern 0/50/100/50ms]")
             .count(),
         1,
         "once, and not for the 1 s step: {out}"
@@ -772,7 +772,7 @@ fn brewed_short(setup: &[&[&str]]) -> Result<String, Box<dyn std::error::Error>>
 fn brew_with_sound_off_prints_no_sound() -> TestResult {
     let out = brewed_short(&[&["settings", "sound", "off"]])?;
     assert!(!out.contains("[sound]"), "{out}");
-    assert!(out.contains("[vibrate 40ms]\n"), "{out}");
+    assert!(out.contains("[vibrate pattern 0/50/100/50ms]\n"), "{out}");
     assert!(
         out.contains("[vibrate 100ms]\n[notify B · 00:01]\n"),
         "{out}"
@@ -812,14 +812,14 @@ fn brew_with_both_off_prints_only_screen_and_notification_effects() -> TestResul
 
 #[test]
 fn brew_follows_the_pre_alert_setting() -> TestResult {
-    assert!(!brewed_short(&[&["settings", "pre-alert", "0"]])?.contains("[vibrate 40ms]"));
+    assert!(!brewed_short(&[&["settings", "pre-alert", "0"]])?.contains("[vibrate pattern 0/50/100/50ms]"));
     assert!(
-        !brewed_short(&[&["settings", "pre-alert", "5"]])?.contains("[vibrate 40ms]"),
+        !brewed_short(&[&["settings", "pre-alert", "5"]])?.contains("[vibrate pattern 0/50/100/50ms]"),
         "the 4 s step is no longer than the lead"
     );
     let out = brewed_short(&[&["settings", "pre-alert", "3"]])?;
     assert!(
-        out.contains("tick 1   00:03 A  Next: B · 0:01  |  1:current 2:pending\n[vibrate 40ms]\n"),
+        out.contains("tick 1   00:03 A  Next: B · 0:01  |  1:current 2:pending\n[vibrate pattern 0/50/100/50ms]\n"),
         "{out}"
     );
     Ok(())
