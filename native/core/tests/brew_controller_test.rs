@@ -1296,8 +1296,13 @@ fn a_recipe_that_pours_nothing_has_no_poured_label() -> TestResult {
 
 // pre-alert
 
-/// The pre-alert: a short buzz a few seconds before a step ends.
-const PRE_ALERT: Effect = Effect::Vibrate { ms: 40 };
+/// The pre-alert: two quick taps a few seconds before a step ends, unlike
+/// a step boundary's single buzz.
+fn pre_alert() -> Effect {
+    Effect::VibratePattern {
+        pattern_ms: vec![0, 50, 100, 50],
+    }
+}
 
 /// Ticks a running brew to its end; the numbers of the ticks (from 1) that
 /// pre-alerted, and the effects of the last tick.
@@ -1313,7 +1318,7 @@ fn pre_alert_ticks_with(brew: &mut BrewController, settings: &Settings) -> (Vec<
     while brew.state().is_running() {
         tick += 1;
         last = brew.tick(settings);
-        let alerts = last.iter().filter(|&effect| *effect == PRE_ALERT).count();
+        let alerts = last.iter().filter(|&effect| *effect == pre_alert()).count();
         assert!(alerts <= 1, "tick {tick} pre-alerted {alerts} times");
         if alerts == 1 {
             ticks.push(tick);
@@ -1325,7 +1330,7 @@ fn pre_alert_ticks_with(brew: &mut BrewController, settings: &Settings) -> (Vec<
 #[test]
 fn the_default_lead_is_three_seconds() {
     assert_eq!(SETTINGS.pre_alert(), PreAlertLead::Seconds3);
-    assert_eq!(CuePolicy::PRE_ALERT_MS, 40);
+    assert_eq!(CuePolicy::PRE_ALERT_PATTERN_MS, [0, 50, 100, 50]);
 }
 
 #[test]
@@ -1338,7 +1343,7 @@ fn the_pre_alert_fires_once_on_the_tick_that_leaves_three_seconds() -> TestResul
     );
     assert_eq!(
         brew.tick(&SETTINGS),
-        [PRE_ALERT, show("Step 1 · 00:03", Some("Step 2"))],
+        [pre_alert(), show("Step 1 · 00:03", Some("Step 2"))],
         "the buzz comes before the notification, which stays last"
     );
     assert_eq!(
@@ -1377,11 +1382,11 @@ fn pausing_after_the_pre_alert_does_not_repeat_it() -> TestResult {
     let (mut brew, _catalog) = opened(&[5])?;
     brew.start(0)?;
     brew.tick(&SETTINGS);
-    assert!(brew.tick(&SETTINGS).contains(&PRE_ALERT));
+    assert!(brew.tick(&SETTINGS).contains(&pre_alert()));
 
     let paused = brew.pause()?;
     let resumed = brew.resume()?;
-    assert!(!paused.contains(&PRE_ALERT) && !resumed.contains(&PRE_ALERT));
+    assert!(!paused.contains(&pre_alert()) && !resumed.contains(&pre_alert()));
     let (ticks, last) = pre_alert_ticks(&mut brew);
     assert_eq!(ticks, [] as [u32; 0], "already given before the pause");
     assert_eq!(last, ended());
@@ -1392,7 +1397,7 @@ fn pausing_after_the_pre_alert_does_not_repeat_it() -> TestResult {
 fn pausing_just_before_the_pre_alert_gives_it_once_after_resuming() -> TestResult {
     let (mut brew, _catalog) = opened(&[5])?;
     brew.start(0)?;
-    assert!(!brew.tick(&SETTINGS).contains(&PRE_ALERT));
+    assert!(!brew.tick(&SETTINGS).contains(&pre_alert()));
     brew.pause()?;
     assert_eq!(brew.tick(&SETTINGS), [], "nothing ticks while paused");
     brew.resume()?;
@@ -1501,7 +1506,7 @@ fn every_sound_and_vibration_combination_gives_only_its_cues() -> TestResult {
                     "{case}: buzz"
                 );
                 assert_eq!(
-                    all.contains(&&PRE_ALERT),
+                    all.contains(&&pre_alert()),
                     vibration.is_on() && lead == PreAlertLead::Seconds3,
                     "{case}: pre-alert (only 3 s fits a 5 s step)"
                 );
@@ -1534,7 +1539,7 @@ fn the_default_settings_give_every_cue() -> TestResult {
     let ticks = brew_effects(&SETTINGS)?;
     assert_eq!(
         ticks[1],
-        [PRE_ALERT, show("Step 1 · 00:03", Some("Step 2"))]
+        [pre_alert(), show("Step 1 · 00:03", Some("Step 2"))]
     );
     assert_eq!(ticks[4], [BUZZ, SOUND, show("Step 2 · 00:05", None)]);
     assert_eq!(ticks.last().map(Vec::as_slice), Some(ended().as_slice()));

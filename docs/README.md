@@ -203,8 +203,8 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
   `~/.local/share/coffee_timer/coffee_timer.db`, then `./coffee_timer.db`.
 - `brew` ticks once per second until the last step ends, and prints the
   countdown, the next-step preview, each step's status and the effects
-  (`[vibrate 100ms]` at a step boundary, `[vibrate 40ms]` for the
-  pre-alert 3 s before a step ends, `[vibrate pattern 0/400/200/400ms]`, `[sound]`,
+  (`[vibrate 100ms]` at a step boundary,
+  `[vibrate pattern 0/50/100/50ms]` for the pre-alert 3 s before a step ends, `[vibrate pattern 0/400/200/400ms]`, `[sound]`,
   `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`). It follows
   the stored settings: with sound off it prints no `[sound]`, with
   vibration off no `[vibrate …]`, and the pre-alert comes at the stored
