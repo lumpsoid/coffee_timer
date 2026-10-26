@@ -183,6 +183,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
                 coffeeLabel: r.coffeeLabel,
                 waterLabel: r.waterLabel,
                 timeLabel: r.timeLabel,
+                grindLabel: r.grindLabel,
                 label: r.label,
                 pinned: r.pinned,
                 onTap: () => _openBrew(context, r),

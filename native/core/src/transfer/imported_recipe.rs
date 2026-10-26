@@ -1,4 +1,4 @@
-use crate::model::{CoffeeDose, PourSpeed, Recipe, RecipeName, WaterAmount};
+use crate::model::{CoffeeDose, GrindClicks, PourSpeed, Recipe, RecipeName, WaterAmount};
 use crate::ports::IdGen;
 use crate::transfer::ImportedStep;
 
@@ -12,6 +12,7 @@ pub struct ImportedRecipe {
     coffee: CoffeeDose,
     water: WaterAmount,
     pour_speed: PourSpeed,
+    grind: Option<GrindClicks>,
     steps: Vec<ImportedStep>,
 }
 
@@ -22,6 +23,7 @@ impl ImportedRecipe {
         coffee: CoffeeDose,
         water: WaterAmount,
         pour_speed: PourSpeed,
+        grind: Option<GrindClicks>,
         steps: Vec<ImportedStep>,
     ) -> Self {
         Self {
@@ -30,6 +32,7 @@ impl ImportedRecipe {
             coffee,
             water,
             pour_speed,
+            grind,
             steps,
         }
     }
@@ -51,6 +54,7 @@ impl ImportedRecipe {
             steps,
         )
         .with_pour_speed(self.pour_speed)
+        .with_grind(self.grind)
     }
 
     pub fn name(&self) -> &RecipeName {
@@ -71,6 +75,10 @@ impl ImportedRecipe {
 
     pub fn pour_speed(&self) -> PourSpeed {
         self.pour_speed
+    }
+
+    pub fn grind(&self) -> Option<GrindClicks> {
+        self.grind
     }
 
     pub fn steps(&self) -> &[ImportedStep] {

@@ -107,6 +107,9 @@ pub struct BrewRecipe {
     /// Water per gram of coffee, `1:5`.
     pub ratio_label: String,
     pub ratio: BrewRatioSetting,
+    /// Where to set the grinder, in clicks, `22`; none when the recipe does
+    /// not say.
+    pub grind_label: Option<String>,
     /// Total, `M:SS`.
     pub duration_label: String,
     /// The page wears the recipe's label, the same one the list shows.

@@ -9,8 +9,8 @@ import 'package:flutter/material.dart';
 /// in a stamped badge, the description as a tagline, the brew figures in a
 /// spec grid. A pinned recipe carries a small pin in the corner opposite
 /// the roast meter. Pure cosmetics: the figures arrive as labels computed
-/// in Rust (`20 g`, `1:35`) and the look as a [RecipeLabel]; only the
-/// captions are UI text.
+/// in Rust (`20 g`, `1:35`, `22`) and the look as a [RecipeLabel]; only
+/// the captions are UI text. A recipe without a grind shows no CLICKS spec.
 class RecipeSummaryTile extends StatelessWidget {
   const RecipeSummaryTile({
     required this.name,
@@ -19,6 +19,7 @@ class RecipeSummaryTile extends StatelessWidget {
     required this.waterLabel,
     required this.timeLabel,
     required this.label,
+    this.grindLabel,
     this.pinned = false,
     this.onTap,
     this.onLongPress,
@@ -30,6 +31,7 @@ class RecipeSummaryTile extends StatelessWidget {
   final String coffeeLabel;
   final String waterLabel;
   final String timeLabel;
+  final String? grindLabel;
   final RecipeLabel label;
 
   /// Whether to show the pin marker.
@@ -63,6 +65,7 @@ class RecipeSummaryTile extends StatelessWidget {
                     coffeeLabel: coffeeLabel,
                     waterLabel: waterLabel,
                     timeLabel: timeLabel,
+                    grindLabel: grindLabel,
                   ),
                 ),
                 Positioned(
@@ -93,6 +96,7 @@ class _LabelText extends StatelessWidget {
     required this.coffeeLabel,
     required this.waterLabel,
     required this.timeLabel,
+    required this.grindLabel,
   });
 
   final LabelColors colors;
@@ -101,6 +105,7 @@ class _LabelText extends StatelessWidget {
   final String coffeeLabel;
   final String waterLabel;
   final String timeLabel;
+  final String? grindLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -130,6 +135,8 @@ class _LabelText extends StatelessWidget {
             (caption: 'COFFEE', value: coffeeLabel, highlight: false),
             (caption: 'WATER', value: waterLabel, highlight: false),
             (caption: 'TIME', value: timeLabel, highlight: true),
+            if (grindLabel case final grind?)
+              (caption: 'CLICKS', value: grind, highlight: false),
           ],
         ),
       ],

@@ -53,6 +53,7 @@ fn recipe(view: &BrewView, steps: Vec<BrewStep>) -> BrewRecipe {
         water_label: view.water_label().to_owned(),
         ratio_label: view.ratio_label().to_owned(),
         ratio: view.ratio().into(),
+        grind_label: view.grind_label(),
         duration_label: view.duration_label().to_owned(),
         label: view.style().into(),
         steps,

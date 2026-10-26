@@ -82,7 +82,8 @@ pub enum RecipeListUpdate {
 }
 
 /// One row of the recipe list. Labels are values only (`20 g`, `100 g`,
-/// `1:35`); the captions (`Coffee`, …) are UI text. `pinned` shows the pin
+/// `1:35`, `22`); the captions (`Coffee`, …, `Clicks`) are UI text.
+/// `grind_label` is none for a recipe without a grind. `pinned` shows the pin
 /// marker and picks the long-press sheet's Pin or Unpin.
 #[derive(Serialize, SignalPiece)]
 pub struct RecipeSummary {
@@ -92,6 +93,7 @@ pub struct RecipeSummary {
     pub coffee_label: String,
     pub water_label: String,
     pub time_label: String,
+    pub grind_label: Option<String>,
     pub label: RecipeLabel,
     pub pinned: bool,
 }

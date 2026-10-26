@@ -55,6 +55,12 @@ again.
   g/s`, `0.5–30 g/s`), lenient clamping for storage, and `duration_of(water)`:
   the time a pour takes, rounded up to a second. `Recipe::new` pours at the
   default; `Recipe::with_pour_speed` sets it.
+- **`GrindClicks`** is where to set the grinder, in whole clicks,
+  `0..=99`. A recipe's grind is optional: `Recipe::new` has none,
+  `Recipe::with_grind` sets or clears it. Strict optional text parsing
+  (blank is none; `Enter clicks`, `0–99 clicks`), lenient clamping for
+  storage. Its `label` is the bare count (`22`), shown under a `Clicks`
+  caption on the list card, the brew page and in the CLI.
 - **`PourScale`** is the one rounding rule for step pours in a brew whose
   water differs from the recipe's: it scales the running totals by brew
   water over recipe water, half up to a gram, and each `Pour` is the
@@ -175,7 +181,8 @@ write the text.
   step name as `Step N`), at least one recipe and one step per recipe.
   The header is read first, so another format or version is refused for
   that. Unknown fields are ignored; a recipe without
-  `pour_grams_per_second` pours at the default speed. The wire structs are private
+  `pour_grams_per_second` pours at the default speed, and one without
+  `grind_clicks` has no grind. The wire structs are private
   (`wire.rs`).
 - `ImportedRecipe` / `ImportedStep` are valid recipes without ids;
   `into_recipe(&mut dyn IdGen)` mints them, only once the whole document
@@ -257,7 +264,7 @@ which runs the timer tick by tick.
   `IdGen`. It provides `new_draft`, `edit`, `duplicate` (a new draft
   copied from a catalog recipe: `<name> copy`, a fresh recipe id and fresh
   step ids; an unknown id is `EditError::UnknownRecipe`), the field setters (including
-  `set_pour_speed` and
+  `set_pour_speed`, `set_grind` (blank is none) and
   `set_step_water`, which also sets a row's duration to the time its pour
   takes at the draft's pour speed when both are valid), `add_step`
   (which returns the new row's `StepId`), `remove_step`, `move_step(row, to)`
@@ -316,7 +323,8 @@ The store implements the core's ports. It makes no decisions.
   Pour Over seed's Bloom 50 g and Pour 200 g. v4 adds
   `recipe.pinned` (0 or 1, default 0): every upgraded recipe is unpinned
   and keeps its position. v5 adds `recipe.pour_speed_tenths` (default 50,
-  so every upgraded recipe pours at 5 g/s).
+  so every upgraded recipe pours at 5 g/s). v6 adds the nullable
+  `recipe.grind_clicks`: every upgraded recipe has no grind.
 - **Row mapping:** [`recipe_rows.rs`](../native/store/src/recipe_rows.rs)
   loads `ORDER BY position`. An upsert keeps the recipe's position and
   replaces its steps, and leaves `pinned` alone. `append_all` inserts
@@ -403,7 +411,7 @@ makes no business decisions.
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
-| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetRecipePourSpeed`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
+| editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetRecipePourSpeed`, `SetRecipeGrind`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial

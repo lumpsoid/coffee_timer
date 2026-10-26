@@ -135,6 +135,9 @@ pub struct NewRecipe {
     /// [default: 5]
     #[arg(long, value_name = "G/S")]
     pub pour_speed: Option<String>,
+    /// Where to set the grinder, in clicks, 0–99. [default: none]
+    #[arg(long, value_name = "CLICKS")]
+    pub grind: Option<String>,
     /// A step as NAME=SECONDS, or NAME=SECONDS@GRAMS for a step that pours
     /// that much water (e.g. "Grind=30", "Bloom=30@50"); repeat in brew
     /// order. NAME=@GRAMS leaves out the seconds: the step lasts as long as

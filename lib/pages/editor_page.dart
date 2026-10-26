@@ -269,6 +269,17 @@ class _EditorPageState extends State<EditorPage> {
       keyboardType: const TextInputType.numberWithOptions(decimal: true),
       onChanged: (raw) => SetRecipePourSpeed(raw: raw).sendSignalToRust(),
     ),
+    const SizedBox(height: 12),
+    TextFormField(
+      initialValue: draft.grind,
+      decoration: InputDecoration(
+        labelText: 'Grind (clicks)',
+        helperText: 'Optional: where to set the grinder',
+        errorText: draft.grindError,
+      ),
+      keyboardType: TextInputType.number,
+      onChanged: (raw) => SetRecipeGrind(raw: raw).sendSignalToRust(),
+    ),
     const SizedBox(height: 20),
     Text('Total duration: ${draft.totalLabel}'),
     if (draft.pourHint case final hint?)

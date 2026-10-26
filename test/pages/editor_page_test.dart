@@ -112,6 +112,8 @@ void main() {
           waterError: 'Enter grams',
           pourSpeed: '40',
           pourSpeedError: '0.5–30 g/s',
+          grind: '100',
+          grindError: '0–99 clicks',
           totalLabel: '0:00',
           steps: [
             EditorStep(
@@ -140,6 +142,7 @@ void main() {
     expect(find.text('Enter seconds'), findsOneWidget);
     expect(find.text('1–2000 g'), findsOneWidget);
     expect(find.text('0.5–30 g/s'), findsOneWidget);
+    expect(find.text('0–99 clicks'), findsOneWidget);
     expect(find.text('Step pours add up to 0 g of 250 g'), findsOneWidget);
     expect(find.byTooltip('Delete'), findsNothing);
   });
@@ -286,6 +289,7 @@ void main() {
     );
     await tester.pump();
     expect(value('Pour speed (g/s)'), '5');
+    expect(value('Grind (clicks)'), '', reason: 'no grind until typed');
 
     // Typing the grams; Rust answers with the pour's time at a new revision.
     tester

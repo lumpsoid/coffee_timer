@@ -20,8 +20,8 @@ pub use editor::{
     AddStep, AddStepButton, CloseEditor, DeleteRecipe, DuplicateRecipe, DurationNudgeButton,
     DurationNudgeChoice, EditRecipe, EditorDraft, EditorReady, EditorStep, EditorUpdate, MoveStep,
     NewDraft, NudgeStepDuration, RemoveStep, SaveRecipe, SetRecipeCoffee, SetRecipeDescription,
-    SetRecipeName, SetRecipePourSpeed, SetRecipeWater, SetStepDuration, SetStepName, SetStepWater,
-    StepPresetChoice,
+    SetRecipeGrind, SetRecipeName, SetRecipePourSpeed, SetRecipeWater, SetStepDuration,
+    SetStepName, SetStepWater, StepPresetChoice,
 };
 pub use recipe_list::{
     ExportRecipes, ImportRecipes, LabelShade, LabelTexture, LabelTone, PinRecipe, RecipeLabel,

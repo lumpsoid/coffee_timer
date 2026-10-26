@@ -25,7 +25,7 @@ use crate::signals::{
     EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes, LeaveBrew, MoveStep,
     NewDraft, NudgeStepDuration, OpenBrew, PauseBrew, PinRecipe, PlatformEffect, RecipeListReady,
     RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe,
-    SetAccent, SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeName,
+    SetAccent, SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeGrind, SetRecipeName,
     SetRecipePourSpeed, SetRecipeWater, SetSound, SetStepDuration, SetStepName, SetStepWater,
     SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew, UndoRemoveRecipe,
     UnpinRecipe,
@@ -86,6 +86,7 @@ pub async fn run(mut c: Controllers) {
     let set_recipe_coffee = SetRecipeCoffee::get_dart_signal_receiver();
     let set_recipe_water = SetRecipeWater::get_dart_signal_receiver();
     let set_recipe_pour_speed = SetRecipePourSpeed::get_dart_signal_receiver();
+    let set_recipe_grind = SetRecipeGrind::get_dart_signal_receiver();
     let set_step_name = SetStepName::get_dart_signal_receiver();
     let set_step_duration = SetStepDuration::get_dart_signal_receiver();
     let nudge_step_duration = NudgeStepDuration::get_dart_signal_receiver();
@@ -210,6 +211,10 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = set_recipe_pour_speed.recv() => {
                 report(c.editor.set_pour_speed(&pack.message.raw));
+                show_editor(&c.editor);
+            }
+            Some(pack) = set_recipe_grind.recv() => {
+                report(c.editor.set_grind(&pack.message.raw));
                 show_editor(&c.editor);
             }
             Some(pack) = set_step_name.recv() => {

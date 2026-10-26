@@ -4,8 +4,8 @@ use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
 use crate::editor::{DraftMode, DurationNudge, EditError, EditorStepRow, StepPreset};
 use crate::model::{
-    BrewMetrics, CoffeeDose, ModelError, PourSpeed, Recipe, RecipeId, RecipeName, StepId,
-    WaterAmount,
+    BrewMetrics, CoffeeDose, GrindClicks, ModelError, PourSpeed, Recipe, RecipeId, RecipeName,
+    StepId, WaterAmount,
 };
 use crate::ports::IdGen;
 
@@ -24,6 +24,7 @@ pub struct Draft {
     coffee: Field<CoffeeDose>,
     water: Field<WaterAmount>,
     pour_speed: Field<PourSpeed>,
+    grind: Field<Option<GrindClicks>>,
     steps: Vec<DraftStep>,
     errors_shown: bool,
     notice: Option<String>,
@@ -47,6 +48,7 @@ impl Draft {
             coffee: Field::parse(Self::NEW_COFFEE_TEXT, CoffeeDose::try_parse_text),
             water: Field::parse(Self::NEW_WATER_TEXT, WaterAmount::try_parse_text),
             pour_speed: Field::parse(&PourSpeed::DEFAULT.text(), PourSpeed::try_parse_text),
+            grind: Field::parse("", GrindClicks::try_parse_optional_text),
             steps: vec![DraftStep::new(ids.step_id(), StepPreset::Blank.step_name())],
             errors_shown: false,
             notice: None,
@@ -70,6 +72,13 @@ impl Draft {
                 WaterAmount::try_parse_text,
             ),
             pour_speed: Field::parse(&recipe.pour_speed().text(), PourSpeed::try_parse_text),
+            grind: Field::parse(
+                &recipe
+                    .grind()
+                    .map(|grind| grind.clicks().to_string())
+                    .unwrap_or_default(),
+                GrindClicks::try_parse_optional_text,
+            ),
             steps: recipe.steps().iter().map(DraftStep::of).collect(),
             errors_shown: false,
             notice: None,
@@ -79,9 +88,10 @@ impl Draft {
         draft
     }
 
-    /// A new recipe seeded from `recipe`: its description, coffee, water
-    /// and steps (names, durations, pours), named `<name> copy`, with a
-    /// fresh recipe id and a fresh id for every step row. Nothing is in the
+    /// A new recipe seeded from `recipe`: its description, coffee, water,
+    /// pour speed, grind and steps (names, durations, pours), named
+    /// `<name> copy`, with a fresh recipe id and a fresh id for every step
+    /// row. Nothing is in the
     /// catalog until it is saved, so it reads and saves as a new recipe.
     pub(crate) fn copy_of(recipe: &Recipe, ids: &mut dyn IdGen, metrics: &BrewMetrics) -> Self {
         let mut draft = Self::of(recipe, ids, metrics);
@@ -124,6 +134,11 @@ impl Draft {
     /// typed from now on is timed at the new speed.
     pub(crate) fn set_pour_speed(&mut self, raw: &str) {
         self.pour_speed = Field::parse(raw, PourSpeed::try_parse_text);
+    }
+
+    /// The grind in clicks as typed; blank is none.
+    pub(crate) fn set_grind(&mut self, raw: &str) {
+        self.grind = Field::parse(raw, GrindClicks::try_parse_optional_text);
     }
 
     pub(crate) fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
@@ -194,6 +209,7 @@ impl Draft {
         let coffee = *self.coffee.value()?;
         let water = *self.water.value()?;
         let pour_speed = *self.pour_speed.value()?;
+        let grind = *self.grind.value()?;
         let steps = self
             .steps
             .iter()
@@ -209,7 +225,8 @@ impl Draft {
                 water,
                 steps,
             )
-            .with_pour_speed(pour_speed),
+            .with_pour_speed(pour_speed)
+            .with_grind(grind),
         )
     }
 
@@ -277,6 +294,16 @@ impl Draft {
     /// `Enter g/s` or `0.5–30 g/s`, once errors are shown.
     pub fn pour_speed_error(&self) -> Option<String> {
         self.shown(self.pour_speed.error())
+    }
+
+    /// The grind in clicks as typed; blank is none.
+    pub fn grind(&self) -> &str {
+        self.grind.raw()
+    }
+
+    /// `Enter clicks` or `0–99 clicks`, once errors are shown.
+    pub fn grind_error(&self) -> Option<String> {
+        self.shown(self.grind.error())
     }
 
     /// Live `M:SS` total of the typed durations, read leniently and capped

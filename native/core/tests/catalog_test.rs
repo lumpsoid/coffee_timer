@@ -7,8 +7,8 @@ use coffee_timer_core::catalog::{
 };
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
-    BrewMetrics, CoffeeDose, LabelStyle, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep,
-    StepDuration, StepId, WaterAmount,
+    BrewMetrics, CoffeeDose, GrindClicks, LabelStyle, ModelError, Pin, Recipe, RecipeId,
+    RecipeName, RecipeStep, StepDuration, StepId, WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -393,7 +393,8 @@ fn summary_carries_the_stored_dose_and_the_total_time() -> TestResult {
         CoffeeDose::try_parse(18)?,
         WaterAmount::try_parse(36)?,
         vec![step("s1", 30)?, step("s2", 65)?],
-    );
+    )
+    .with_grind(Some(GrindClicks::try_parse(9)?));
     assert_eq!(
         RecipeSummary::of(&recipe, Pin::Pinned, &BrewMetrics::default()),
         RecipeSummary {
@@ -403,6 +404,7 @@ fn summary_carries_the_stored_dose_and_the_total_time() -> TestResult {
             coffee_label: "18 g".to_owned(),
             water_label: "36 g".to_owned(),
             time_label: "1:35".to_owned(),
+            grind_label: Some("9".to_owned()),
             style: LabelStyle::of(&recipe, &BrewMetrics::default()),
             pin: Pin::Pinned,
         }
