@@ -17,8 +17,9 @@ import 'package:flutter/services.dart';
 /// first), opening its brew page on tap and offering edit / duplicate /
 /// pin or unpin / export / delete on long press. The app bar's menu
 /// exports every recipe to the clipboard, imports the clipboard's text
-/// (Rust copies, validates and adds), or enters reorder mode: each card
-/// gets a drag handle and a drop asks Rust for the move, until Done. A
+/// (Rust copies, validates and adds), or enters reorder mode: the pinned
+/// recipes stand as one fixed card, each unpinned card gets a drag handle
+/// and a drop asks Rust for the move, until Done. A
 /// delete, here or in the editor, shows a snackbar with an Undo when Rust
 /// offers one; a failure, and an export's or import's notice, shows as a
 /// snackbar too.
@@ -185,11 +186,18 @@ class _RecipeListPageState extends State<RecipeListPage> {
       body: ListenableBuilder(
         listenable: recipes,
         builder: (context, _) {
+          // Rust lists pinned recipes first and moves a recipe only among
+          // those that share its pin: the pinned stand as one fixed card,
+          // and only the unpinned can be dragged.
           final rows = _rows();
+          final pinned = rows.where((r) => r.pinned).length;
+          final unpinned = rows.sublist(pinned);
           return ReorderableListView.builder(
             buildDefaultDragHandles: false,
-            itemCount: rows.length,
-            onReorderItem: (from, to) => _moveRecipe(rows, from, to),
+            header: pinned == 0 ? null : _PinnedCard(count: pinned),
+            itemCount: unpinned.length,
+            onReorderItem: (from, to) =>
+                _moveRecipe(rows, pinned + from, pinned + to),
             // The dragged card is its own paper; the default lifts it on
             // a rectangle of Material around the row's padding.
             proxyDecorator: (child, _, _) => Material(
@@ -197,7 +205,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
               child: child,
             ),
             itemBuilder: (_, index) {
-              final r = rows[index];
+              final r = unpinned[index];
               return Row(
                 key: ValueKey(r.id),
                 children: [
@@ -414,3 +422,36 @@ class _RecipeListPageState extends State<RecipeListPage> {
 
 /// The app bar menu's entries.
 enum _ListAction { reorder, exportAll, import }
+
+/// Reorder mode's stand-in for the pinned recipes: they stay on top, in
+/// their own order, and cannot be dragged. About as tall as a recipe card
+/// without a description, so the list does not jump between modes.
+class _PinnedCard extends StatelessWidget {
+  const _PinnedCard({required this.count});
+
+  final int count;
+
+  /// The paper height of a [RecipeSummaryTile] without a description,
+  /// approximately: its padding, badge, rule and spec row.
+  static const height = 132.0;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      // The recipe card's own inset around its paper.
+      margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+      child: SizedBox(
+        height: height,
+        child: Center(
+          child: ListTile(
+            leading: const Icon(Icons.push_pin),
+            title: Text(
+              count == 1 ? '1 pinned recipe' : '$count pinned recipes',
+            ),
+            subtitle: const Text('Pinned recipes stay on top'),
+          ),
+        ),
+      ),
+    );
+  }
+}

@@ -220,6 +220,36 @@ void main() {
     expect(names, ['Chemex', 'Aero']);
   });
 
+  testWidgets('reorder mode shows the pinned recipes as one fixed card', (
+    tester,
+  ) async {
+    recipes.apply(
+      RecipeListUpdateSnapshot(
+        recipes: [
+          summary('a', name: 'Aero', pinned: true),
+          summary('b', name: 'Chemex', pinned: true),
+          summary('c', name: 'Kalita'),
+        ],
+      ),
+    );
+    await pumpList(tester);
+    await enterReorder(tester);
+    expect(find.text('2 pinned recipes'), findsOneWidget);
+    final names = tester
+        .widgetList<RecipeSummaryTile>(find.byType(RecipeSummaryTile))
+        .map((t) => t.name);
+    expect(names, ['Kalita']);
+    expect(find.byIcon(Icons.drag_handle), findsOneWidget);
+  });
+
+  testWidgets('reorder mode has no pinned card without pinned recipes', (
+    tester,
+  ) async {
+    await pumpList(tester);
+    await enterReorder(tester);
+    expect(find.byIcon(Icons.push_pin), findsNothing);
+  });
+
   testWidgets('shows a snackbar for each export or import notice', (
     tester,
   ) async {
