@@ -101,9 +101,10 @@ Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
 This is the border with what cannot run in a test.
 
 - `RecipeStore`: `load_all`, `load_pinned`, `upsert`, `append_all`,
-  `insert_at`, `set_pin` and `remove`. `append_all` adds new recipes,
+  `insert_at`, `set_pin`, `reorder` and `remove`. `append_all` adds new recipes,
   unpinned, at the end, all or none. Recipe order is part of the contract; `insert_at`
-  puts a recipe back at a given place, with its `Pin`. A pin is stored
+  puts a recipe back at a given place, with its `Pin`, and `reorder`
+  rewrites the whole order, pins unchanged. A pin is stored
   beside the recipe and never moves it: `upsert` keeps a known id's pin
   and stores a new id unpinned.
 - `SettingsStore`: `load` and `save`.
@@ -135,7 +136,7 @@ dev-dependency, and the CLI and hub enable it for their tests. Test:
 
 - `RecipeCatalog` owns `Vec<Recipe>` (in stored order) and the set of
   pinned ids, and writes through its `RecipeStore` before it changes its
-  state. It provides `load`, `upsert`, `remove`, `set_pin`, `get`,
+  state. It provides `load`, `upsert`, `remove`, `set_pin`, `move_to`, `get`,
   `pin_of`, `listed`, `index_of` and `state`. `listed` is the list's
   order and `index_of` a place in it; `state` is stored order. The pin is
   catalog metadata, not a `Recipe` field: the editor, the brew page and a
@@ -143,7 +144,11 @@ dev-dependency, and the CLI and hub enable it for their tests. Test:
   unpinned, and pinning the open recipe is no change to the brew
   (`on_catalog_change` finds the recipe unchanged). `set_pin(id, pin)`
   returns `Upserted`; an unknown id is `PinError::UnknownRecipe`, a failed
-  write `PinError::Store`. It also keeps the recipe it removed last as a
+  write `PinError::Store`. `move_to(id, to)` moves a recipe to a place in
+  list order, only among those that share its pin (a `to` past the
+  group's edge is that edge), reshuffling only that group's stored
+  places, and returns `Upserted`; an unknown id is
+  `MoveError::UnknownRecipe`, a failed write `MoveError::Store`. It also keeps the recipe it removed last as a
   `RemovedRecipe` (the whole recipe, its index and its pin, with the undo text
   `Deleted V60`): `restorable(id)` offers it, and `restore(id)` puts it back
   at its index through `RecipeStore::insert_at` and returns `Upserted`. The
@@ -330,7 +335,9 @@ The store implements the core's ports. It makes no decisions.
   replaces its steps, and leaves `pinned` alone. `append_all` inserts
   every recipe and its steps in one transaction, so a known id rolls the
   whole batch back. `set_pin` updates only
-  `pinned`; `load_pinned` reads the pinned ids. `insert_at` moves the rows from that place on one
+  `pinned`; `load_pinned` reads the pinned ids. `reorder` renumbers
+  every row in one transaction, through negative positions so no two rows
+  share one. `insert_at` moves the rows from that place on one
   position down and gives the recipe the freed one. Rows are read through core's lenient constructors
   (grams are clamped into bounds).
   [`settings_rows.rs`](../native/store/src/settings_rows.rs) stores key/value
@@ -366,7 +373,7 @@ decides nothing: core produces every label, status and error text.
   command, plus `pass_on` for catalog changes. `new` fills a draft as the
   editor page would. `duplicate` opens the editor's copy, sets `--name`
   if given, and saves. `delete` goes through the editor. `pin` / `unpin`
-  call `RecipeCatalog::set_pin`; `list` prints `listed()` order and marks
+  call `RecipeCatalog::set_pin`, and `move` calls `RecipeCatalog::move_to`; `list` prints `listed()` order and marks
   a pinned row `[pinned]`. `export` writes `RecipeCatalog::export`'s
   document; `import` passes the text (read in `lib.rs`, from the file or
   stdin) to `EditorController::import` and passes each change on.
@@ -409,7 +416,7 @@ makes no business decisions.
 | Feature | Dart → Rust | Rust → Dart |
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
-| recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
+| recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `MoveRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetRecipePourSpeed`, `SetRecipeGrind`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
@@ -447,7 +454,10 @@ The GUI renders, sends intents, and performs effects. It holds no business
   `EditorPage` and `SettingsPage`. The list's long-press Export sends
   `ExportRecipes` with the row's id, the app bar's menu sends it with
   none (every recipe) or reads the clipboard and sends its text as
-  `ImportRecipes`. Each page reads holders and sends
+  `ImportRecipes`, or enters reorder mode: a `ReorderableListView` with a
+  drag handle per card (tap and long press off) until Done or back. A
+  drop shows the new order at once and sends `MoveRecipe` (id and final
+  index, from `onReorderItem`); the holder's next list replaces it. Each page reads holders and sends
   signals; none of them computes a label. The editor's steps are a
   `SliverReorderableList`: a drop sends `MoveStep` (row id and final index,
   from `onReorderItem`) and the order changes only when Rust's draft comes
@@ -485,8 +495,9 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
 - [`effects/`](../test/effects) tests one plugin call per effect, order, and
   that a failure does not block later effects.
 - [`pages/`](../test/pages) tests the list page's long-press menu (Pin or
-  Unpin by the row's `pinned`, Export), the app bar's export / import
-  menu, the pin marker, and
+  Unpin by the row's `pinned`, Export), the app bar's reorder / export /
+  import menu, reorder mode (handles, Done, back, no long-press menu), the
+  pin marker, and
   snackbars (failures, notices and the undo offer), the settings page's cue
   controls following Rust's state, and the editor
   page: open, field errors, pop on `Closed`, notices, and the delete dialog.

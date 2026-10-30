@@ -68,6 +68,14 @@ pub enum Command {
         /// Recipe id, as printed by `list`.
         id: String,
     },
+    /// Move a recipe to a new place in the list, as the list's reorder mode
+    /// does. It stays among the recipes that share its pin.
+    Move {
+        /// Recipe id, as printed by `list`.
+        id: String,
+        /// The 0-based place in the list it takes, counted after the move.
+        to: usize,
+    },
     /// Write recipes as a JSON recipe document (no ids, no pins), as the
     /// app's Export copies them.
     Export {

@@ -38,8 +38,8 @@ impl FakeRecipeStore {
         }
     }
 
-    /// Every `upsert`, `append_all`, `insert_at`, `set_pin` and `remove`
-    /// returns `Err` and stores nothing.
+    /// Every `upsert`, `append_all`, `insert_at`, `set_pin`, `reorder` and
+    /// `remove` returns `Err` and stores nothing.
     pub fn failing_writes(self) -> Self {
         Self {
             fail_writes: true,
@@ -122,6 +122,13 @@ impl RecipeStore for FakeRecipeStore {
         } else {
             self.pinned.remove(id);
         }
+        Ok(())
+    }
+
+    fn reorder(&mut self, ids: &[RecipeId]) -> Result<(), StoreError> {
+        self.check_write()?;
+        self.recipes
+            .sort_by_key(|r| ids.iter().position(|id| id == r.id()).unwrap_or(ids.len()));
         Ok(())
     }
 

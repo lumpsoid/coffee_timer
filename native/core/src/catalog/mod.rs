@@ -1,6 +1,7 @@
 //! The recipe catalog: the shared list of recipes and its persistence.
 
 mod catalog_change;
+mod move_error;
 mod pin_error;
 mod pinned_first;
 mod recipe_catalog;
@@ -9,6 +10,7 @@ mod removed_recipe;
 mod restore_error;
 
 pub use catalog_change::CatalogChange;
+pub use move_error::MoveError;
 pub use pin_error::PinError;
 pub use pinned_first::PinnedFirst;
 pub use recipe_catalog::RecipeCatalog;

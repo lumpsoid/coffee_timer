@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use crate::catalog::{CatalogChange, PinError, PinnedFirst, RemovedRecipe, RestoreError};
+use crate::catalog::{
+    CatalogChange, MoveError, PinError, PinnedFirst, RemovedRecipe, RestoreError,
+};
 use crate::model::{Pin, Recipe, RecipeId};
 use crate::ports::{RecipeStore, StoreError};
 use crate::transfer::{ExportError, RecipeDocument, RecipeExport};
@@ -117,6 +119,53 @@ impl RecipeCatalog {
             Pin::Pinned => self.pinned.insert(id.clone()),
             Pin::Unpinned => self.pinned.remove(id),
         };
+        Ok(CatalogChange::Upserted(id.clone()))
+    }
+
+    /// Moves the recipe `id` to `to`, its 0-based place in the list
+    /// ([`RecipeCatalog::listed`] order) counted after the move, and
+    /// reports it `Upserted`. A recipe moves only among those that share
+    /// its pin, so a `to` outside that group puts it at the group's nearer
+    /// end. Only the group's own stored places are reshuffled: the other
+    /// group keeps its places, so an unpinned recipe still goes back among
+    /// the unpinned where it stood. Moving a recipe to the place it has
+    /// writes the order again. An id the catalog does not hold is
+    /// [`MoveError::UnknownRecipe`].
+    pub fn move_to(&mut self, id: &RecipeId, to: usize) -> Result<CatalogChange, MoveError> {
+        let pin = self.pin_of(id);
+        let mut group: Vec<RecipeId> = self
+            .state
+            .iter()
+            .map(Recipe::id)
+            .filter(|r| self.pin_of(r) == pin)
+            .cloned()
+            .collect();
+        let Some(from) = group.iter().position(|r| r == id) else {
+            return Err(MoveError::UnknownRecipe(id.clone()));
+        };
+        let first = if pin.is_pinned() {
+            0
+        } else {
+            self.state.len() - group.len()
+        };
+        let moved = group.remove(from);
+        group.insert(to.saturating_sub(first).min(group.len()), moved);
+        // The group, in its new order, fills the stored places it had.
+        let mut regrouped = group.into_iter();
+        let order: Vec<RecipeId> = self
+            .state
+            .iter()
+            .map(|r| {
+                if self.pin_of(r.id()) == pin {
+                    regrouped.next().unwrap_or_else(|| r.id().clone())
+                } else {
+                    r.id().clone()
+                }
+            })
+            .collect();
+        self.store.reorder(&order)?;
+        self.state
+            .sort_by_key(|r| order.iter().position(|o| o == r.id()));
         Ok(CatalogChange::Upserted(id.clone()))
     }
 

@@ -43,6 +43,10 @@ impl RecipeStore for SqliteStore {
             .map_err(db_error)
     }
 
+    fn reorder(&mut self, ids: &[RecipeId]) -> Result<(), StoreError> {
+        reorder(&mut *self.conn()?, ids).map_err(db_error)
+    }
+
     fn remove(&mut self, id: &RecipeId) -> Result<(), StoreError> {
         self.conn()?
             .execute("DELETE FROM recipe WHERE id = ?1", [id.as_str()])
@@ -248,6 +252,26 @@ fn insert_at(
         ],
     )?;
     insert_steps(&tx, recipe)?;
+    tx.commit()
+}
+
+/// One transaction: every row moves to a negative position (so no two rows
+/// ever share one), the rows `ids` names take positions 1 onward in that
+/// order, and any row left negative follows them in its old order.
+fn reorder(conn: &mut Connection, ids: &[RecipeId]) -> rusqlite::Result<()> {
+    let tx = conn.transaction()?;
+    tx.execute("UPDATE recipe SET position = -position - 1", [])?;
+    {
+        let mut place = tx.prepare("UPDATE recipe SET position = ?2 WHERE id = ?1")?;
+        for (position, id) in (1_i64..).zip(ids) {
+            place.execute(params![id.as_str(), position])?;
+        }
+    }
+    let after = i64::try_from(ids.len()).unwrap_or(i64::MAX);
+    tx.execute(
+        "UPDATE recipe SET position = ?1 - position WHERE position < 0",
+        [after],
+    )?;
     tx.commit()
 }
 

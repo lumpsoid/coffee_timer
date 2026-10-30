@@ -456,6 +456,42 @@ fn pin_of_an_unknown_id_is_the_core_error() -> TestResult {
 }
 
 #[test]
+fn move_puts_the_recipe_at_its_new_place_and_it_persists() -> TestResult {
+    let mut session = Session::new()?;
+    assert_eq!(
+        session.run(&["move", "pourover-uuid", "0"])?,
+        "upserted pourover-uuid\n"
+    );
+    assert_eq!(
+        session.reopened()?.run(&["list"])?,
+        "\
+pourover-uuid  Pour Over  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean
+espresso-uuid  Espresso  Coffee: 18 g  Water: 36 g  Time: 0:55  Strong coffee
+"
+    );
+    Ok(())
+}
+
+#[test]
+fn move_keeps_an_unpinned_recipe_below_the_pinned_ones() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["pin", "pourover-uuid"])?;
+    session.run(&["move", "espresso-uuid", "0"])?;
+    assert_eq!(session.run(&["list"])?, PINNED_POUR_OVER_LIST);
+    Ok(())
+}
+
+#[test]
+fn move_of_an_unknown_id_is_the_core_error() -> TestResult {
+    let error = Session::new()?
+        .run(&["move", "nope", "0"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(error, "No recipe with id nope");
+    Ok(())
+}
+
+#[test]
 fn a_duplicate_of_a_pinned_recipe_is_listed_unpinned_at_the_end() -> TestResult {
     let mut session = Session::new()?;
     session.run(&["pin", "pourover-uuid"])?;

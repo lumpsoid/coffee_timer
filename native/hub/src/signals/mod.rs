@@ -24,9 +24,9 @@ pub use editor::{
     SetStepName, SetStepWater, StepPresetChoice,
 };
 pub use recipe_list::{
-    ExportRecipes, ImportRecipes, LabelShade, LabelTexture, LabelTone, PinRecipe, RecipeLabel,
-    RecipeListReady, RecipeListUpdate, RecipeSummary, RemoveRecipe, StainCorner, UndoRemoveRecipe,
-    UnpinRecipe,
+    ExportRecipes, ImportRecipes, LabelShade, LabelTexture, LabelTone, MoveRecipe, PinRecipe,
+    RecipeLabel, RecipeListReady, RecipeListUpdate, RecipeSummary, RemoveRecipe, StainCorner,
+    UndoRemoveRecipe, UnpinRecipe,
 };
 pub use settings::{
     AccentChoice, PreAlertChoice, SetAccent, SetPreAlert, SetSound, SetTheme, SetVibration,

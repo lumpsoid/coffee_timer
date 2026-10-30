@@ -5,10 +5,10 @@ use crate::ports::StoreError;
 /// before changing its own state.
 ///
 /// Order is part of the contract: `load_all` returns recipes in stored order,
-/// `upsert` of a known id keeps its position, and `upsert` of a new id
-/// appends, and `insert_at` puts a new id at the place it names. A
-/// recipe's [`Pin`] is stored beside it and never moves it: the list's
-/// pinned-first order is the catalog's, not the store's.
+/// `upsert` of a known id keeps its position, `upsert` of a new id appends,
+/// `insert_at` puts a new id at the place it names, and `reorder` rewrites
+/// the whole order. A recipe's [`Pin`] is stored beside it and never moves
+/// it: the list's pinned-first order is the catalog's, not the store's.
 pub trait RecipeStore: Send {
     fn load_all(&self) -> Result<Vec<Recipe>, StoreError>;
 
@@ -33,6 +33,12 @@ pub trait RecipeStore: Send {
     /// Stores `pin` for the stored recipe `id`; its position stays. An
     /// unknown id is not an error.
     fn set_pin(&mut self, id: &RecipeId, pin: Pin) -> Result<(), StoreError>;
+
+    /// Stores `ids` as the stored order: `load_all` returns those recipes
+    /// in this order, pins unchanged. The catalog passes every stored id;
+    /// a stored id missing from `ids` would follow them, in its old order,
+    /// and an unknown id is skipped. Moves a recipe in the list.
+    fn reorder(&mut self, ids: &[RecipeId]) -> Result<(), StoreError>;
 
     /// Deletes the recipe and its steps. An unknown id is not an error.
     fn remove(&mut self, id: &RecipeId) -> Result<(), StoreError>;

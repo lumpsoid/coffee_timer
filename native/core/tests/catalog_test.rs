@@ -1,9 +1,9 @@
-//! `RecipeCatalog`: load, upsert, append, remove, restore and pin write
+//! `RecipeCatalog`: load, upsert, append, remove, restore, pin and move write
 //! through the store first; the list is in `PinnedFirst` order. Export
 //! reads it.
 
 use coffee_timer_core::catalog::{
-    CatalogChange, PinError, PinnedFirst, RecipeCatalog, RecipeSummary, RestoreError,
+    CatalogChange, MoveError, PinError, PinnedFirst, RecipeCatalog, RecipeSummary, RestoreError,
 };
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
@@ -568,5 +568,124 @@ fn undo_restores_an_unpinned_recipe_unpinned() -> TestResult {
     catalog.restore(&rid("a")?)?;
     assert_eq!(catalog.pin_of(&rid("a")?), Pin::Unpinned);
     assert_eq!(listed(&catalog), ["c", "a", "b"]);
+    Ok(())
+}
+
+// move
+
+fn stored_abcd() -> Result<FakeRecipeStore, ModelError> {
+    Ok(FakeRecipeStore::with_recipes(vec![
+        recipe("a", "A")?,
+        recipe("b", "B")?,
+        recipe("c", "C")?,
+        recipe("d", "D")?,
+    ]))
+}
+
+#[test]
+fn move_down_puts_the_recipe_at_its_new_place_and_persists() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?)?;
+    let change = catalog.move_to(&rid("a")?, 2)?;
+    assert_eq!(change, CatalogChange::Upserted(rid("a")?));
+    assert_eq!(listed(&catalog), ["b", "c", "a", "d"]);
+    assert_eq!(catalog.index_of(&rid("a")?), Some(2));
+    catalog.load()?;
+    assert_eq!(
+        listed(&catalog),
+        ["b", "c", "a", "d"],
+        "store has the order"
+    );
+    Ok(())
+}
+
+#[test]
+fn move_up_puts_the_recipe_at_its_new_place() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?)?;
+    catalog.move_to(&rid("d")?, 0)?;
+    assert_eq!(listed(&catalog), ["d", "a", "b", "c"]);
+    Ok(())
+}
+
+#[test]
+fn moving_to_its_own_place_changes_nothing_but_still_reports_it() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?)?;
+    let change = catalog.move_to(&rid("b")?, 1)?;
+    assert_eq!(change, CatalogChange::Upserted(rid("b")?));
+    assert_eq!(listed(&catalog), ["a", "b", "c", "d"]);
+    Ok(())
+}
+
+#[test]
+fn a_place_past_the_end_is_the_end() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?)?;
+    catalog.move_to(&rid("a")?, 99)?;
+    assert_eq!(listed(&catalog), ["b", "c", "d", "a"]);
+    Ok(())
+}
+
+#[test]
+fn an_unpinned_recipe_stops_below_the_pinned_ones() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?.pinning(&rid("b")?))?;
+    assert_eq!(listed(&catalog), ["b", "a", "c", "d"]);
+    catalog.move_to(&rid("d")?, 0)?;
+    assert_eq!(listed(&catalog), ["b", "d", "a", "c"]);
+    assert_eq!(catalog.index_of(&rid("d")?), Some(1));
+    assert_eq!(catalog.pin_of(&rid("d")?), Pin::Unpinned);
+    Ok(())
+}
+
+#[test]
+fn a_pinned_recipe_stops_above_the_unpinned_ones() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?.pinning(&rid("a")?).pinning(&rid("c")?))?;
+    assert_eq!(listed(&catalog), ["a", "c", "b", "d"]);
+    catalog.move_to(&rid("a")?, 3)?;
+    assert_eq!(listed(&catalog), ["c", "a", "b", "d"]);
+    assert_eq!(catalog.index_of(&rid("a")?), Some(1));
+    Ok(())
+}
+
+#[test]
+fn moving_a_pinned_recipe_keeps_the_unpinned_places() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?.pinning(&rid("a")?).pinning(&rid("c")?))?;
+    catalog.move_to(&rid("c")?, 0)?;
+    assert_eq!(ids(&catalog), ["c", "b", "a", "d"], "c and a swap places");
+    catalog.set_pin(&rid("a")?, Pin::Unpinned)?;
+    assert_eq!(
+        listed(&catalog),
+        ["c", "b", "a", "d"],
+        "a goes back between b and d"
+    );
+    Ok(())
+}
+
+#[test]
+fn moving_an_unknown_id_is_an_error() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?)?;
+    assert_eq!(
+        catalog.move_to(&rid("missing")?, 0),
+        Err(MoveError::UnknownRecipe(rid("missing")?))
+    );
+    assert_eq!(listed(&catalog), ["a", "b", "c", "d"]);
+    Ok(())
+}
+
+#[test]
+fn a_failed_move_leaves_the_catalog_unchanged() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?.failing_writes())?;
+    assert!(matches!(
+        catalog.move_to(&rid("a")?, 3),
+        Err(MoveError::Store(_))
+    ));
+    assert_eq!(listed(&catalog), ["a", "b", "c", "d"]);
+    Ok(())
+}
+
+#[test]
+fn undo_after_a_move_restores_the_recipe_at_its_stored_place() -> TestResult {
+    let mut catalog = loaded(stored_abcd()?)?;
+    catalog.move_to(&rid("d")?, 0)?;
+    catalog.remove(rid("a")?)?;
+    catalog.restore(&rid("a")?)?;
+    assert_eq!(listed(&catalog), ["d", "a", "b", "c"]);
     Ok(())
 }

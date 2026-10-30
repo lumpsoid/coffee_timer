@@ -77,6 +77,7 @@ pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Resu
         Command::Unpin { id } => {
             commands::set_pin(id, Pin::Unpinned, &mut c.catalog, &mut c.brew, out)
         }
+        Command::Move { id, to } => commands::move_to(id, *to, &mut c.catalog, &mut c.brew, out),
         Command::Export { ids, out: file } => {
             commands::export(ids, file.as_deref(), &c.catalog, out)
         }
