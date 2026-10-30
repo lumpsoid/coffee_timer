@@ -1,7 +1,7 @@
 use std::{fmt, io};
 
 use coffee_timer_core::brew::{BrewError, SaveRatioError};
-use coffee_timer_core::catalog::PinError;
+use coffee_timer_core::catalog::{MoveError, PinError};
 use coffee_timer_core::editor::{DeleteError, EditError, SaveError};
 use coffee_timer_core::model::ModelError;
 use coffee_timer_core::ports::StoreError;
@@ -24,6 +24,7 @@ pub enum CliError {
     },
     Delete(DeleteError),
     Pin(PinError),
+    Move(MoveError),
     Export(ExportError),
     Import(ImportError),
     Io(io::Error),
@@ -46,6 +47,7 @@ impl fmt::Display for CliError {
             }
             Self::Delete(e) => e.fmt(f),
             Self::Pin(e) => e.fmt(f),
+            Self::Move(e) => e.fmt(f),
             Self::Export(e) => e.fmt(f),
             Self::Import(e) => e.fmt(f),
             Self::Io(e) => e.fmt(f),
@@ -94,6 +96,12 @@ impl From<DeleteError> for CliError {
 impl From<PinError> for CliError {
     fn from(e: PinError) -> Self {
         Self::Pin(e)
+    }
+}
+
+impl From<MoveError> for CliError {
+    fn from(e: MoveError) -> Self {
+        Self::Move(e)
     }
 }
 

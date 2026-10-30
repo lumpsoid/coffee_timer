@@ -2,7 +2,7 @@
 
 use coffee_timer_core::brew::SaveRatioError;
 use coffee_timer_core::catalog::{
-    self, CatalogChange, PinError, RecipeCatalog, RemovedRecipe, RestoreError,
+    self, CatalogChange, MoveError, PinError, RecipeCatalog, RemovedRecipe, RestoreError,
 };
 use coffee_timer_core::editor::DeleteError;
 use coffee_timer_core::model::{self, BrewMetrics, LabelStyle, Recipe};
@@ -55,6 +55,14 @@ impl From<RestoreError> for RecipeListUpdate {
 
 impl From<PinError> for RecipeListUpdate {
     fn from(error: PinError) -> Self {
+        Self::Failed {
+            message: error.to_string(),
+        }
+    }
+}
+
+impl From<MoveError> for RecipeListUpdate {
+    fn from(error: MoveError) -> Self {
         Self::Failed {
             message: error.to_string(),
         }
@@ -272,6 +280,25 @@ mod tests {
         };
         assert!(!recipe.pinned);
         assert_eq!(index, 1, "back to its place");
+        Ok(())
+    }
+
+    #[test]
+    fn a_move_sends_the_row_at_its_new_place() -> TestResult {
+        let other = Recipe::blank(
+            RecipeId::try_parse("r2")?,
+            model::RecipeName::try_parse("Aero")?,
+            CoffeeDose::try_parse(15)?,
+            WaterAmount::try_parse(250)?,
+        );
+        let mut catalog = catalog_with(vec![v60()?, other])?;
+        let change = catalog.move_to(&RecipeId::try_parse("r1")?, 1)?;
+        let RecipeListUpdate::Upserted { recipe, index } = RecipeListUpdate::of(&change, &catalog)
+        else {
+            return Err("not upserted".into());
+        };
+        assert_v60_row(&recipe);
+        assert_eq!(index, 1);
         Ok(())
     }
 

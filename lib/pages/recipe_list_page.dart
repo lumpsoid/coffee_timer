@@ -16,10 +16,12 @@ import 'package:flutter/services.dart';
 /// The home page: every recipe, in the order Rust lists them (pinned
 /// first), opening its brew page on tap and offering edit / duplicate /
 /// pin or unpin / export / delete on long press. The app bar's menu
-/// exports every recipe to the clipboard, or imports the clipboard's text:
-/// Rust copies, validates and adds. A delete, here or in the editor, shows a
-/// snackbar with an Undo when Rust offers one; a failure, and an export's
-/// or import's notice, shows as a snackbar too.
+/// exports every recipe to the clipboard, imports the clipboard's text
+/// (Rust copies, validates and adds), or enters reorder mode: each card
+/// gets a drag handle and a drop asks Rust for the move, until Done. A
+/// delete, here or in the editor, shows a snackbar with an Undo when Rust
+/// offers one; a failure, and an export's or import's notice, shows as a
+/// snackbar too.
 class RecipeListPage extends StatefulWidget {
   const RecipeListPage({
     required this.recipes,
@@ -46,6 +48,14 @@ class _RecipeListPageState extends State<RecipeListPage> {
   late final StreamSubscription<String> _failures;
   late final StreamSubscription<String> _notices;
   late final StreamSubscription<UndoOffer> _undoOffers;
+
+  /// Whether the cards show drag handles instead of opening on tap or long
+  /// press.
+  bool _reordering = false;
+
+  /// The order shown after a drop, over the holder's list it was made
+  /// from; the holder's next list, with Rust's order, replaces it.
+  ({List<RecipeSummary>? over, List<RecipeSummary> rows})? _moved;
 
   RecipeListHolder get recipes => widget.recipes;
   BrewHolder get brew => widget.brew;
@@ -124,8 +134,94 @@ class _RecipeListPageState extends State<RecipeListPage> {
     ImportRecipes(text: data?.text ?? '').sendSignalToRust();
   }
 
+  /// The holder's rows, or the order shown after a drop until Rust's
+  /// answer replaces the holder's list.
+  List<RecipeSummary> _rows() {
+    final held = recipes.recipes;
+    final moved = _moved;
+    if (moved != null && identical(moved.over, held)) return moved.rows;
+    return held ?? const <RecipeSummary>[];
+  }
+
+  /// Shows the dropped card in its new place at once, then asks Rust for the
+  /// move. Waiting for Rust's list would show the old order for a frame or
+  /// more after the drop; Rust's list still replaces this one when it
+  /// comes, with its order (a recipe stays among those that share its pin)
+  /// and any refusal.
+  void _moveRecipe(List<RecipeSummary> rows, int from, int to) {
+    final moved = [...rows];
+    final recipe = moved.removeAt(from);
+    moved.insert(to, recipe);
+    setState(() => _moved = (over: recipes.recipes, rows: moved));
+    MoveRecipe(recipeId: recipe.id, to: to).sendSignalToRust();
+  }
+
+  void _setReordering(bool reordering) =>
+      setState(() => _reordering = reordering);
+
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      // Back leaves reorder mode rather than the app.
+      canPop: !_reordering,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _setReordering(false);
+      },
+      child: _reordering ? _reorderScaffold() : _listScaffold(context),
+    );
+  }
+
+  Widget _reorderScaffold() {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('REORDER'),
+        actions: [
+          TextButton(
+            onPressed: () => _setReordering(false),
+            child: const Text('DONE'),
+          ),
+        ],
+      ),
+      body: ListenableBuilder(
+        listenable: recipes,
+        builder: (context, _) {
+          final rows = _rows();
+          return ReorderableListView.builder(
+            buildDefaultDragHandles: false,
+            itemCount: rows.length,
+            onReorderItem: (from, to) => _moveRecipe(rows, from, to),
+            // The dragged card is its own paper; the default lifts it on
+            // a rectangle of Material around the row's padding.
+            proxyDecorator: (child, _, _) => Material(
+              type: MaterialType.transparency,
+              child: child,
+            ),
+            itemBuilder: (_, index) {
+              final r = rows[index];
+              return Row(
+                key: ValueKey(r.id),
+                children: [
+                  ReorderableDragStartListener(
+                    index: index,
+                    child: const Padding(
+                      padding: EdgeInsets.only(left: 16),
+                      child: Icon(
+                        Icons.drag_handle,
+                        semanticLabel: 'Drag to reorder recipe',
+                      ),
+                    ),
+                  ),
+                  Expanded(child: _tile(r)),
+                ],
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _listScaffold(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('RECIPES'),
@@ -143,8 +239,13 @@ class _RecipeListPageState extends State<RecipeListPage> {
                 recipeIds: [],
               ).sendSignalToRust(),
               _ListAction.import => unawaited(_importFromClipboard()),
+              _ListAction.reorder => _setReordering(true),
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: _ListAction.reorder,
+                child: Text('Reorder recipes'),
+              ),
               PopupMenuItem(
                 value: _ListAction.exportAll,
                 child: Text('Export all to clipboard'),
@@ -166,7 +267,7 @@ class _RecipeListPageState extends State<RecipeListPage> {
       body: ListenableBuilder(
         listenable: recipes,
         builder: (context, _) {
-          final rows = recipes.recipes ?? const <RecipeSummary>[];
+          final rows = _rows();
           return ListView.builder(
             itemCount: rows.length,
             // A row that moved keeps its widgets (and its paper snapshot).
@@ -176,16 +277,9 @@ class _RecipeListPageState extends State<RecipeListPage> {
             },
             itemBuilder: (_, index) {
               final r = rows[index];
-              return RecipeSummaryTile(
+              return _tile(
+                r,
                 key: ValueKey(r.id),
-                name: r.name,
-                description: r.description,
-                coffeeLabel: r.coffeeLabel,
-                waterLabel: r.waterLabel,
-                timeLabel: r.timeLabel,
-                grindLabel: r.grindLabel,
-                label: r.label,
-                pinned: r.pinned,
                 onTap: () => _openBrew(context, r),
                 onLongPress: () => _showRecipeOptionsSheet(context, r),
               );
@@ -195,6 +289,26 @@ class _RecipeListPageState extends State<RecipeListPage> {
       ),
     );
   }
+
+  /// One recipe's card; without callbacks it ignores taps.
+  Widget _tile(
+    RecipeSummary r, {
+    Key? key,
+    VoidCallback? onTap,
+    VoidCallback? onLongPress,
+  }) => RecipeSummaryTile(
+    key: key,
+    name: r.name,
+    description: r.description,
+    coffeeLabel: r.coffeeLabel,
+    waterLabel: r.waterLabel,
+    timeLabel: r.timeLabel,
+    grindLabel: r.grindLabel,
+    label: r.label,
+    pinned: r.pinned,
+    onTap: onTap,
+    onLongPress: onLongPress,
+  );
 
   void _showRecipeOptionsSheet(BuildContext context, RecipeSummary recipe) {
     unawaited(
@@ -299,4 +413,4 @@ class _RecipeListPageState extends State<RecipeListPage> {
 }
 
 /// The app bar menu's entries.
-enum _ListAction { exportAll, import }
+enum _ListAction { reorder, exportAll, import }

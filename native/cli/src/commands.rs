@@ -41,6 +41,19 @@ pub fn set_pin(
     pass_on(&change, brew, catalog, out)
 }
 
+/// Moves the recipe to place `to` in the list, as the list's reorder mode
+/// does, and passes the change on.
+pub fn move_to(
+    id: &str,
+    to: usize,
+    catalog: &mut RecipeCatalog,
+    brew: &mut BrewController,
+    out: &mut impl Write,
+) -> Result<(), CliError> {
+    let change = catalog.move_to(&RecipeId::try_parse(id)?, to)?;
+    pass_on(&change, brew, catalog, out)
+}
+
 /// Opens the recipe, then presses the brew page's more-water (positive) or
 /// less-water (negative) button `ratio_steps` times. With `save`, then
 /// saves that ratio to the recipe ("Save to recipe") and passes the change

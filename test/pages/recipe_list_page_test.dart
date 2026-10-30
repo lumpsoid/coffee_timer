@@ -146,14 +146,78 @@ void main() {
     expect(find.text(message), findsNothing);
   });
 
-  testWidgets('the app bar menu offers export all and import', (
+  testWidgets('the app bar menu offers reorder, export all and import', (
     tester,
   ) async {
     await pumpList(tester);
     await tester.tap(find.byTooltip('More'));
     await tester.pumpAndSettle();
+    expect(find.text('Reorder recipes'), findsOneWidget);
     expect(find.text('Export all to clipboard'), findsOneWidget);
     expect(find.text('Import from clipboard'), findsOneWidget);
+  });
+
+  Future<void> enterReorder(WidgetTester tester) async {
+    await tester.tap(find.byTooltip('More'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Reorder recipes'));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('reorder mode gives each card a handle until Done', (
+    tester,
+  ) async {
+    recipes.apply(
+      RecipeListUpdateSnapshot(recipes: [summary('a'), summary('b')]),
+    );
+    await pumpList(tester);
+    expect(find.byIcon(Icons.drag_handle), findsNothing);
+
+    await enterReorder(tester);
+    expect(find.text('REORDER'), findsOneWidget);
+    expect(find.byIcon(Icons.drag_handle), findsNWidgets(2));
+    expect(find.byType(RecipeSummaryTile), findsNWidgets(2));
+    expect(find.byType(FloatingActionButton), findsNothing);
+
+    await tester.tap(find.text('DONE'));
+    await tester.pumpAndSettle();
+    expect(find.text('RECIPES'), findsOneWidget);
+    expect(find.byIcon(Icons.drag_handle), findsNothing);
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+  });
+
+  testWidgets('in reorder mode a long press opens no options', (
+    tester,
+  ) async {
+    await pumpList(tester);
+    await enterReorder(tester);
+    await tester.longPress(find.byType(RecipeSummaryTile));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ListTile, 'Edit'), findsNothing);
+  });
+
+  testWidgets('back leaves reorder mode', (tester) async {
+    await pumpList(tester);
+    await enterReorder(tester);
+    final handled = await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(handled, isTrue);
+    expect(find.text('RECIPES'), findsOneWidget);
+    expect(find.byIcon(Icons.drag_handle), findsNothing);
+  });
+
+  testWidgets('reorder mode follows the holder', (tester) async {
+    final a = summary('a', name: 'Aero');
+    final b = summary('b', name: 'Chemex');
+    recipes.apply(RecipeListUpdateSnapshot(recipes: [a, b]));
+    await pumpList(tester);
+    await enterReorder(tester);
+    recipes.apply(RecipeListUpdateUpserted(recipe: a, index: 1));
+    await tester.pump();
+    final names = tester
+        .widgetList<RecipeSummaryTile>(find.byType(RecipeSummaryTile))
+        .map((t) => t.name);
+    expect(names, ['Chemex', 'Aero']);
   });
 
   testWidgets('shows a snackbar for each export or import notice', (

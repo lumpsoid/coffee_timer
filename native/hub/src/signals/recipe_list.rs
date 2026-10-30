@@ -31,6 +31,16 @@ pub struct UnpinRecipe {
     pub recipe_id: String,
 }
 
+/// Move the listed recipe with this id to `to`, its 0-based place in the
+/// list counted after the move (the list's reorder mode). A recipe moves
+/// only among those that share its pin; Rust answers with an `Upserted` at
+/// the place it took.
+#[derive(Deserialize, DartSignal)]
+pub struct MoveRecipe {
+    pub recipe_id: String,
+    pub to: u32,
+}
+
 /// Export recipes as a JSON recipe document, to the clipboard: the ones
 /// with these ids, in this order (the long-press sheet's Export), or every
 /// recipe, in list order, when empty (the app bar's Export all). Rust
@@ -59,8 +69,8 @@ pub enum RecipeListUpdate {
     /// The row with this id now reads `recipe` and stands at `index`, its
     /// 0-based place in list order: drop the row with this id if there is
     /// one, then insert `recipe` at `index`. That one rule covers an edit
-    /// (same place), a new recipe (the end), a restored one (its old place)
-    /// and a pin or unpin (a move).
+    /// (same place), a new recipe (the end), a restored one (its old place),
+    /// a pin or unpin and a `MoveRecipe` (a move).
     Upserted { recipe: RecipeSummary, index: u32 },
     /// Drop the row with this id. `undo_notice`, when present, offers to
     /// undo the removal: the snackbar text (`Deleted V60`), shown once with
@@ -70,10 +80,11 @@ pub enum RecipeListUpdate {
         undo_notice: Option<String>,
     },
     /// A `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`,
-    /// `SaveBrewRatio`, `ExportRecipes` or `ImportRecipes` failed; the list
-    /// is unchanged. A one-shot notice for a snackbar (`Failed to delete
-    /// recipe: …`, `Nothing to undo`, `Failed to save the pin: …`, `Can't
-    /// save this ratio: …`, `Can't import: …`), not list state.
+    /// `MoveRecipe`, `SaveBrewRatio`, `ExportRecipes` or `ImportRecipes`
+    /// failed; the list is unchanged. A one-shot notice for a snackbar
+    /// (`Failed to delete recipe: …`, `Nothing to undo`, `Failed to save
+    /// the pin: …`, `Failed to save the order: …`, `Can't save this ratio:
+    /// …`, `Can't import: …`), not list state.
     Failed { message: String },
     /// An `ExportRecipes` or `ImportRecipes` succeeded: a one-shot notice
     /// for a snackbar (`Copied 2 recipes`, `Imported 1 recipe`), not list

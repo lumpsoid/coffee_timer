@@ -114,9 +114,9 @@ the catalog. An edit shows the new version, idle, and stops a running or
 paused brew.
 A delete shows "Empty recipe".
 
-Eight intents produce a change: the editor's save, the editor's delete, the
-list's `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe` and
-`ImportRecipes` (one change per imported recipe), and the brew page's
+Nine intents produce a change: the editor's save, the editor's delete, the
+list's `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`,
+`MoveRecipe` and `ImportRecipes` (one change per imported recipe), and the brew page's
 `SaveBrewRatio`. `RemoveRecipe` calls `RecipeCatalog::remove` directly,
 without opening a draft.
 
@@ -198,6 +198,21 @@ variant: `Upserted { recipe, index }` means "the row with this id now reads
 so and stands at `index`", and Dart drops the row with that id, if any,
 then inserts it at `index`. The same rule serves an edit (same index), a
 new recipe (the end) and a restore (its old place).
+
+**Reordering.** `MoveRecipe { recipe_id, to }` (the list page's reorder
+mode) calls `RecipeCatalog::move_to(id, to)`, where `to` is a place in
+list order counted after the move, as the editor's `MoveStep` counts it.
+A recipe moves only among those that share its pin, since `PinnedFirst`
+could not list it anywhere else: a `to` past its group's edge is that
+edge. Only the group's own stored places are reshuffled, and the other
+group keeps its places, so unpinning still puts a recipe back where it
+stood among the unpinned. The catalog writes the whole stored order
+(`RecipeStore::reorder`) and returns `Upserted(id)`, which goes through
+`pass_on` like any change; the diff's index is where the recipe landed.
+Dart shows the dropped card in its new place at once and asks for the
+move; the holder's next list replaces that, so a drop past the pin edge
+settles at the edge. The open brew is untouched: `on_catalog_change`
+finds the recipe unchanged.
 
 ## Effects
 
@@ -406,12 +421,14 @@ feature's state as usual. The user sees an error only in these cases:
   are already on the draft.
 - **`RecipeListUpdate::Failed { message }`.** This is a one-shot notice when
   a list `RemoveRecipe` fails in the store, an `UndoRemoveRecipe` fails,
-  a `PinRecipe` / `UnpinRecipe` fails, a `SaveBrewRatio` is refused or
+  a `PinRecipe` / `UnpinRecipe` or a `MoveRecipe` fails, a `SaveBrewRatio` is refused or
   fails, an `ExportRecipes` names an unknown recipe, or an
   `ImportRecipes` is refused or fails. The message is core's
   `DeleteError::Store` text, `Failed to delete recipe: …`, its
   `RestoreError` text, `Nothing to undo` or `Failed to restore recipe: …`,
   its `PinError` text, `No recipe with id …` or `Failed to save the pin: …`,
+  its `MoveError` text, `No recipe with id …` or `Failed to save the
+  order: …`,
   its `SaveRatioError` text, `Can't save this ratio: 2050 g of water is
   outside 1–2000 g` or `Failed to save recipe: …`, its `ExportError`
   text, `No recipe with id …`, or its `ImportError` text, `Can't import:

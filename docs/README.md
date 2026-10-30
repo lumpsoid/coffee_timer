@@ -22,6 +22,10 @@ to.
   corner marks them. Unpinning puts a recipe back where it stood among the
   unpinned. Editing a pinned recipe keeps it pinned; a duplicate or a new
   recipe starts unpinned, at the end of the list.
+  The app bar's **Reorder recipes** puts a drag handle on each label; drag
+  a recipe to a new place, then press **Done** (or back). A recipe moves
+  only among those that share its pin: a recipe dropped among the other
+  group stops at the edge of its own.
   Duplicate opens the editor on a new recipe copied from it (description,
   coffee, water, and every step with its time and pour), named `V60 copy`;
   nothing is saved until **Save**, which adds it at the end of the list,
@@ -185,6 +189,7 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew espresso-uuid --pause-at 1
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db duplicate pourover-uuid --name "Iced"
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db pin pourover-uuid
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db unpin pourover-uuid
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db move pourover-uuid 0
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db delete <id>
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db export                       # every recipe, to stdout
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db export pourover-uuid --out v60.json
@@ -239,6 +244,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
 - `pin <id>` / `unpin <id>` pin or unpin a recipe, as the list's long-press
   does, and print `upserted <id>`. `list` prints in the app's order,
   pinned recipes first, each marked `[pinned]` after its name.
+- `move <id> <to>` moves a recipe to place `to` (0-based, in `list`
+  order, counted after the move), as the list's reorder mode does, and
+  prints `upserted <id>`. It stays among the recipes that share its pin.
 - `export [<id>...] [--out FILE]` writes the recipe document of those
   recipes, in that order, or of every recipe in list order; to stdout, or
   to `FILE`, printing `Exported 2 recipes to FILE`. An unknown id is an

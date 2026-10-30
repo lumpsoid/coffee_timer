@@ -1,4 +1,4 @@
-//! `SqliteStore`: schema v6 and seed, recipe doses, pour speeds, grinds, step pours, recipe pins, recipe order, appending in one transaction, step replacement,
+//! `SqliteStore`: schema v6 and seed, recipe doses, pour speeds, grinds, step pours, recipe pins, recipe order and reordering, appending in one transaction, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
@@ -804,5 +804,52 @@ fn the_catalog_lists_pins_first_after_a_reopen() -> TestResult {
     catalog.load()?;
     assert_eq!(catalog.pin_of(&rid("pourover-uuid")?), Pin::Pinned);
     assert_eq!(catalog.index_of(&rid("pourover-uuid")?), Some(0));
+    Ok(())
+}
+
+#[test]
+fn reorder_rewrites_the_stored_order_and_keeps_pins_and_steps() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.upsert(&recipe("r1", "V60", vec![step("s1", "Bloom", 30)?])?)?;
+    store.set_pin(&rid("pourover-uuid")?, Pin::Pinned)?;
+    store.reorder(&[rid("r1")?, rid("pourover-uuid")?, rid("espresso-uuid")?])?;
+    let recipes = store.load_all()?;
+    assert_eq!(ids(&recipes), ["r1", "pourover-uuid", "espresso-uuid"]);
+    assert_eq!(pinned_ids(&store)?, ["pourover-uuid"]);
+    assert_eq!(recipes.first().map(|r| r.steps().len()), Some(1));
+
+    store.upsert(&recipe("r2", "Aeropress", Vec::new())?)?;
+    store.insert_at(&recipe("r3", "Chemex", Vec::new())?, 1, Pin::Unpinned)?;
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["r1", "r3", "pourover-uuid", "espresso-uuid", "r2"],
+        "later writes still append and insert"
+    );
+    Ok(())
+}
+
+#[test]
+fn reorder_puts_unnamed_rows_after_and_skips_unknown_ids() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    store.upsert(&recipe("r1", "V60", Vec::new())?)?;
+    store.reorder(&[rid("r1")?, rid("missing")?])?;
+    assert_eq!(
+        ids(&store.load_all()?),
+        ["r1", "espresso-uuid", "pourover-uuid"]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_moved_recipe_keeps_its_place_after_reopen() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("recipes.db");
+    let mut catalog = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    catalog.load()?;
+    catalog.move_to(&rid("pourover-uuid")?, 0)?;
+
+    let mut reopened = RecipeCatalog::new(Box::new(SqliteStore::open(&path)?));
+    reopened.load()?;
+    assert_eq!(ids(reopened.state()), ["pourover-uuid", "espresso-uuid"]);
     Ok(())
 }
