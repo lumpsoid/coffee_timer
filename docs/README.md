@@ -22,10 +22,10 @@ to.
   corner marks them. Unpinning puts a recipe back where it stood among the
   unpinned. Editing a pinned recipe keeps it pinned; a duplicate or a new
   recipe starts unpinned, at the end of the list.
-  The app bar's **Reorder recipes** puts a drag handle on each label; drag
-  a recipe to a new place, then press **Done** (or back). A recipe moves
-  only among those that share its pin: a recipe dropped among the other
-  group stops at the edge of its own.
+  The app bar's **Reorder recipes** puts a drag handle on each unpinned
+  label; drag a recipe to a new place, then press **Done** (or back). The
+  pinned recipes show there as one card on top (`2 pinned recipes`) that
+  does not move: only the unpinned are reordered.
   Duplicate opens the editor on a new recipe copied from it (description,
   coffee, water, and every step with its time and pour), named `V60 copy`;
   nothing is saved until **Save**, which adds it at the end of the list,

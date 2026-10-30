@@ -454,10 +454,12 @@ The GUI renders, sends intents, and performs effects. It holds no business
   `EditorPage` and `SettingsPage`. The list's long-press Export sends
   `ExportRecipes` with the row's id, the app bar's menu sends it with
   none (every recipe) or reads the clipboard and sends its text as
-  `ImportRecipes`, or enters reorder mode: a `ReorderableListView` with a
-  drag handle per card (tap and long press off) until Done or back. A
+  `ImportRecipes`, or enters reorder mode: a `ReorderableListView` of the
+  unpinned recipes, a drag handle per card (tap and long press off), under
+  a fixed header card counting the pinned ones, until Done or back. A
   drop shows the new order at once and sends `MoveRecipe` (id and final
-  index, from `onReorderItem`); the holder's next list replaces it. Each page reads holders and sends
+  index in the whole list: the pinned count plus `onReorderItem`'s
+  index); the holder's next list replaces it. Each page reads holders and sends
   signals; none of them computes a label. The editor's steps are a
   `SliverReorderableList`: a drop sends `MoveStep` (row id and final index,
   from `onReorderItem`) and the order changes only when Rust's draft comes
@@ -496,7 +498,8 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
   that a failure does not block later effects.
 - [`pages/`](../test/pages) tests the list page's long-press menu (Pin or
   Unpin by the row's `pinned`, Export), the app bar's reorder / export /
-  import menu, reorder mode (handles, Done, back, no long-press menu), the
+  import menu, reorder mode (handles, Done, back, no long-press menu, the pinned
+  card), the
   pin marker, and
   snackbars (failures, notices and the undo offer), the settings page's cue
   controls following Rust's state, and the editor
