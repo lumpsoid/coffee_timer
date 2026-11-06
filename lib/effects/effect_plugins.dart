@@ -32,7 +32,7 @@ class PluginEffects implements EffectPlugins {
     _loaded = _load();
   }
 
-  static const _stepSound = 'sounds/step-change.mp3';
+  static const _stepSound = 'sounds/breath-and-bowl.mp3';
   static const _brewNotification = MethodChannel(
     'coffee_timer/brew_notification',
   );
