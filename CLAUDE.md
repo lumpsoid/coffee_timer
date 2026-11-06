@@ -30,7 +30,8 @@ settings are stored locally.
 
 ## Gates
 
-- `cargo clippy --all-targets -- -D warnings` and `cargo test`
+- `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`
+  and `cargo test`
 - `rinf gen` after changing any signal struct, and on a fresh checkout
   before `flutter analyze` (the generated bindings are gitignored)
 - `flutter analyze` / `flutter test` for the GUI

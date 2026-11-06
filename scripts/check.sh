@@ -10,6 +10,9 @@ step() { printf '\n==> %s\n' "$*"; }
 step "rinf gen (Dart bindings)"
 rinf gen
 
+step "cargo fmt --check"
+cargo fmt --all -- --check
+
 step "cargo clippy"
 cargo clippy --all-targets -- -D warnings
 

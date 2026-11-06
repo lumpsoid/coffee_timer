@@ -69,7 +69,7 @@ code style. [CLAUDE.md](CLAUDE.md) lists the architectural commitments.
 
 ## Before you open a pull request
 
-- `scripts/check.sh` passes: clippy, `cargo test`, `flutter analyze`,
+- `scripts/check.sh` passes: `cargo fmt --check`, clippy, `cargo test`, `flutter analyze`,
   `flutter test`. CI runs the same.
 - No `unwrap`, `expect` or `panic` in Rust: return a `Result`. Clippy
   enforces it.

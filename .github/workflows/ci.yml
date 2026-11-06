@@ -21,14 +21,15 @@ env:
 
 jobs:
   rust:
-    name: Rust (clippy, test)
+    name: Rust (fmt, clippy, test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: clippy
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
       - run: scripts/version.sh check

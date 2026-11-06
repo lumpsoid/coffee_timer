@@ -6,7 +6,7 @@ everyday work, a release, dependency updates. The scripts live in
 
 | Script | Does |
 |---|---|
-| `scripts/check.sh` | Every gate in CI's order: `rinf gen`, clippy, `cargo test`, `flutter analyze`, `flutter test`, versions agree |
+| `scripts/check.sh` | Every gate in CI's order: `rinf gen`, `cargo fmt --check`, clippy, `cargo test`, `flutter analyze`, `flutter test`, versions agree |
 | `scripts/version.sh show\|check\|bump X.Y.Z` | Print, check or bump the version in `Cargo.toml` and `pubspec.yaml` |
 | `scripts/release.sh` | Check the tree is releasable, run the gates, tag `vX.Y.Z` |
 | `scripts/gen-sounds.py` | Regenerate the brew sounds in `assets/sounds/` (needs numpy and `lame`) |
