@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: How to contribute
+    url: https://github.com/lumpsoid/coffee_timer/blob/main/CONTRIBUTING.md
+    about: Proposals start as an issue; a pull request follows once we agree.

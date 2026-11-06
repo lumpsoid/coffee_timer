@@ -1,0 +1,37 @@
+name: Proposal
+description: Suggest a feature or a change. Start here before opening a pull request.
+labels: [proposal]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. If you would like to build it yourself, let's
+        agree on the shape here first; see CONTRIBUTING.md.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does it solve
+      description: What you are trying to do while brewing, and what gets in the way.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you propose
+      description: How it would work for the user. Sketches and mockups are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+  - type: dropdown
+    id: contribute
+    attributes:
+      label: Would you like to implement it?
+      options:
+        - "Yes, once we agree on the approach"
+        - "Maybe, with some guidance"
+        - "No, just suggesting"
+    validations:
+      required: true

@@ -1,0 +1,41 @@
+name: Bug report
+description: Something in the app or the CLI does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report this.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the recipe "V60"
+        2. Start the brew and pause it on step 2
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: App version
+      description: Shown at the foot of the Settings page, e.g. `0.1.0 (2391c1d)`.
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and OS
+      placeholder: Pixel 7, Android 15
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, an exported recipe (Export copies it as JSON), logs.
