@@ -7,6 +7,8 @@ version may change behaviour.
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-11-06
+
 The first public release.
 
 ### Added
