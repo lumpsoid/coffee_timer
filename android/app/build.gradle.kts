@@ -65,5 +65,5 @@ flutter {
 
 dependencies {
     // BrewService and MainActivity: notifications, foreground service, permissions.
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.19.1")
 }
