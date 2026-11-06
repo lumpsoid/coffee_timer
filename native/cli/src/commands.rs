@@ -9,8 +9,8 @@ use coffee_timer_core::brew::{BrewController, RatioChange};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::editor::{EditError, EditorController, StepPreset};
 use coffee_timer_core::model::{
-    AccentColor, AccentOption, BrewMetrics, Pin, PreAlertLead, RecipeId, Settings, StepId,
-    ThemeSelection, Toggle,
+    AccentColor, AccentOption, BrewMetrics, CoffeeDose, Pin, PreAlertLead, RecipeId, Settings,
+    StepId, ThemeSelection, Toggle,
 };
 use coffee_timer_core::settings::SettingsController;
 
@@ -54,12 +54,14 @@ pub fn move_to(
     pass_on(&change, brew, catalog, out)
 }
 
-/// Opens the recipe, then presses the brew page's more-water (positive) or
-/// less-water (negative) button `ratio_steps` times. With `save`, then
-/// saves that ratio to the recipe ("Save to recipe") and passes the change
-/// on before showing the page.
+/// Opens the recipe, sets its `coffee` grams as the brew page's coffee tape
+/// does, then presses its more-water (positive) or less-water (negative)
+/// button `ratio_steps` times. With `save`, then saves that
+/// dose to the recipe ("Save to recipe") and passes the change on before
+/// showing the page.
 pub fn show(
     id: &str,
+    coffee: Option<i64>,
     ratio_steps: i32,
     save: bool,
     brew: &mut BrewController,
@@ -68,6 +70,9 @@ pub fn show(
 ) -> Result<(), CliError> {
     let effects = brew.open(&RecipeId::try_parse(id)?, catalog);
     render::effects(out, &effects)?;
+    if let Some(coffee) = coffee {
+        brew.set_coffee(CoffeeDose::try_parse(coffee)?)?;
+    }
     let change = if ratio_steps < 0 {
         RatioChange::LessWater
     } else {

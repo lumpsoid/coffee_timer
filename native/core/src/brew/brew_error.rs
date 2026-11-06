@@ -1,6 +1,6 @@
 use std::fmt;
 
-/// Why a brew could not start, pause or resume, or its ratio not change. The state is unchanged when one is returned.
+/// Why a brew could not start, pause or resume, or its dose not change. The state is unchanged when one is returned.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BrewError {
     /// No recipe is open.

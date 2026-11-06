@@ -6,6 +6,4 @@ pub enum RatioChange {
     MoreWater,
     /// One step less water per gram of coffee, `1:5` → `1:4.5`.
     LessWater,
-    /// Back to the recipe's own ratio.
-    Recipe,
 }

@@ -86,9 +86,16 @@ BrewRecipe brewRecipe({List<BrewStepStatus>? statuses}) => BrewRecipe(
   name: 'V60',
   description: 'clean',
   coffeeLabel: '20g',
+  coffee: const BrewCoffee(
+    grams: 20,
+    minGrams: 1,
+    maxGrams: 200,
+    setting: BrewCoffeeSetting.recipe,
+  ),
   waterLabel: '100g',
   ratioLabel: '1:5',
   ratio: BrewRatioSetting.recipe,
+  adjusted: false,
   durationLabel: '0:30',
   label: label(),
   steps: [

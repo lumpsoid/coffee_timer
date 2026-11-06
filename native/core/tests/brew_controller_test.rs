@@ -3,8 +3,8 @@
 //! `lib/recipe_details/pages/recipe_details_page.dart` (what is shown).
 
 use coffee_timer_core::brew::{
-    BrewController, BrewError, BrewNotice, BrewState, BrewView, CuePolicy, Effect, RatioChange,
-    RatioSetting, SaveRatioError, StepStatus,
+    BrewController, BrewError, BrewNotice, BrewState, BrewView, CoffeeSetting, CuePolicy, Effect,
+    RatioChange, RatioSetting, SaveRatioError, StepStatus,
 };
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
@@ -760,7 +760,7 @@ fn stepping_back_to_the_recipes_ratio_is_no_adjustment() -> TestResult {
 fn back_to_the_recipe_restores_its_ratio() -> TestResult {
     let (mut brew, _catalog) = opened(&[30])?;
     brew.adjust_ratio(RatioChange::MoreWater)?;
-    brew.adjust_ratio(RatioChange::Recipe)?;
+    brew.back_to_recipe_dose()?;
     assert_eq!(dose(&brew), shown("20g", "100g", "1:5"));
     assert!(matches!(
         ratio_setting(&brew),
@@ -850,6 +850,132 @@ fn adjusting_with_no_recipe_open_is_an_error() {
         Err(BrewError::NoRecipe)
     );
     assert_eq!(brew.state(), &BrewState::Empty);
+}
+
+// the coffee for this brew
+
+fn coffee_setting(brew: &BrewController) -> Option<CoffeeSetting> {
+    brew.state().view().map(BrewView::coffee)
+}
+
+fn grams(coffee: i64) -> Result<CoffeeDose, ModelError> {
+    CoffeeDose::try_parse(coffee)
+}
+
+#[test]
+fn less_coffee_takes_the_water_down_at_the_recipes_ratio() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30])?;
+    brew.set_coffee(grams(12)?)?;
+    assert_eq!(dose(&brew), shown("12g", "60g", "1:5"));
+    assert!(matches!(
+        coffee_setting(&brew),
+        Some(CoffeeSetting::Adjusted(_))
+    ));
+    assert!(matches!(
+        ratio_setting(&brew),
+        Some(RatioSetting::Recipe(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn the_water_follows_the_recipes_exact_ratio_not_its_rounded_label() -> TestResult {
+    let (mut brew, _catalog) = pour_over()?;
+    // 15 g to 250 g reads 1:16.7. Doubling the coffee doubles the water,
+    // 500 g; the rounded label would make it 30 × 16.7 = 501 g.
+    brew.set_coffee(grams(30)?)?;
+    assert_eq!(dose(&brew), shown("30g", "500g", "1:16.7"));
+    assert_eq!(
+        pour_labels(&brew),
+        [None, Some("100g".to_owned()), Some("400g".to_owned())]
+    );
+    let view = brew.state().view().ok_or("no view")?;
+    assert_eq!(view.pour_to_label(2).as_deref(), Some("Pour to 500g"));
+    Ok(())
+}
+
+#[test]
+fn coming_back_to_the_recipes_coffee_is_no_adjustment() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30])?;
+    brew.set_coffee(grams(12)?)?;
+    brew.set_coffee(grams(20)?)?;
+    assert_eq!(dose(&brew), shown("20g", "100g", "1:5"));
+    assert!(matches!(
+        coffee_setting(&brew),
+        Some(CoffeeSetting::Recipe(_))
+    ));
+    Ok(())
+}
+
+#[test]
+fn a_changed_coffee_and_a_changed_ratio_combine() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30])?;
+    brew.set_coffee(grams(10)?)?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    assert_eq!(
+        dose(&brew),
+        shown("10g", "55g", "1:5.5"),
+        "the coffee stays"
+    );
+    brew.set_coffee(grams(20)?)?;
+    assert_eq!(
+        dose(&brew),
+        shown("20g", "110g", "1:5.5"),
+        "the ratio stays"
+    );
+    Ok(())
+}
+
+#[test]
+fn back_to_the_recipe_dose_restores_its_coffee_and_ratio() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30])?;
+    brew.set_coffee(grams(10)?)?;
+    brew.adjust_ratio(RatioChange::MoreWater)?;
+    brew.back_to_recipe_dose()?;
+    assert_eq!(dose(&brew), shown("20g", "100g", "1:5"));
+    let view = brew.state().view().ok_or("no view")?;
+    assert!(!view.is_adjusted());
+    Ok(())
+}
+
+#[test]
+fn changing_the_coffee_mid_brew_keeps_the_timer_running() -> TestResult {
+    let (mut brew, _catalog) = opened(&[30, 10])?;
+    brew.start(0)?;
+    brew.tick(&SETTINGS);
+    brew.set_coffee(grams(10)?)?;
+    assert_eq!(timer(&brew), running(0, "00:29"));
+    assert_eq!(dose(&brew), shown("10g", "50g", "1:5"));
+    Ok(())
+}
+
+#[test]
+fn the_changed_coffee_is_for_this_brew_only() -> TestResult {
+    let (mut brew, catalog) = opened(&[30])?;
+    brew.set_coffee(grams(10)?)?;
+    brew.leave();
+    brew.open(&id("a")?, &catalog);
+    assert_eq!(dose(&brew), shown("20g", "100g", "1:5"));
+    Ok(())
+}
+
+#[test]
+fn an_edit_to_the_open_recipe_keeps_the_changed_coffee() -> TestResult {
+    let (mut brew, mut catalog) = opened(&[30])?;
+    brew.set_coffee(grams(10)?)?;
+    let change = catalog.upsert(dosed("a", 30, 150, &[30, 30])?)?;
+    brew.on_catalog_change(&change, &catalog);
+    assert_eq!(dose(&brew), shown("10g", "50g", "1:5"));
+    Ok(())
+}
+
+#[test]
+fn changing_the_coffee_with_no_recipe_open_is_an_error() -> TestResult {
+    let mut brew = BrewController::new();
+    assert_eq!(brew.set_coffee(grams(10)?), Err(BrewError::NoRecipe));
+    assert_eq!(brew.back_to_recipe_dose(), Err(BrewError::NoRecipe));
+    assert_eq!(brew.state(), &BrewState::Empty);
+    Ok(())
 }
 
 // pause and resume
@@ -1137,7 +1263,7 @@ fn an_adjusted_ratio_scales_the_pours_and_their_targets() -> TestResult {
     );
     assert_eq!(view.pour_to_label(1).as_deref(), Some("Pour to 51g"));
     assert_eq!(view.pour_to_label(2).as_deref(), Some("Pour to 255g"));
-    brew.adjust_ratio(RatioChange::Recipe)?;
+    brew.back_to_recipe_dose()?;
     assert_eq!(
         pour_labels(&brew),
         [None, Some("50g".to_owned()), Some("200g".to_owned())]
@@ -1782,7 +1908,7 @@ fn saving_more_water_than_a_recipe_holds_is_an_error() -> TestResult {
     );
     assert_eq!(
         error.to_string(),
-        "Can't save this ratio: 2050 g of water is outside 1–2000 g"
+        "Can't save to the recipe: 2050 g of water is outside 1–2000 g"
     );
     assert_eq!(brew.state(), &before, "still adjusted");
     assert_eq!(catalog.state(), catalog_recipes.as_slice());
@@ -1827,6 +1953,39 @@ fn saving_a_scaled_pour_out_of_range_is_an_error() -> TestResult {
         }))
     );
     assert_eq!(catalog.get(&id("f")?), Some(&flood));
+    Ok(())
+}
+
+#[test]
+fn saving_a_changed_coffee_stores_the_coffee_water_and_pours_shown() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    brew.set_coffee(grams(9)?)?;
+    let change = brew.save_ratio(&mut catalog)?;
+    assert_eq!(change, CatalogChange::Upserted(id("p")?));
+
+    let saved = catalog.get(&id("p")?).ok_or("no recipe")?;
+    assert_eq!(saved.coffee().grams(), 9);
+    assert_eq!(saved.water().grams(), 150);
+    assert_eq!(stored_pours(&catalog)?, [None, Some(30), Some(120)]);
+
+    let view = brew.state().view().ok_or("no view")?;
+    assert!(!view.is_adjusted(), "the recipe's own dose now");
+    assert_eq!(dose(&brew), shown("9g", "150g", "1:16.7"));
+    Ok(())
+}
+
+#[test]
+fn saving_coffee_that_needs_more_water_than_a_recipe_holds_is_an_error() -> TestResult {
+    let (mut brew, mut catalog) = pour_over()?;
+    brew.set_coffee(grams(200)?)?;
+    assert_eq!(dose(&brew), shown("200g", "3333g", "1:16.7"));
+    assert_eq!(
+        brew.save_ratio(&mut catalog),
+        Err(SaveRatioError::OutOfRange(WaterScaleError::Water {
+            grams: 3333
+        }))
+    );
+    assert_eq!(catalog.get(&id("p")?).map(|r| r.coffee().grams()), Some(15));
     Ok(())
 }
 

@@ -57,8 +57,17 @@ pub fn run(command: &Command, c: &mut Controllers, out: &mut impl Write) -> Resu
         Command::Show {
             id,
             ratio_steps,
+            coffee,
             save,
-        } => commands::show(id, *ratio_steps, *save, &mut c.brew, &mut c.catalog, out),
+        } => commands::show(
+            id,
+            *coffee,
+            *ratio_steps,
+            *save,
+            &mut c.brew,
+            &mut c.catalog,
+            out,
+        ),
         Command::New(recipe) => {
             commands::new_recipe(recipe, &mut c.editor, &mut c.catalog, &mut c.brew, out)
         }

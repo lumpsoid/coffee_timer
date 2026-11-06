@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Parser, Subcommand};
+use clap::{ArgGroup, Parser, Subcommand};
 
 /// Coffee Timer on the command line: the same core and database as the app.
 #[derive(Debug, Parser)]
@@ -22,6 +22,7 @@ pub enum Command {
     /// `[pinned]`), with their coffee, water and time.
     List,
     /// Show a recipe and its steps as the brew page does.
+    #[command(group(ArgGroup::new("dose").args(["ratio_steps", "coffee"]).multiple(true)))]
     Show {
         /// Recipe id, as printed by `list`.
         id: String,
@@ -35,9 +36,14 @@ pub enum Command {
             allow_negative_numbers = true
         )]
         ratio_steps: i32,
-        /// Save the adjusted ratio to the recipe, as the brew page's "Save
-        /// to recipe" does: its water and step pours become the ones shown.
-        #[arg(long, requires = "ratio_steps")]
+        /// Brew with this many grams of coffee for this showing, as the
+        /// brew page's coffee tape does: the water follows at the ratio.
+        #[arg(long, value_name = "GRAMS")]
+        coffee: Option<i64>,
+        /// Save the changed dose to the recipe, as the brew page's "Save
+        /// to recipe" does: its coffee, water and step pours become the
+        /// ones shown.
+        #[arg(long, requires = "dose")]
         save: bool,
     },
     /// Create a recipe.

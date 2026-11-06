@@ -135,7 +135,7 @@ fn show_with_save_past_what_a_recipe_holds_is_an_error() -> TestResult {
         .ok_or("expected an error")?;
     assert_eq!(
         error,
-        "Can't save this ratio: 2050 g of water is outside 1–2000 g"
+        "Can't save to the recipe: 2050 g of water is outside 1–2000 g"
     );
     let list = session.reopened()?.run(&["list"])?;
     assert!(list.contains("Water: 1950 g"), "{list}");
@@ -143,12 +143,66 @@ fn show_with_save_past_what_a_recipe_holds_is_an_error() -> TestResult {
 }
 
 #[test]
-fn show_with_save_needs_ratio_steps() -> TestResult {
+fn show_with_save_needs_a_changed_dose() -> TestResult {
     let error = Session::new()?
         .run(&["show", "pourover-uuid", "--save"])
         .err()
         .ok_or("expected an error")?;
     assert!(error.contains("--ratio-steps"), "{error}");
+    assert!(error.contains("--coffee"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn show_with_coffee_scales_the_water_and_pours_for_that_showing() -> TestResult {
+    let mut session = Session::new()?;
+    let less = session.run(&["show", "pourover-uuid", "--coffee", "9"])?;
+    assert!(
+        less.contains("Coffee: 9g (adjusted)  Water: 150g  Ratio: 1:16.7  Time"),
+        "{less}"
+    );
+    assert!(less.contains("  2. Bloom  30s  30g  pending\n"), "{less}");
+    assert!(less.contains("  3. Pour  120s  120g  pending\n"), "{less}");
+    let both = session.run(&[
+        "show",
+        "pourover-uuid",
+        "--coffee",
+        "10",
+        "--ratio-steps",
+        "3",
+    ])?;
+    assert!(
+        both.contains("Coffee: 10g (adjusted)  Water: 180g  Ratio: 1:18 (adjusted)"),
+        "{both}"
+    );
+    let plain = session.run(&["show", "pourover-uuid"])?;
+    assert!(plain.contains("Coffee: 15g  Water: 250g  Ratio: 1:16.7  Time"));
+    Ok(())
+}
+
+#[test]
+fn show_with_coffee_and_save_persists_the_coffee_water_and_pours() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["show", "pourover-uuid", "--coffee", "9", "--save"])?;
+    let reopened = session.reopened()?.run(&["show", "pourover-uuid"])?;
+    assert!(
+        reopened.contains("Coffee: 9g  Water: 150g  Ratio: 1:16.7  Time"),
+        "{reopened}"
+    );
+    assert!(
+        reopened.contains("  3. Pour  120s  120g  pending\n"),
+        "{reopened}"
+    );
+    Ok(())
+}
+
+#[test]
+fn show_with_coffee_out_of_range_is_an_error() -> TestResult {
+    let error = Session::new()?
+        .run(&["show", "pourover-uuid", "--coffee", "201"])
+        .err()
+        .ok_or("expected an error")?;
+    assert!(error.contains("1–200"), "{error}");
     Ok(())
 }
 
@@ -848,9 +902,13 @@ fn brew_with_both_off_prints_only_screen_and_notification_effects() -> TestResul
 
 #[test]
 fn brew_follows_the_pre_alert_setting() -> TestResult {
-    assert!(!brewed_short(&[&["settings", "pre-alert", "0"]])?.contains("[vibrate pattern 0/50/100/50ms]"));
     assert!(
-        !brewed_short(&[&["settings", "pre-alert", "5"]])?.contains("[vibrate pattern 0/50/100/50ms]"),
+        !brewed_short(&[&["settings", "pre-alert", "0"]])?
+            .contains("[vibrate pattern 0/50/100/50ms]")
+    );
+    assert!(
+        !brewed_short(&[&["settings", "pre-alert", "5"]])?
+            .contains("[vibrate pattern 0/50/100/50ms]"),
         "the 4 s step is no longer than the lead"
     );
     let out = brewed_short(&[&["settings", "pre-alert", "3"]])?;
