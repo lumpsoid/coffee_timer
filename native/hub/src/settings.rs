@@ -1,6 +1,7 @@
 //! Settings ↔ settings signals.
 
 use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, ThemeSelection};
+use coffee_timer_core::version::APP_VERSION;
 
 use crate::signals::{AccentChoice, PreAlertChoice, SettingsUpdate, ThemeChoice};
 
@@ -27,6 +28,7 @@ impl From<&Settings> for SettingsUpdate {
                     label: lead.label(),
                 })
                 .collect(),
+            app_version: APP_VERSION.to_owned(),
         }
     }
 }

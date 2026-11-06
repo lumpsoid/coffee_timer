@@ -31,6 +31,11 @@ void main() {
     expect(find.text('3 s'), findsOneWidget);
   });
 
+  testWidgets('shows the version Rust sent', (tester) async {
+    await pumpPage(tester);
+    expect(find.text('Version 0.1.0 (2391c1d)'), findsOneWidget);
+  });
+
   testWidgets('follows each new update from Rust', (tester) async {
     await pumpPage(tester);
     holder.apply(settings(sound: false, vibration: false, preAlertSeconds: 0));

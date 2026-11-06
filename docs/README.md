@@ -106,7 +106,8 @@ to.
   off (step boundaries, the pre-alert and the finish buzz), and the
   pre-alert before each step ends: off, 3 s (the default), 5 s or 10 s.
   Sound and vibration start on. A change made during a brew applies from
-  its next second.
+  its next second. The foot of the page shows the app's version and the
+  commit it was built from, `Version 0.1.0 (2391c1d)`.
 
 ## Repository layout
 
@@ -261,7 +262,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (
   and unpinned, at the end of the list. It prints `upserted <new id>` per
   recipe, then `Imported 2 recipes`; an invalid document is an error and
   adds none.
-- Use `--help` on any command for its options.
+- Use `--help` on any command for its options; `--version` prints the
+  same version as the app's Settings page, `coffee_timer_cli 0.1.0
+  (2391c1d)`.
 - There is no undo command. The removed recipe is held in memory only, and
   each CLI run is one command, so nothing is left to undo by the next run;
   core's `catalog_test.rs` covers delete → undo instead.

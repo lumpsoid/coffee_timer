@@ -207,6 +207,15 @@ without duplicates.
 
 Test: [`transfer_test.rs`](../native/core/tests/transfer_test.rs).
 
+### `version`: the app's version
+
+[`native/core/src/version.rs`](../native/core/src/version.rs)
+
+`APP_VERSION` is the workspace version plus the 7-char commit hash,
+`0.1.0 (2391c1d)`, stamped by [`build.rs`](../native/core/build.rs); built
+without git it is the version alone. The CLI's `--version` and the hub's
+`SettingsUpdate::app_version` both read it.
+
 ### `settings/`: user settings
 
 [`native/core/src/settings`](../native/core/src/settings)
@@ -420,7 +429,7 @@ makes no business decisions.
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `MoveRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SetBrewCoffee`, `BackToRecipeDose`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetRecipePourSpeed`, `SetRecipeGrind`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
-| settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
+| settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds`, the `pre_alerts` options and `app_version`) |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial
 mappings. The loops are not unit tested; they are kept thin enough to

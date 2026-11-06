@@ -136,4 +136,5 @@ SettingsUpdate settings({
     PreAlertChoice(seconds: 5, label: '5 s'),
     PreAlertChoice(seconds: 10, label: '10 s'),
   ],
+  appVersion: '0.1.0 (2391c1d)',
 );
