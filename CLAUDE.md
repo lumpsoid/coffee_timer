@@ -10,9 +10,8 @@ settings are stored locally.
 
 - **Rust** — all business logic and state.
 - **Flutter** — GUI and platform effects only. No business logic in Dart.
-- **[rinf](https://github.com/cunarist/rinf)** — the Rust↔Flutter bridge
-  (local clone: `/home/pi/projects/rinf`). Layering and signal rules:
-  [rinf bridge](./docs/rinf-bridge.md).
+- **[rinf](https://github.com/cunarist/rinf)** — the Rust↔Flutter bridge.
+  Layering and signal rules: [rinf bridge](./docs/rinf-bridge.md).
 
 ## Architectural commitments
 
@@ -31,10 +30,12 @@ settings are stored locally.
 
 ## Gates
 
-- `cargo clippy --all-targets -- -D warnings` and `cargo test`
+- `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`
+  and `cargo test`
 - `rinf gen` after changing any signal struct, and on a fresh checkout
   before `flutter analyze` (the generated bindings are gitignored)
 - `flutter analyze` / `flutter test` for the GUI
+- `scripts/check.sh` runs them all, as CI does
 
 ## Behavior reference
 

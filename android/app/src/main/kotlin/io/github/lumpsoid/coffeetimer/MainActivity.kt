@@ -1,4 +1,4 @@
-package com.example.coffee_timer
+package io.github.lumpsoid.coffeetimer
 
 import android.Manifest
 import android.content.pm.PackageManager

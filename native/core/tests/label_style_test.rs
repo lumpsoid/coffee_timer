@@ -48,9 +48,18 @@ fn tone_turns_caramel_at_two_minutes_and_crema_at_four() {
 
 #[test]
 fn tone_follows_the_recipes_total_brew_time() -> TestResult {
-    assert_eq!(style(&recipe("r", "R", &[30, 25])?).tone(), LabelTone::Roast);
-    assert_eq!(style(&recipe("r", "R", &[40, 30, 120])?).tone(), LabelTone::Caramel);
-    assert_eq!(style(&recipe("r", "R", &[200, 40])?).tone(), LabelTone::Crema);
+    assert_eq!(
+        style(&recipe("r", "R", &[30, 25])?).tone(),
+        LabelTone::Roast
+    );
+    assert_eq!(
+        style(&recipe("r", "R", &[40, 30, 120])?).tone(),
+        LabelTone::Caramel
+    );
+    assert_eq!(
+        style(&recipe("r", "R", &[200, 40])?).tone(),
+        LabelTone::Crema
+    );
     assert_eq!(style(&recipe("r", "R", &[])?).tone(), LabelTone::Roast);
     Ok(())
 }

@@ -4,7 +4,7 @@ use clap::{ArgGroup, Parser, Subcommand};
 
 /// Coffee Timer on the command line: the same core and database as the app.
 #[derive(Debug, Parser)]
-#[command(name = "coffee_timer_cli", version)]
+#[command(name = "coffee_timer_cli", version = coffee_timer_core::version::APP_VERSION)]
 pub struct Args {
     /// SQLite database file. Created and seeded if missing.
     /// [default: $XDG_DATA_HOME/coffee_timer/coffee_timer.db, else

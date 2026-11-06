@@ -238,7 +238,7 @@ refreshed on every tick. A paused brew keeps it, reading
 brew alive in the background and one tap from the app. (It still holds its
 partial wake lock while paused; nothing ticks, so that costs little, and
 releasing it would need a second notification kind for no visible gain.) On Android,
-[`BrewService`](../android/app/src/main/kotlin/com/example/coffee_timer/BrewService.kt)
+[`BrewService`](../android/app/src/main/kotlin/io/github/lumpsoid/coffeetimer/BrewService.kt)
 performs it as a foreground service that holds a partial wake lock. That
 keeps the process alive and the CPU awake, so the hub keeps ticking and the
 step effects keep firing with the app in the background or the screen off.

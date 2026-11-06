@@ -54,6 +54,8 @@ pub struct SettingsUpdate {
     pub pre_alert_seconds: u32,
     /// The pre-alert picker's options, in order.
     pub pre_alerts: Vec<PreAlertChoice>,
+    /// The app's version and commit, `0.1.0 (2391c1d)`.
+    pub app_version: String,
 }
 
 #[derive(Serialize, Deserialize, SignalPiece, Clone, Copy)]
