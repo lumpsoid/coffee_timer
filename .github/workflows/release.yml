@@ -1,0 +1,93 @@
+# Pushing a tag vX.Y.Z (made by scripts/release.sh) builds signed Android
+# APKs and publishes them as a GitHub Release, with the tag's message
+# (the changelog section) as the notes.
+#
+# Needs these repository secrets (docs/maintaining.md explains them):
+#   ANDROID_KEYSTORE_BASE64   the release keystore, base64-encoded
+#   ANDROID_KEYSTORE_PASSWORD
+#   ANDROID_KEY_ALIAS
+#   ANDROID_KEY_PASSWORD
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  RINF_CLI_VERSION: 8.11.0
+
+jobs:
+  android:
+    name: Android APKs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      # actions/checkout fetches the tag without its annotation; the
+      # release notes live in the annotation.
+      - name: Fetch the annotated tag
+        run: git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+
+      - name: Check the tag matches the version
+        run: |
+          version=$(scripts/version.sh show | cut -d+ -f1)
+          [ "v$version" = "$GITHUB_REF_NAME" ] || {
+            echo "tag $GITHUB_REF_NAME does not match version $version" >&2
+            exit 1
+          }
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install rinf CLI
+        run: cargo install rinf_cli --locked --version "$RINF_CLI_VERSION"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: rinf gen
+
+      - name: Write the release key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          # Never publish a debug-signed release.
+          [ -n "$KEYSTORE_BASE64" ] || { echo "ANDROID_KEYSTORE_BASE64 is not set" >&2; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 --decode > android/release.jks
+          cat > android/key.properties <<EOF
+          storeFile=release.jks
+          storePassword=$KEYSTORE_PASSWORD
+          keyAlias=$KEY_ALIAS
+          keyPassword=$KEY_PASSWORD
+          EOF
+
+      - run: flutter build apk --release --split-per-abi
+
+      - name: Name the APKs
+        run: |
+          mkdir dist
+          for apk in build/app/outputs/flutter-apk/app-*-release.apk; do
+            abi=$(basename "$apk" | sed 's/^app-\(.*\)-release\.apk$/\1/')
+            cp "$apk" "dist/coffee-timer-${GITHUB_REF_NAME}-${abi}.apk"
+          done
+          (cd dist && sha256sum *.apk > SHA256SUMS)
+          ls -l dist
+
+      - name: Release notes from the tag
+        run: git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME" > notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Coffee Timer ${{ github.ref_name }}
+          body_path: notes.md
+          files: dist/*
