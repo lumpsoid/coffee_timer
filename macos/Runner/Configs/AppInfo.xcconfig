@@ -8,7 +8,7 @@
 PRODUCT_NAME = coffee_timer
 
 // The application's bundle identifier
-PRODUCT_BUNDLE_IDENTIFIER = com.example.coffeeTimer
+PRODUCT_BUNDLE_IDENTIFIER = io.github.lumpsoid.coffeetimer
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2025 com.example. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2025 lumpsoid. 0BSD license.

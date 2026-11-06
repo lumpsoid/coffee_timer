@@ -1,4 +1,4 @@
-package com.example.coffee_timer
+package io.github.lumpsoid.coffeetimer
 
 import android.app.PendingIntent
 import android.app.Service
