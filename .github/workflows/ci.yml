@@ -1,0 +1,53 @@
+# The gates from CLAUDE.md / CONTRIBUTING.md, on every push to main and
+# every pull request. scripts/check.sh runs the same steps locally.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep in step with the rinf crate in Cargo.lock.
+  RINF_CLI_VERSION: 8.11.0
+
+jobs:
+  rust:
+    name: Rust (clippy, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test
+      - run: scripts/version.sh check
+
+  flutter:
+    name: Flutter (analyze, test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install rinf CLI
+        run: cargo install rinf_cli --locked --version "$RINF_CLI_VERSION"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # The Dart bindings are gitignored: generate them before analyzing.
+      - run: rinf gen
+      - run: flutter analyze
+      - run: flutter test
