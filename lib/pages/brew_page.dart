@@ -6,6 +6,7 @@ import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/pages/editor_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/brew_dial.dart';
+import 'package:coffee_timer/widgets/dose_sheet.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:coffee_timer/widgets/label_paper.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
@@ -83,12 +84,13 @@ class _BrewPageState extends State<BrewPage> {
     const LeaveBrew().sendSignalToRust();
   }
 
-  /// The ratio controls, for this brew only; they follow Rust's updates
-  /// while open.
+  /// The dose controls (ratio and coffee), for this brew only; they follow
+  /// Rust's updates while open.
   void _showRatioSheet(LabelColors colors) {
     unawaited(
       showModalBottomSheet<void>(
         context: context,
+        isScrollControlled: true,
         backgroundColor: colors.paper,
         builder: (_) => ListenableBuilder(
           listenable: widget.brew,
@@ -96,9 +98,17 @@ class _BrewPageState extends State<BrewPage> {
             BrewUpdateIdle(:final recipe) ||
             BrewUpdateRunning(:final recipe) ||
             BrewUpdatePaused(:final recipe) ||
-            BrewUpdateFinished(:final recipe) => _RatioSheet(
+            BrewUpdateFinished(:final recipe) => DoseSheet(
               recipe: recipe,
               colors: colors,
+              captionStyle: _caption(colors, size: 11),
+              figureStyle: _bigFigure(colors),
+              onRatio: (change) =>
+                  AdjustBrewRatio(change: change).sendSignalToRust(),
+              onCoffee: (grams) =>
+                  SetBrewCoffee(grams: grams).sendSignalToRust(),
+              onReset: () => const BackToRecipeDose().sendSignalToRust(),
+              onSave: () => const SaveBrewRatio().sendSignalToRust(),
             ),
             _ => const SizedBox.shrink(),
           },
@@ -177,7 +187,7 @@ class _BrewPageState extends State<BrewPage> {
     final colors = LabelColors.of(recipe.label, Theme.of(context).brightness);
     final paperBrightness = ThemeData.estimateBrightnessForColor(colors.paper);
     final sweep = timer?.sweepSeconds;
-    final adjusted = recipe.ratio == BrewRatioSetting.adjusted;
+    final ratioAdjusted = recipe.ratio == BrewRatioSetting.adjusted;
     return LabelPaper(
       colors: colors,
       texture: recipe.label.texture,
@@ -230,17 +240,19 @@ class _BrewPageState extends State<BrewPage> {
                         (
                           caption: 'COFFEE',
                           value: recipe.coffeeLabel,
-                          highlight: false,
+                          highlight:
+                              recipe.coffee.setting ==
+                              BrewCoffeeSetting.adjusted,
                         ),
                         (
                           caption: 'WATER',
                           value: recipe.waterLabel,
-                          highlight: adjusted,
+                          highlight: recipe.adjusted,
                         ),
                         (
                           caption: 'RATIO',
                           value: recipe.ratioLabel,
-                          highlight: adjusted,
+                          highlight: ratioAdjusted,
                         ),
                         if (recipe.grindLabel case final grind?)
                           (caption: 'CLICKS', value: grind, highlight: false),
@@ -313,7 +325,7 @@ class _BrewPageState extends State<BrewPage> {
                   ),
                 const SizedBox(height: 14),
                 Text(
-                  'Tap the figures to change the ratio\n'
+                  'Tap the figures to change the dose\n'
                   'Hold a step to start from there',
                   textAlign: TextAlign.center,
                   style: TextStyle(
@@ -512,90 +524,6 @@ class _TimerFace extends StatelessWidget {
               ),
             ),
         ],
-      ),
-    );
-  }
-}
-
-/// Less water, the ratio, more water; then the dose it makes, the way
-/// back to the recipe's own ratio and, while adjusted, saving it to the
-/// recipe. Saving closes the sheet: the page then shows the saved recipe,
-/// or a snackbar says why it could not be saved.
-class _RatioSheet extends StatelessWidget {
-  const _RatioSheet({required this.recipe, required this.colors});
-
-  final BrewRecipe recipe;
-  final LabelColors colors;
-
-  void _adjust(BrewRatioChange change) =>
-      AdjustBrewRatio(change: change).sendSignalToRust();
-
-  @override
-  Widget build(BuildContext context) {
-    final adjusted = recipe.ratio == BrewRatioSetting.adjusted;
-    return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 20, 22, 12),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('RATIO FOR THIS BREW', style: _caption(colors, size: 11)),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                IconButton.outlined(
-                  tooltip: 'Less water',
-                  color: colors.ink,
-                  icon: const Icon(Icons.remove),
-                  onPressed: () => _adjust(BrewRatioChange.lessWater),
-                ),
-                SizedBox(
-                  width: 180,
-                  child: Text(
-                    recipe.ratioLabel,
-                    textAlign: TextAlign.center,
-                    style: _bigFigure(colors).copyWith(
-                      color: adjusted ? colors.accent : colors.ink,
-                    ),
-                  ),
-                ),
-                IconButton.outlined(
-                  tooltip: 'More water',
-                  color: colors.ink,
-                  icon: const Icon(Icons.add),
-                  onPressed: () => _adjust(BrewRatioChange.moreWater),
-                ),
-              ],
-            ),
-            const SizedBox(height: 6),
-            LabelTagline(
-              text: '${recipe.coffeeLabel} coffee · ${recipe.waterLabel} water',
-              colors: colors,
-            ),
-            const SizedBox(height: 8),
-            TextButton(
-              onPressed: adjusted
-                  ? () => _adjust(BrewRatioChange.recipe)
-                  : null,
-              style: TextButton.styleFrom(foregroundColor: colors.accent),
-              child: const Text("Back to the recipe's ratio"),
-            ),
-            if (adjusted)
-              FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  const SaveBrewRatio().sendSignalToRust();
-                },
-                style: FilledButton.styleFrom(
-                  backgroundColor: colors.accent,
-                  foregroundColor: colors.paper,
-                ),
-                icon: const Icon(Icons.save_outlined),
-                label: const Text('Save to recipe'),
-              ),
-          ],
-        ),
       ),
     );
   }

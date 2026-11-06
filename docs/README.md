@@ -63,19 +63,24 @@ to.
   pending. While paused the sweep stops and fades, the countdown fades, the
   screen may sleep again, and the brew notification reads `Paused`.
   The coffee, water and ratio are the recipe's stored grams.
-  Tap the coffee/water/ratio figures to change the ratio for this brew in
-  steps of 0.5. The coffee stays the same and the water follows. Leaving the
-  page goes back to the recipe's own ratio. While the ratio is changed,
-  **Save to recipe** in the ratio sheet makes it the recipe's own: the
-  recipe keeps its coffee and takes the water and step pours shown, the
-  list shows the new water, and a running, paused or done brew carries on
-  where it is. A recipe holds at most 2000 g of water, and each pour 1–2000
-  g; a ratio that would go past that is not saved, and a snackbar says why
-  (`Can't save this ratio: 2050 g of water is outside 1–2000 g`).
+  Tap the coffee/water/ratio figures to change the dose for this brew. The
+  ratio moves in steps of 0.5; the coffee shown stays and the water
+  follows. The coffee sits on a gram tape under a needle: swipe the tape
+  sideways (it follows the finger, so left is more) to brew with less or
+  more coffee, 1–200 g; a slow drag moves a gram at a time, a fast swipe
+  many. The ratio shown stays and the water follows: at the recipe's own
+  ratio exactly as the recipe scales (15 g to 250 g at 9 g is 150 g).
+  **Reset** restores both, and so does leaving the page.
+  While either is changed, **Save** makes the dose the recipe's
+  own: the recipe takes the coffee, water and step pours shown, the list
+  shows them, and a running, paused or done brew carries on where it is.
+  A recipe holds at most 2000 g of water, and each pour 1–2000 g; a dose
+  that would go past that is not saved, and a snackbar says why
+  (`Can't save to the recipe: 2050 g of water is outside 1–2000 g`).
   Each step that pours water shows its grams in the step list, and while it
   runs or is paused the dial reads the scale total to pour up to, such as
-  `Pour to 150g` (this step's pour plus every earlier one). An adjusted
-  ratio scales every pour with the water.
+  `Pour to 150g` (this step's pour plus every earlier one). A changed
+  coffee or ratio scales every pour with the water.
   Under the dial, a running or paused brew previews the step after this
   one, `Next: Pour 2 · 0:45 · 100g` (its pour only if it pours), or reads
   `Last step`. Three seconds before a step ends the phone gives one short
@@ -182,6 +187,7 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db list
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show espresso-uuid
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --ratio-steps -2   # 1:16
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --ratio-steps 3 --save  # 1:18, saved
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db show pourover-uuid --coffee 9      # 9 g to 150 g
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db new V60 --description "Clean" \
     --coffee 15 --water 250 --step Bloom=30@50 --step Pour=120@200
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db brew pourover-uuid --from 1 --fast

@@ -1,17 +1,19 @@
 use std::cmp::Ordering;
 
-use crate::brew::{FinishedBrew, RatioSetting, RunningStep, StepRow, StepStatus};
+use crate::brew::{CoffeeSetting, FinishedBrew, RatioSetting, RunningStep, StepRow, StepStatus};
 use crate::model::{
-    BrewMetrics, BrewRatio, GrindClicks, LabelStyle, Pour, PourScale, Recipe, RecipeId,
+    BrewMetrics, BrewRatio, CoffeeDose, GrindClicks, LabelStyle, Pour, PourScale, Recipe, RecipeId,
 };
 
 /// The open recipe as the brew page shows it. Built once per recipe version
-/// and ratio; the timer's position is kept beside it in
+/// and dose (coffee and ratio); the timer's position is kept beside it in
 /// [`crate::brew::BrewState`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrewView {
     recipe: Recipe,
+    coffee: CoffeeSetting,
     coffee_label: String,
+    water_grams: u32,
     water_label: String,
     ratio_label: String,
     ratio: RatioSetting,
@@ -27,25 +29,37 @@ impl BrewView {
     /// [`BrewView::next_label`] on the last step: nothing follows.
     pub const LAST_STEP_LABEL: &'static str = "Last step";
 
-    /// `recipe` at the ratio `adjusted` on the brew page, or at its own
-    /// ratio. An adjusted ratio equal to the recipe's is no adjustment.
-    /// The step pours follow the water ([`PourScale`]).
-    pub(crate) fn of(recipe: Recipe, metrics: &BrewMetrics, adjusted: Option<BrewRatio>) -> Self {
-        let coffee = recipe.coffee();
+    /// `recipe` at the coffee and ratio changed on the brew page, each at
+    /// the recipe's own when not changed. A change equal to the recipe's
+    /// is no change. At the recipe's own ratio the water follows the coffee
+    /// exactly ([`Recipe::water_for`]); at a changed one it is the coffee
+    /// times that ratio. The step pours follow the water ([`PourScale`]).
+    pub(crate) fn of(
+        recipe: Recipe,
+        metrics: &BrewMetrics,
+        coffee: Option<CoffeeDose>,
+        ratio: Option<BrewRatio>,
+    ) -> Self {
+        let coffee = match coffee {
+            Some(dose) if dose != recipe.coffee() => CoffeeSetting::Adjusted(dose),
+            Some(_) | None => CoffeeSetting::Recipe(recipe.coffee()),
+        };
         let own = metrics.ratio(&recipe);
-        let ratio = match adjusted {
+        let ratio = match ratio {
             Some(ratio) if ratio != own => RatioSetting::Adjusted(ratio),
             Some(_) | None => RatioSetting::Recipe(own),
         };
         let water = match ratio {
-            RatioSetting::Adjusted(ratio) => ratio.water_grams(coffee),
-            RatioSetting::Recipe(_) => recipe.water().grams(),
+            RatioSetting::Adjusted(ratio) => ratio.water_grams(coffee.dose()),
+            RatioSetting::Recipe(_) => recipe.water_for(coffee.dose()),
         };
         let pours = PourScale::new(recipe.water(), water).pours(recipe.steps());
         let next_labels = next_labels(&recipe, &pours, metrics);
         Self {
-            coffee_label: format!("{}g", coffee.grams()),
+            coffee_label: format!("{}g", coffee.dose().grams()),
+            coffee,
             water_label: format!("{water}g"),
+            water_grams: water,
             ratio_label: ratio.ratio().label(),
             ratio,
             duration_label: metrics.duration_label(&recipe),
@@ -61,9 +75,26 @@ impl BrewView {
         &self.recipe
     }
 
-    /// The same recipe at the ratio `adjusted`, or at its own.
-    pub(crate) fn with_ratio(self, adjusted: Option<BrewRatio>, metrics: &BrewMetrics) -> Self {
-        Self::of(self.recipe, metrics, adjusted)
+    /// The same recipe at the coffee and ratio given, each at its own when
+    /// none.
+    pub(crate) fn with_dose(
+        self,
+        coffee: Option<CoffeeDose>,
+        ratio: Option<BrewRatio>,
+        metrics: &BrewMetrics,
+    ) -> Self {
+        Self::of(self.recipe, metrics, coffee, ratio)
+    }
+
+    /// Whether the coffee or the ratio differs from the recipe's: the page
+    /// can go back to the recipe's dose, or save this one to it.
+    pub fn is_adjusted(&self) -> bool {
+        self.coffee.adjusted().is_some() || self.ratio.adjusted().is_some()
+    }
+
+    /// The water at the coffee and ratio shown, in grams.
+    pub(crate) fn water_grams(&self) -> u32 {
+        self.water_grams
     }
 
     /// The step at `index`, about to run with its full duration in start
@@ -188,9 +219,14 @@ impl BrewView {
         self.recipe.description()
     }
 
-    /// Coffee grams, `20g`.
+    /// Coffee grams shown, `20g`.
     pub fn coffee_label(&self) -> &str {
         &self.coffee_label
+    }
+
+    /// The coffee shown, and whether it is the recipe's own.
+    pub fn coffee(&self) -> CoffeeSetting {
+        self.coffee
     }
 
     /// Water grams at the ratio shown, `100g`.

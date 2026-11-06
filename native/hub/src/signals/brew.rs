@@ -31,8 +31,8 @@ pub struct PauseBrew;
 #[derive(Deserialize, DartSignal)]
 pub struct ResumeBrew;
 
-/// Change the open recipe's ratio for this brew only; the coffee stays and
-/// the water follows.
+/// Change the open recipe's ratio for this brew only; the coffee shown
+/// stays and the water follows.
 #[derive(Deserialize, DartSignal)]
 pub struct AdjustBrewRatio {
     pub change: BrewRatioChange,
@@ -44,12 +44,22 @@ pub enum BrewRatioChange {
     MoreWater,
     /// One step less water per gram of coffee.
     LessWater,
-    /// Back to the recipe's own ratio.
-    Recipe,
 }
 
-/// Make the brew's adjusted ratio the open recipe's own: save the water
-/// and step pours shown. A refusal (too much water, a pour out of range) or
+/// Brew the open recipe with `grams` of coffee for this brew only; the
+/// ratio shown stays and the water follows. Grams outside
+/// `BrewCoffee.min_grams..=max_grams` are ignored.
+#[derive(Deserialize, DartSignal)]
+pub struct SetBrewCoffee {
+    pub grams: u32,
+}
+
+/// Back to the open recipe's own coffee and ratio.
+#[derive(Deserialize, DartSignal)]
+pub struct BackToRecipeDose;
+
+/// Make the brew's changed dose the open recipe's own: save the coffee,
+/// water and step pours shown. A refusal (too much water, a pour out of range) or
 /// a store failure comes back as `RecipeListUpdate::Failed`.
 #[derive(Deserialize, DartSignal)]
 pub struct SaveBrewRatio;
@@ -102,11 +112,15 @@ pub struct BrewRecipe {
     pub description: String,
     /// `20g`.
     pub coffee_label: String,
+    pub coffee: BrewCoffee,
     /// `100g`, at the ratio shown.
     pub water_label: String,
     /// Water per gram of coffee, `1:5`.
     pub ratio_label: String,
     pub ratio: BrewRatioSetting,
+    /// The coffee or the ratio differs from the recipe's: the water does
+    /// too, and the dose can go back to the recipe's or be saved to it.
+    pub adjusted: bool,
     /// Where to set the grinder, in clicks, `22`; none when the recipe does
     /// not say.
     pub grind_label: Option<String>,
@@ -133,6 +147,25 @@ pub struct BrewStep {
     /// brew: steps lie end to end from 0.0 to 1.0.
     pub track_start: f64,
     pub track_end: f64,
+}
+
+/// The coffee shown, for the coffee tape: where its needle sits and how far
+/// the tape runs.
+#[derive(Serialize, SignalPiece)]
+pub struct BrewCoffee {
+    pub grams: u32,
+    pub min_grams: u32,
+    pub max_grams: u32,
+    pub setting: BrewCoffeeSetting,
+}
+
+/// Whose coffee the page shows.
+#[derive(Serialize, SignalPiece)]
+pub enum BrewCoffeeSetting {
+    /// The recipe's own coffee.
+    Recipe,
+    /// Changed for this brew; coffee and water differ from the recipe's.
+    Adjusted,
 }
 
 /// Whose ratio the page shows.

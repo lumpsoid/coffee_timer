@@ -13,7 +13,9 @@ use std::time::Duration;
 use coffee_timer_core::brew::{BrewController, Effect};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::{DeleteError, EditorController, SaveError};
-use coffee_timer_core::model::{self, AccentColor, ModelError, PreAlertLead, RecipeId, StepId};
+use coffee_timer_core::model::{
+    self, AccentColor, CoffeeDose, ModelError, PreAlertLead, RecipeId, StepId,
+};
 use coffee_timer_core::ports::StoreError;
 use coffee_timer_core::settings::SettingsController;
 use coffee_timer_store::{SqliteStore, UuidIds};
@@ -21,14 +23,14 @@ use rinf::{DartSignal, RustSignal, debug_print};
 use tokio::time::{Instant, Interval, MissedTickBehavior, interval_at};
 
 use crate::signals::{
-    AddStep, AdjustBrewRatio, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe, DuplicateRecipe,
-    EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes, LeaveBrew, MoveRecipe,
-    MoveStep, NewDraft, NudgeStepDuration, OpenBrew, PauseBrew, PinRecipe, PlatformEffect,
-    RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew, ResumeBrew,
-    SaveBrewRatio, SaveRecipe, SetAccent, SetPreAlert, SetRecipeCoffee, SetRecipeDescription,
-    SetRecipeGrind, SetRecipeName, SetRecipePourSpeed, SetRecipeWater, SetSound, SetStepDuration,
-    SetStepName, SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
-    UndoRemoveRecipe, UnpinRecipe,
+    AddStep, AdjustBrewRatio, BackToRecipeDose, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe,
+    DuplicateRecipe, EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes,
+    LeaveBrew, MoveRecipe, MoveStep, NewDraft, NudgeStepDuration, OpenBrew, PauseBrew, PinRecipe,
+    PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew,
+    ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetBrewCoffee, SetPreAlert, SetRecipeCoffee,
+    SetRecipeDescription, SetRecipeGrind, SetRecipeName, SetRecipePourSpeed, SetRecipeWater,
+    SetSound, SetStepDuration, SetStepName, SetStepWater, SetTheme, SetVibration, SettingsReady,
+    SettingsUpdate, StartBrew, UndoRemoveRecipe, UnpinRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -77,6 +79,8 @@ pub async fn run(mut c: Controllers) {
     let resume_brew = ResumeBrew::get_dart_signal_receiver();
     let leave_brew = LeaveBrew::get_dart_signal_receiver();
     let adjust_brew_ratio = AdjustBrewRatio::get_dart_signal_receiver();
+    let set_brew_coffee = SetBrewCoffee::get_dart_signal_receiver();
+    let back_to_recipe_dose = BackToRecipeDose::get_dart_signal_receiver();
     let save_brew_ratio = SaveBrewRatio::get_dart_signal_receiver();
     let editor_ready = EditorReady::get_dart_signal_receiver();
     let new_draft = NewDraft::get_dart_signal_receiver();
@@ -174,6 +178,16 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = adjust_brew_ratio.recv() => {
                 report(c.brew.adjust_ratio(pack.message.change.into()));
+                show_brew(&c.brew, &[]);
+            }
+            Some(pack) = set_brew_coffee.recv() => {
+                if let Some(coffee) = report(CoffeeDose::try_parse(pack.message.grams.into())) {
+                    report(c.brew.set_coffee(coffee));
+                }
+                show_brew(&c.brew, &[]);
+            }
+            Some(_) = back_to_recipe_dose.recv() => {
+                report(c.brew.back_to_recipe_dose());
                 show_brew(&c.brew, &[]);
             }
             // `pass_on` sends the brew view, or it is unchanged.
@@ -318,7 +332,7 @@ fn delete(c: &mut Controllers) -> Result<(), DeleteError> {
     Ok(())
 }
 
-/// Saves the brew's adjusted ratio to its recipe. A refusal or a store
+/// Saves the brew's changed dose to its recipe. A refusal or a store
 /// failure goes to the list as core's error, for a snackbar.
 fn save_ratio(c: &mut Controllers) {
     match c.brew.save_ratio(&mut c.catalog) {

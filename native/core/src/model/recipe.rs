@@ -86,6 +86,30 @@ impl Recipe {
         Ok(self)
     }
 
+    /// The water for `coffee` at this recipe's own ratio, exact rather than
+    /// through the rounded [`crate::model::BrewRatio`], rounded half up to a
+    /// gram: the recipe's own coffee gets its own water.
+    pub fn water_for(&self, coffee: CoffeeDose) -> u32 {
+        let recipe_coffee = u64::from(self.coffee.grams()).max(1);
+        let product = u64::from(self.water.grams()) * u64::from(coffee.grams());
+        let rounded = (product * 2 + recipe_coffee) / (recipe_coffee * 2);
+        u32::try_from(rounded).unwrap_or(u32::MAX)
+    }
+
+    /// The recipe at `coffee` and `water_grams` of total water: what a brew
+    /// with a changed dose shows, made the recipe's own. The pours scale as
+    /// [`Recipe::with_water_scaled_to`] scales them.
+    pub fn with_dose_scaled_to(
+        self,
+        coffee: CoffeeDose,
+        water_grams: u32,
+    ) -> Result<Self, WaterScaleError> {
+        Ok(Self {
+            coffee,
+            ..self.with_water_scaled_to(water_grams)?
+        })
+    }
+
     /// The recipe at `water_grams` of total water, the coffee kept: what a
     /// brew at an adjusted ratio shows, made the recipe's own. Every step's
     /// pour is scaled by [`PourScale`], the rule the brew page shows them

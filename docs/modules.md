@@ -224,7 +224,8 @@ Test:
 
 - `BrewController` owns `BrewState` and runs the timer state machine. It
   provides `open`, `start`, `tick`, `pause`, `resume`, `reset`, `leave`,
-  `adjust_ratio`, `save_ratio` (the adjusted ratio saved to the recipe
+  `adjust_ratio`, `set_coffee`, `back_to_recipe_dose`, `save_ratio` (the
+  changed coffee and ratio saved to the recipe
   through `&mut RecipeCatalog`, returning the `CatalogChange`) and
   `on_catalog_change`. `tick(&Settings)` takes the user's settings on
   every call.
@@ -243,9 +244,9 @@ Test:
   brew page wears the list card's label), `Step N of M` positions, and each
   step's `Pour` at the water shown (`pour_to_label(index)`), and the
   next-step preview (`next_label(index)`: `Next: Pour · 2:00 · 200g` or
-  `Last step`). Its
-  `RatioSetting` is `Recipe` or `Adjusted`; `RatioChange` is
-  one press of the page's ratio controls.
+  `Last step`). Its `CoffeeSetting` and
+  `RatioSetting` are each `Recipe` or `Adjusted`, and `is_adjusted` is
+  either; `RatioChange` is one press of the page's ratio controls.
 - `RunningStep` is the current (or paused) step, the time left, the run
   number, the step the run started from, and the dial's sweep.
 - `StepRow` and `StepStatus` (`Done` / `Current` / `Paused` / `Pending`) describe the
@@ -253,8 +254,8 @@ Test:
   fractions of the whole brew, and its pour label if it pours.
 - `Effect` is a platform command. `BrewNotice` is the content of the brew
   notification.
-- `BrewError` is a rejected start, pause, resume or ratio change.
-  `SaveRatioError` is a rejected ratio save: `NoRecipe`, `NotAdjusted`,
+- `BrewError` is a rejected start, pause, resume or dose change.
+  `SaveRatioError` is a rejected dose save: `NoRecipe`, `NotAdjusted`,
   `OutOfRange(WaterScaleError)` or `Store`.
 
 Test:
@@ -363,7 +364,7 @@ A second head on core and store. It proves that core needs no rinf. It
 decides nothing: core produces every label, status and error text.
 
 - [`args.rs`](../native/cli/src/args.rs) defines the clap arguments: `list`,
-  `show` (with `--ratio-steps` and `--save`), `new`, `duplicate`, `pin`, `unpin`, `delete`,
+  `show` (with `--coffee`, `--ratio-steps` and `--save`), `new`, `duplicate`, `pin`, `unpin`, `delete`,
   `export` (ids, `--out`), `import` (a file or `-`), `brew` and `settings`
   (`theme`, `accent`, `sound`, `vibration`, `pre-alert`), plus the global `--db`.
   `brew` ticks with the stored settings.
@@ -417,7 +418,7 @@ makes no business decisions.
 |---|---|---|
 | boot | `Boot` | `BootFailed` |
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `MoveRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
-| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
+| brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SetBrewCoffee`, `BackToRecipeDose`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetRecipePourSpeed`, `SetRecipeGrind`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
 | settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds` and the `pre_alerts` options) |
 
@@ -480,7 +481,15 @@ The GUI renders, sends intents, and performs effects. It holds no business
   the brew timer: bezel ticks, an inner arc that sweeps per step and
   restarts on `restartKey` (it stops and fades while a step is `paused`,
   and goes on from there), and an outer track with each step's arc.
-  `StepListTile` is one step of the brew page's method.
+  `StepListTile` is one step of the brew page's method. `CoffeeTape` is
+  the ratio sheet's coffee: a gram tape under a fixed needle that follows
+  a horizontal drag, its grams per pixel rising with finger speed
+  (`gramsPerPixel`). It runs on the finger while dragged, sends each whole
+  gram as `SetBrewCoffee`, and otherwise sits at Rust's `BrewCoffee.grams`,
+  within its `min_grams..=max_grams`. `DoseSheet` is the brew page's dose sheet
+  (ratio buttons, the coffee tape, then Reset and Save in one row, enabled
+  while the dose is changed); it reports intents through callbacks and
+  the page sends them.
 - `src/bindings/` holds the generated, gitignored signal classes. Run
   `rinf gen` to create them.
 
@@ -505,4 +514,5 @@ Every test uses hand-built signal values, so no test needs Rust. Shared values l
   controls following Rust's state, and the editor
   page: open, field errors, pop on `Closed`, notices, and the delete dialog.
 - [`widgets/`](../test/widgets) tests the display widgets, including the
-  ring's restart key.
+  ring's restart key, the coffee tape's drag direction, speed curve and
+  bounds, and the dose sheet's buttons and the intents it reports.

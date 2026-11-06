@@ -1,14 +1,14 @@
 //! Brew state and effects → brew signals.
 
 use coffee_timer_core::brew::{
-    BrewNotice, BrewState, BrewView, Effect, FinishedBrew, RatioChange, RatioSetting, RunningStep,
-    StepRow, StepStatus,
+    BrewNotice, BrewState, BrewView, CoffeeSetting, Effect, FinishedBrew, RatioChange,
+    RatioSetting, RunningStep, StepRow, StepStatus,
 };
-use coffee_timer_core::model::StepDuration;
+use coffee_timer_core::model::{CoffeeDose, StepDuration};
 
 use crate::signals::{
-    BrewFinished, BrewRatioChange, BrewRatioSetting, BrewRecipe, BrewStep, BrewStepStatus,
-    BrewTimer, BrewUpdate, PlatformEffect,
+    BrewCoffee, BrewCoffeeSetting, BrewFinished, BrewRatioChange, BrewRatioSetting, BrewRecipe,
+    BrewStep, BrewStepStatus, BrewTimer, BrewUpdate, PlatformEffect,
 };
 
 impl From<&BrewState> for BrewUpdate {
@@ -50,13 +50,29 @@ fn recipe(view: &BrewView, steps: Vec<BrewStep>) -> BrewRecipe {
         name: view.name().to_owned(),
         description: view.description().to_owned(),
         coffee_label: view.coffee_label().to_owned(),
+        coffee: view.coffee().into(),
         water_label: view.water_label().to_owned(),
         ratio_label: view.ratio_label().to_owned(),
         ratio: view.ratio().into(),
+        adjusted: view.is_adjusted(),
         grind_label: view.grind_label(),
         duration_label: view.duration_label().to_owned(),
         label: view.style().into(),
         steps,
+    }
+}
+
+impl From<CoffeeSetting> for BrewCoffee {
+    fn from(setting: CoffeeSetting) -> Self {
+        Self {
+            grams: setting.dose().grams(),
+            min_grams: CoffeeDose::MIN_GRAMS,
+            max_grams: CoffeeDose::MAX_GRAMS,
+            setting: match setting {
+                CoffeeSetting::Recipe(_) => BrewCoffeeSetting::Recipe,
+                CoffeeSetting::Adjusted(_) => BrewCoffeeSetting::Adjusted,
+            },
+        }
     }
 }
 
@@ -74,7 +90,6 @@ impl From<BrewRatioChange> for RatioChange {
         match change {
             BrewRatioChange::MoreWater => Self::MoreWater,
             BrewRatioChange::LessWater => Self::LessWater,
-            BrewRatioChange::Recipe => Self::Recipe,
         }
     }
 }
@@ -140,7 +155,7 @@ mod tests {
     use coffee_timer_core::catalog::RecipeCatalog;
     use coffee_timer_core::fakes::FakeRecipeStore;
     use coffee_timer_core::model::{
-        CoffeeDose, Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepId, WaterAmount,
+        Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepId, WaterAmount,
     };
 
     use super::*;
@@ -207,6 +222,10 @@ mod tests {
         assert_eq!(recipe.duration_label, "0:30");
         assert_eq!(recipe.ratio_label, "1:5");
         assert!(matches!(recipe.ratio, BrewRatioSetting::Recipe));
+        assert_eq!(recipe.coffee.grams, 20);
+        assert_eq!((recipe.coffee.min_grams, recipe.coffee.max_grams), (1, 200));
+        assert!(matches!(recipe.coffee.setting, BrewCoffeeSetting::Recipe));
+        assert!(!recipe.adjusted);
         let track: Vec<_> = recipe
             .steps
             .iter()
@@ -231,6 +250,23 @@ mod tests {
         assert_eq!(recipe.water_label, "110g");
         assert_eq!(recipe.ratio_label, "1:5.5");
         assert!(matches!(recipe.ratio, BrewRatioSetting::Adjusted));
+        assert!(recipe.adjusted);
+        Ok(())
+    }
+
+    #[test]
+    fn a_changed_coffee_shows_its_grams_and_water() -> TestResult {
+        let mut brew = opened()?;
+        brew.set_coffee(CoffeeDose::try_parse(12)?)?;
+        let BrewUpdate::Idle { recipe } = BrewUpdate::from(brew.state()) else {
+            return Err("not idle".into());
+        };
+        assert_eq!(recipe.coffee_label, "12g");
+        assert_eq!(recipe.water_label, "60g");
+        assert_eq!(recipe.coffee.grams, 12);
+        assert!(matches!(recipe.coffee.setting, BrewCoffeeSetting::Adjusted));
+        assert!(matches!(recipe.ratio, BrewRatioSetting::Recipe));
+        assert!(recipe.adjusted);
         Ok(())
     }
 

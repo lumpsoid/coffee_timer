@@ -144,15 +144,14 @@ core `Effect`, since copying is how the GUI head delivers the text (the
 CLI writes it to stdout or a file). The clipboard is read in Dart, whose
 `ImportRecipes { text }` carries it as is.
 
-**Saving the brew's ratio.** The flow belongs to the brew page, which
+**Saving the brew's dose.** The flow belongs to the brew page, which
 starts it, so `BrewController::save_ratio(&mut catalog)` owns it, as
 `EditorController::save` owns the editor's: no new ordering owner, and the
-hub only passes the change on. The controller takes its adjusted ratio's
-water (`BrewRatio::water_grams` of the coffee, the figure the page shows),
-builds the recipe with `Recipe::with_water_scaled_to`, whose step pours
+hub only passes the change on. The controller takes the coffee and water
+its view shows, builds the recipe with `Recipe::with_dose_scaled_to`, whose step pours
 come from the same `PourScale` the page shows, so what was shown is what
 is saved, and upserts it. Only after the write does it replace its own
-view with the saved recipe at its own ratio, keeping the timer's place
+view with the saved recipe at its own dose, keeping the timer's place
 (`BrewState::map_view`): the steps and their times are unchanged, so a
 running, paused or finished brew carries on. The returned `Upserted`
 goes through `pass_on` like any change; the list gets the new row, and
@@ -309,7 +308,7 @@ clock. Time arrives as `tick()`, one call per second while
   `BrewView::poured_label` is the scale's final reading, `Poured to 250g`,
   at the ratio shown, or none when no step pours. A finished brew is
   stopped like an idle one: `tick()` does nothing, `pause()`/`resume()`
-  are `Err`, `adjust_ratio` keeps it finished at the new ratio, and a
+  are `Err`, a dose change keeps it finished at the new dose, and a
   catalog change to its recipe reopens it idle (or empty) with no effects.
   The GUI's dial tap starts a new brew from step 1, as it does while idle.
 - `reset()` stops the brew (or clears a finished one) and keeps the recipe
@@ -321,11 +320,17 @@ clock. Time arrives as `tick()`, one call per second while
   sound.
 - `adjust_ratio(change)` changes the open recipe's ratio for this brew
   only: one step of 0.5 more or less water per gram of coffee, within
-  `1:1..=1:30`, or back to the recipe's own. The coffee stays and the water
-  follows, and so does every step's pour (scaled by `PourScale`). It
-  returns no effects and leaves a running or paused timer alone. `open`
-  and `leave` drop the adjustment. An edit to the open recipe keeps it,
-  applied to the edited recipe's coffee. `save_ratio` makes it the
+  `1:1..=1:30`. The coffee shown stays and the water follows.
+  `set_coffee(dose)` changes the coffee for this brew only; the ratio
+  shown stays and the water follows: at the recipe's own ratio
+  `Recipe::water_for` (the stored water times the coffee over the stored
+  coffee, not through the rounded `BrewRatio`), at a changed one
+  `BrewRatio::water_grams`. `back_to_recipe_dose()` restores both. Every
+  step's pour follows the water (scaled by `PourScale`). None returns
+  effects or touches a running or paused timer. A coffee or ratio equal to
+  the recipe's is no change (`CoffeeSetting` / `RatioSetting::Recipe`).
+  `open` and `leave` drop the changes. An edit to the open recipe keeps
+  them, applied to the edited recipe. `save_ratio` makes the dose the
   recipe's own (see [the catalog-change flow](#the-catalogchange-flow)). Every recipe has coffee
   (`CoffeeDose` is at least 1 g), so every recipe has a ratio to change.
 - Every accepted start increments a run number, held in
@@ -429,7 +434,7 @@ feature's state as usual. The user sees an error only in these cases:
   its `PinError` text, `No recipe with id …` or `Failed to save the pin: …`,
   its `MoveError` text, `No recipe with id …` or `Failed to save the
   order: …`,
-  its `SaveRatioError` text, `Can't save this ratio: 2050 g of water is
+  its `SaveRatioError` text, `Can't save to the recipe: 2050 g of water is
   outside 1–2000 g` or `Failed to save recipe: …`, its `ExportError`
   text, `No recipe with id …`, or its `ImportError` text, `Can't import:
   Recipe 2, step 3, seconds: 0–5999 seconds` or `Failed to import
