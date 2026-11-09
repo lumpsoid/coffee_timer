@@ -9,9 +9,13 @@ pub enum Effect {
         ms: u32,
     },
     /// A buzz pattern: alternating pause and buzz lengths in ms, starting
-    /// with a pause (`[0, 400, 200, 400]` is two long buzzes).
+    /// with a pause (`[0, 400, 200, 400]` is two long buzzes), and the
+    /// strength of each entry, 1–255 (0 for the pauses), as Android's
+    /// waveform takes them. No strengths buzzes at the device's default; a
+    /// device that cannot vary its strength ignores them.
     VibratePattern {
         pattern_ms: Vec<u32>,
+        strengths: Vec<u8>,
     },
     PlaySound {
         sound: Sound,

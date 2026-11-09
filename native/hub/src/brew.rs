@@ -141,7 +141,13 @@ impl From<Effect> for PlatformEffect {
                 sound: sound.id().to_owned(),
             },
             Effect::Vibrate { ms } => Self::Vibrate { ms },
-            Effect::VibratePattern { pattern_ms } => Self::VibratePattern { pattern_ms },
+            Effect::VibratePattern {
+                pattern_ms,
+                strengths,
+            } => Self::VibratePattern {
+                pattern_ms,
+                strengths,
+            },
             Effect::KeepScreenOn(on) => Self::KeepScreenOn { on },
             Effect::ShowBrewNotification(BrewNotice { title, next }) => {
                 Self::ShowBrewNotification { title, next }

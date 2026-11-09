@@ -9,6 +9,7 @@ pub struct Settings {
     accent: AccentColor,
     sound: Toggle,
     vibration: Toggle,
+    finish_knock: Toggle,
     pre_alert: PreAlertLead,
     step_sound: StepSound,
     finish_sound: FinishSound,
@@ -17,13 +18,14 @@ pub struct Settings {
 impl Settings {
     /// Defaults used before anything is loaded, and what
     /// [`Settings::from_storage`] gives for nothing stored: the system
-    /// theme, Material blue, sound and vibration on, a 3 s pre-alert,
-    /// [`StepSound::DEFAULT`] and [`FinishSound::DEFAULT`].
+    /// theme, Material blue, sound, vibration and the finish knock on, a
+    /// 3 s pre-alert, [`StepSound::DEFAULT`] and [`FinishSound::DEFAULT`].
     pub const FALLBACK: Self = Self {
         theme: ThemeSelection::System,
         accent: AccentColor::FALLBACK,
         sound: Toggle::On,
         vibration: Toggle::On,
+        finish_knock: Toggle::On,
         pre_alert: PreAlertLead::DEFAULT,
         step_sound: StepSound::DEFAULT,
         finish_sound: FinishSound::DEFAULT,
@@ -56,6 +58,7 @@ impl Settings {
                 .unwrap_or(fallback.accent),
             sound: toggle(stored.sound, fallback.sound),
             vibration: toggle(stored.vibration, fallback.vibration),
+            finish_knock: toggle(stored.finish_knock, fallback.finish_knock),
             pre_alert: stored
                 .pre_alert
                 .and_then(|raw| PreAlertLead::try_parse(raw).ok())
@@ -85,6 +88,13 @@ impl Settings {
 
     pub fn with_vibration(self, vibration: Toggle) -> Self {
         Self { vibration, ..self }
+    }
+
+    pub fn with_finish_knock(self, finish_knock: Toggle) -> Self {
+        Self {
+            finish_knock,
+            ..self
+        }
     }
 
     pub fn with_pre_alert(self, pre_alert: PreAlertLead) -> Self {
@@ -120,6 +130,12 @@ impl Settings {
     /// finish.
     pub fn vibration(self) -> Toggle {
         self.vibration
+    }
+
+    /// Whether the finish buzzes the knock ("shave and a haircut, two
+    /// bits") rather than two long buzzes. Under [`Settings::vibration`].
+    pub fn finish_knock(self) -> Toggle {
+        self.finish_knock
     }
 
     pub fn pre_alert(self) -> PreAlertLead {

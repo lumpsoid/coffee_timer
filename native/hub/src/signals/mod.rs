@@ -30,6 +30,7 @@ pub use recipe_list::{
     UndoRemoveRecipe, UnpinRecipe,
 };
 pub use settings::{
-    AccentChoice, PreAlertChoice, PreviewSound, SetAccent, SetFinishSound, SetPreAlert, SetSound,
-    SetStepSound, SetTheme, SetVibration, SettingsReady, SettingsUpdate, SoundChoice, ThemeChoice,
+    AccentChoice, PreAlertChoice, PreviewSound, SetAccent, SetFinishKnock, SetFinishSound,
+    SetPreAlert, SetSound, SetStepSound, SetTheme, SetVibration, SettingsReady, SettingsUpdate,
+    SoundChoice, ThemeChoice,
 };

@@ -223,9 +223,12 @@ pub enum PlatformEffect {
     Vibrate {
         ms: u32,
     },
-    /// Alternating pause and buzz lengths in ms, starting with a pause.
+    /// Alternating pause and buzz lengths in ms, starting with a pause,
+    /// and each entry's strength, 1–255 (0 for the pauses); none for the
+    /// device's default.
     VibratePattern {
         pattern_ms: Vec<u32>,
+        strengths: Vec<u8>,
     },
     KeepScreenOn {
         on: bool,

@@ -28,10 +28,10 @@ use crate::signals::{
     DuplicateRecipe, EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes,
     LeaveBrew, MoveRecipe, MoveStep, NewDraft, NudgeStepDuration, OpenBrew, PauseBrew, PinRecipe,
     PlatformEffect, PreviewSound, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep,
-    ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetBrewCoffee, SetFinishSound,
-    SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeGrind, SetRecipeName,
-    SetRecipePourSpeed, SetRecipeWater, SetSound, SetStepDuration, SetStepName, SetStepSound,
-    SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
+    ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetBrewCoffee, SetFinishKnock,
+    SetFinishSound, SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeGrind,
+    SetRecipeName, SetRecipePourSpeed, SetRecipeWater, SetSound, SetStepDuration, SetStepName,
+    SetStepSound, SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
     UndoRemoveRecipe, UnpinRecipe,
 };
 
@@ -109,6 +109,7 @@ pub async fn run(mut c: Controllers) {
     let set_accent = SetAccent::get_dart_signal_receiver();
     let set_sound = SetSound::get_dart_signal_receiver();
     let set_vibration = SetVibration::get_dart_signal_receiver();
+    let set_finish_knock = SetFinishKnock::get_dart_signal_receiver();
     let set_pre_alert = SetPreAlert::get_dart_signal_receiver();
     let set_step_sound = SetStepSound::get_dart_signal_receiver();
     let set_finish_sound = SetFinishSound::get_dart_signal_receiver();
@@ -302,6 +303,10 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = set_vibration.recv() => {
                 report(c.settings.set_vibration(pack.message.on.into()));
+                show_settings(&c.settings);
+            }
+            Some(pack) = set_finish_knock.recv() => {
+                report(c.settings.set_finish_knock(pack.message.on.into()));
                 show_settings(&c.settings);
             }
             Some(pack) = set_pre_alert.recv() => {

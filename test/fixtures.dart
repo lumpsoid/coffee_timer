@@ -118,6 +118,7 @@ SettingsUpdate settings({
   int accent = 0xFF2196F3,
   bool sound = true,
   bool vibration = true,
+  bool finishKnock = true,
   int preAlertSeconds = 3,
   String stepSound = 'breath-and-bowl',
   String finishSound = 'singing-bowl',
@@ -131,6 +132,7 @@ SettingsUpdate settings({
   ],
   sound: sound,
   vibration: vibration,
+  finishKnock: finishKnock,
   preAlertSeconds: preAlertSeconds,
   preAlerts: const [
     PreAlertChoice(seconds: 0, label: 'Off'),

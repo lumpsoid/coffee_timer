@@ -665,6 +665,11 @@ fn settings_round_trip() -> TestResult {
             }
         }
     }
+    for knock in Toggle::ALL {
+        let cues = second.with_finish_knock(knock);
+        store.save(cues)?;
+        assert_eq!(store.load()?, cues);
+    }
     for sound in StepSound::ALL {
         let sounds = second.with_step_sound(sound);
         store.save(sounds)?;
@@ -686,6 +691,7 @@ fn cue_settings_are_stored_as_key_value_rows() -> TestResult {
     store.save(
         Settings::FALLBACK
             .with_sound(Toggle::Off)
+            .with_finish_knock(Toggle::Off)
             .with_pre_alert(PreAlertLead::Seconds10)
             .with_step_sound(StepSound::Kalimba),
     )?;
@@ -697,6 +703,7 @@ fn cue_settings_are_stored_as_key_value_rows() -> TestResult {
     };
     assert_eq!(row("sound")?, "off");
     assert_eq!(row("vibration")?, "on");
+    assert_eq!(row("finish_knock")?, "off");
     assert_eq!(row("pre_alert_seconds")?, "10");
     assert_eq!(row("step_sound")?, "kalimba");
     assert_eq!(row("finish_sound")?, "singing-bowl");

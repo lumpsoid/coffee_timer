@@ -583,7 +583,7 @@ tick 3   00:01 B  Last step  |  1:done 2:done 3:current
 [notify B · 00:01]
 tick 4   done 0:03  |  1:done 2:done 3:done
 [screen off]
-[vibrate pattern 0/400/200/400ms]
+[vibrate pattern 0/340/100/130/90/130/90/340/100/340/540/340/100/500ms at 0/140/0/70/0/70/0/100/0/100/0/140/0/180]
 [sound singing-bowl]
 [notify off]
 "
@@ -625,7 +625,7 @@ tick 3   00:01 B  Last step  |  1:done 2:current
 [notify B · 00:01]
 tick 4   done 0:04  |  1:done 2:done
 [screen off]
-[vibrate pattern 0/400/200/400ms]
+[vibrate pattern 0/340/100/130/90/130/90/340/100/340/540/340/100/500ms at 0/140/0/70/0/70/0/100/0/100/0/140/0/180]
 [sound singing-bowl]
 [notify off]
 "
@@ -728,7 +728,7 @@ fn brew_of_an_unknown_id_is_the_core_error() -> TestResult {
 }
 
 /// The cue lines `settings` prints at the defaults.
-const DEFAULT_CUES: &str = "Sound: on\nVibration: on\nPre-alert: 3 s\n\
+const DEFAULT_CUES: &str = "Sound: on\nVibration: on\nFinish knock: on\nPre-alert: 3 s\n\
 Step sound: breath-and-bowl\nFinish sound: singing-bowl\n";
 
 const ACCENT_OPTIONS: &str = "\
@@ -826,14 +826,14 @@ fn settings_set_sound_vibration_and_pre_alert_persist() -> TestResult {
     assert_eq!(
         session.run(&["settings", "pre-alert", "10"])?,
         format!(
-            "Theme: system\nAccent: #FF2196F3\nSound: off\nVibration: off\nPre-alert: 10 s\n\
+            "Theme: system\nAccent: #FF2196F3\nSound: off\nVibration: off\nFinish knock: on\nPre-alert: 10 s\n\
              Step sound: breath-and-bowl\nFinish sound: singing-bowl\n{ACCENT_OPTIONS}"
         )
     );
     session.run(&["settings", "pre-alert", "0"])?;
     let reopened = session.reopened()?.run(&["settings"])?;
     assert!(
-        reopened.contains("Sound: off\nVibration: off\nPre-alert: Off\n"),
+        reopened.contains("Sound: off\nVibration: off\nFinish knock: on\nPre-alert: Off\n"),
         "{reopened}"
     );
     session.run(&["settings", "sound", "on"])?;
@@ -952,7 +952,25 @@ fn brew_with_sound_off_prints_no_sound() -> TestResult {
         "{out}"
     );
     assert!(
-        out.ends_with("[screen off]\n[vibrate pattern 0/400/200/400ms]\n[notify off]\n"),
+        out.ends_with("[screen off]\n[vibrate pattern 0/340/100/130/90/130/90/340/100/340/540/340/100/500ms at 0/140/0/70/0/70/0/100/0/100/0/140/0/180]\n[notify off]\n"),
+        "{out}"
+    );
+    Ok(())
+}
+
+#[test]
+fn brew_with_the_finish_knock_off_ends_on_two_long_buzzes() -> TestResult {
+    let mut session = Session::new()?;
+    assert!(
+        session
+            .run(&["settings", "finish-knock", "off"])?
+            .contains("Vibration: on\nFinish knock: off\n")
+    );
+    let out = brewed_short(&[&["settings", "finish-knock", "off"]])?;
+    assert!(
+        out.ends_with(
+            "[screen off]\n[vibrate pattern 0/400/200/400ms]\n[sound singing-bowl]\n[notify off]\n"
+        ),
         "{out}"
     );
     Ok(())

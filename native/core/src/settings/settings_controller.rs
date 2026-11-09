@@ -44,6 +44,10 @@ impl SettingsController {
         self.apply(self.state.with_vibration(vibration))
     }
 
+    pub fn set_finish_knock(&mut self, finish_knock: Toggle) -> Result<(), StoreError> {
+        self.apply(self.state.with_finish_knock(finish_knock))
+    }
+
     pub fn set_pre_alert(&mut self, pre_alert: PreAlertLead) -> Result<(), StoreError> {
         self.apply(self.state.with_pre_alert(pre_alert))
     }

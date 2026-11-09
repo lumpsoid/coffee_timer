@@ -22,6 +22,7 @@ impl From<&Settings> for SettingsUpdate {
                 .collect(),
             sound: settings.sound().is_on(),
             vibration: settings.vibration().is_on(),
+            finish_knock: settings.finish_knock().is_on(),
             pre_alert_seconds: settings.pre_alert().seconds(),
             pre_alerts: PreAlertLead::ALL
                 .into_iter()

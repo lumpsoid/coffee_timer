@@ -217,8 +217,9 @@ finds the recipe unchanged.
 
 An [`Effect`](../native/core/src/brew/effect.rs) is a platform command that
 a controller has already decided on: `Vibrate { ms }`,
-`VibratePattern { pattern_ms }` (pause and buzz lengths, starting with a
-pause), `PlaySound { sound }`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
+`VibratePattern { pattern_ms, strengths }` (pause and buzz lengths,
+starting with a pause, and each one's strength, 1–255 with 0 for the
+pauses, none for the device's default), `PlaySound { sound }`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
 `HideBrewNotification`. Only `BrewController` returns effects. The hub maps
 each effect to a `PlatformEffect` signal and sends it after the brew view.
 The hub also sends `PlatformEffect::CopyToClipboard { text }` itself for
@@ -282,8 +283,9 @@ clock. Time arrives as `tick()`, one call per second while
   pre-alert 3 s before the end, and the finishing tick carries only the
   finish effects. After the last step, the brew is
   `Finished` and the tick returns `KeepScreenOn(false)` +
-  `VibratePattern [0, 400, 200, 400]` (two long buzzes, unlike a step
-  boundary) + `PlaySound` (the chosen finish sound) + `HideBrewNotification`. The hide comes
+  the finish `VibratePattern` (the knock, "shave and a haircut, two bits",
+  each buzz with its strength; with the knock off `[0, 400, 200, 400]`,
+  two long buzzes at the device's default strength) + `PlaySound` (the chosen finish sound) + `HideBrewNotification`. The hide comes
   last, so the app is still kept awake for the final buzz and sound. A
   0-second step shows `00:00` for one tick.
 - **Muting and the pre-alert lead are settings, decided in core.**

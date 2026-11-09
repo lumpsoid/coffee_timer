@@ -10,6 +10,8 @@ pub struct StoredSettings<'a> {
     pub sound: Option<&'a str>,
     /// `on` or `off`.
     pub vibration: Option<&'a str>,
+    /// `on` or `off`.
+    pub finish_knock: Option<&'a str>,
     /// Seconds: `0`, `3`, `5` or `10`.
     pub pre_alert: Option<&'a str>,
     /// A sound's id, `breath-and-bowl`.

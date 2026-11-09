@@ -21,12 +21,13 @@ void main() {
       .widget<SwitchListTile>(find.widgetWithText(SwitchListTile, title))
       .value;
 
-  testWidgets('shows the cues Rust sent: sound, vibration, pre-alert', (
+  testWidgets('shows the cues Rust sent: sound, vibration, knock, pre-alert', (
     tester,
   ) async {
     await pumpPage(tester);
     expect(switchValue(tester, 'Sound'), isTrue);
     expect(switchValue(tester, 'Vibration'), isTrue);
+    expect(switchValue(tester, 'Finish knock'), isTrue);
     expect(find.text('Pre-alert before each step ends'), findsOneWidget);
     expect(find.text('3 s'), findsOneWidget);
   });
@@ -45,10 +46,13 @@ void main() {
     expect(find.text('Off'), findsOneWidget);
     expect(find.text('3 s'), findsNothing);
 
-    holder.apply(settings(vibration: false, preAlertSeconds: 10));
+    holder.apply(
+      settings(vibration: false, finishKnock: false, preAlertSeconds: 10),
+    );
     await tester.pump();
     expect(switchValue(tester, 'Sound'), isTrue);
     expect(switchValue(tester, 'Vibration'), isFalse);
+    expect(switchValue(tester, 'Finish knock'), isFalse);
     expect(find.text('10 s'), findsOneWidget);
   });
 
@@ -56,6 +60,8 @@ void main() {
     tester,
   ) async {
     await pumpPage(tester);
+    await tester.ensureVisible(find.text('3 s'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('3 s'));
     await tester.pumpAndSettle();
     for (final label in ['Off', '5 s', '10 s']) {

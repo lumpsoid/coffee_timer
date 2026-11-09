@@ -78,7 +78,7 @@ Two ways in, one rule for choosing:
   depend on rinf.
 - No controller reads the clock: the timer counts the ticks it is given.
 - An `Effect` is a decision already made, for the shell to carry out:
-  `PlaySound { sound }`, `Vibrate { ms }`, `VibratePattern { pattern_ms }`,
+  `PlaySound { sound }`, `Vibrate { ms }`, `VibratePattern { pattern_ms, strengths }`,
   `KeepScreenOn(bool)`,
   `ShowBrewNotification(BrewNotice)`, `HideBrewNotification`.
 - A `CatalogChange` (`Upserted` / `Removed`) is already persisted when it is

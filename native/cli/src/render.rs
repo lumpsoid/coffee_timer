@@ -113,9 +113,22 @@ pub fn effects(out: &mut impl Write, effects: &[Effect]) -> io::Result<()> {
     for effect in effects {
         match effect {
             Effect::Vibrate { ms } => writeln!(out, "[vibrate {ms}ms]")?,
-            Effect::VibratePattern { pattern_ms } => {
+            Effect::VibratePattern {
+                pattern_ms,
+                strengths,
+            } => {
                 let pattern: Vec<String> = pattern_ms.iter().map(u32::to_string).collect();
-                writeln!(out, "[vibrate pattern {}ms]", pattern.join("/"))?;
+                let strengths: Vec<String> = strengths.iter().map(u8::to_string).collect();
+                if strengths.is_empty() {
+                    writeln!(out, "[vibrate pattern {}ms]", pattern.join("/"))?;
+                } else {
+                    writeln!(
+                        out,
+                        "[vibrate pattern {}ms at {}]",
+                        pattern.join("/"),
+                        strengths.join("/")
+                    )?;
+                }
             }
             Effect::PlaySound { sound } => writeln!(out, "[sound {}]", sound.id())?,
             Effect::KeepScreenOn(true) => writeln!(out, "[screen on]")?,
@@ -142,6 +155,11 @@ pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
     writeln!(out, "Accent: {}", settings.accent().to_hex())?;
     writeln!(out, "Sound: {}", settings.sound().storage_value())?;
     writeln!(out, "Vibration: {}", settings.vibration().storage_value())?;
+    writeln!(
+        out,
+        "Finish knock: {}",
+        settings.finish_knock().storage_value()
+    )?;
     writeln!(out, "Pre-alert: {}", settings.pre_alert().label())?;
     writeln!(out, "Step sound: {}", settings.step_sound().id())?;
     writeln!(out, "Finish sound: {}", settings.finish_sound().id())?;

@@ -1,6 +1,7 @@
 use crate::model::ModelError;
 
-/// A cue that is on or off: the brew's sound, or its vibration.
+/// A cue that is on or off: the brew's sound, its vibration, or the
+/// finish knock.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Toggle {
     On,

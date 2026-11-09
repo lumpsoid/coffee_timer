@@ -6,14 +6,15 @@ use crate::sqlite_store::{SqliteStore, db_error};
 
 /// Key/value rows, as legacy `sqlite_settings_repository.dart:18-20`: the
 /// theme's storage value and the accent as `#AARRGGBB`. The brew's cues,
-/// new since the port, follow the same scheme: sound and vibration as
-/// `on`/`off`, the pre-alert lead in seconds, the step and finish sounds as
+/// new since the port, follow the same scheme: sound, vibration and the
+/// finish knock as `on`/`off`, the pre-alert lead in seconds, the step and finish sounds as
 /// their ids. A database without their rows (one from before them) loads
 /// their fallbacks, so no migration is needed.
 const THEME_KEY: &str = "theme";
 const ACCENT_KEY: &str = "accent_color";
 const SOUND_KEY: &str = "sound";
 const VIBRATION_KEY: &str = "vibration";
+const FINISH_KNOCK_KEY: &str = "finish_knock";
 const PRE_ALERT_KEY: &str = "pre_alert_seconds";
 const STEP_SOUND_KEY: &str = "step_sound";
 const FINISH_SOUND_KEY: &str = "finish_sound";
@@ -26,6 +27,7 @@ impl SettingsStore for SqliteStore {
         let accent = read(ACCENT_KEY)?;
         let sound = read(SOUND_KEY)?;
         let vibration = read(VIBRATION_KEY)?;
+        let finish_knock = read(FINISH_KNOCK_KEY)?;
         let pre_alert = read(PRE_ALERT_KEY)?;
         let step_sound = read(STEP_SOUND_KEY)?;
         let finish_sound = read(FINISH_SOUND_KEY)?;
@@ -34,6 +36,7 @@ impl SettingsStore for SqliteStore {
             accent: accent.as_deref(),
             sound: sound.as_deref(),
             vibration: vibration.as_deref(),
+            finish_knock: finish_knock.as_deref(),
             pre_alert: pre_alert.as_deref(),
             step_sound: step_sound.as_deref(),
             finish_sound: finish_sound.as_deref(),
@@ -63,6 +66,7 @@ fn save(conn: &mut Connection, settings: Settings) -> rusqlite::Result<()> {
         put.execute([ACCENT_KEY, settings.accent().to_hex().as_str()])?;
         put.execute([SOUND_KEY, settings.sound().storage_value()])?;
         put.execute([VIBRATION_KEY, settings.vibration().storage_value()])?;
+        put.execute([FINISH_KNOCK_KEY, settings.finish_knock().storage_value()])?;
         put.execute([PRE_ALERT_KEY, settings.pre_alert().storage_value().as_str()])?;
         put.execute([STEP_SOUND_KEY, settings.step_sound().id()])?;
         put.execute([FINISH_SOUND_KEY, settings.finish_sound().id()])?;

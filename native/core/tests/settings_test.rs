@@ -167,6 +167,7 @@ fn from_storage_reads_valid_values() -> TestResult {
         accent: Some("#FFF44336"),
         sound: Some("off"),
         vibration: Some("off"),
+        finish_knock: Some("off"),
         pre_alert: Some("10"),
         step_sound: Some("kalimba"),
         finish_sound: Some("gong"),
@@ -175,6 +176,7 @@ fn from_storage_reads_valid_values() -> TestResult {
     assert_eq!(settings.accent(), AccentColor::try_from_hex("#FFF44336")?);
     assert_eq!(settings.sound(), Toggle::Off);
     assert_eq!(settings.vibration(), Toggle::Off);
+    assert_eq!(settings.finish_knock(), Toggle::Off);
     assert_eq!(settings.pre_alert(), PreAlertLead::Seconds10);
     assert_eq!(settings.step_sound(), StepSound::Kalimba);
     assert_eq!(settings.finish_sound(), FinishSound::Gong);
@@ -226,6 +228,14 @@ fn from_storage_falls_back_per_cue_field() {
         });
         assert_eq!(settings.vibration(), Toggle::On, "vibration {bad:?}");
         assert_eq!(settings.sound(), Toggle::Off, "the good field stays");
+
+        let settings = Settings::from_storage(StoredSettings {
+            vibration: Some("off"),
+            finish_knock: Some(bad),
+            ..StoredSettings::default()
+        });
+        assert_eq!(settings.finish_knock(), Toggle::On, "finish knock {bad:?}");
+        assert_eq!(settings.vibration(), Toggle::Off, "the good field stays");
     }
     for bad in ["", "4", "-3", "3.0", "three", " 5", "4294967299"] {
         let settings = Settings::from_storage(StoredSettings {
@@ -320,9 +330,10 @@ fn every_stored_cue_value_round_trips() {
 }
 
 #[test]
-fn fallback_cues_are_sound_and_vibration_on_with_a_3_s_pre_alert() {
+fn fallback_cues_are_sound_vibration_and_knock_on_with_a_3_s_pre_alert() {
     assert_eq!(Settings::FALLBACK.sound(), Toggle::On);
     assert_eq!(Settings::FALLBACK.vibration(), Toggle::On);
+    assert_eq!(Settings::FALLBACK.finish_knock(), Toggle::On);
     assert_eq!(Settings::FALLBACK.pre_alert(), PreAlertLead::Seconds3);
     assert_eq!(PreAlertLead::DEFAULT, PreAlertLead::Seconds3);
 }
@@ -349,6 +360,11 @@ fn with_cue_operations_change_only_their_field() {
     assert_eq!(
         (next.vibration(), next.sound(), next.pre_alert()),
         (Toggle::Off, Toggle::On, PreAlertLead::Seconds3)
+    );
+    let next = base.with_finish_knock(Toggle::Off);
+    assert_eq!(
+        (next.finish_knock(), next.vibration(), next.sound()),
+        (Toggle::Off, Toggle::On, Toggle::On)
     );
     let next = base.with_pre_alert(PreAlertLead::Off);
     assert_eq!(

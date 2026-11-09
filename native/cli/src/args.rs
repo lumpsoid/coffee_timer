@@ -125,7 +125,7 @@ pub enum Command {
         pause_for: u32,
     },
     /// Show settings, or change the theme, accent, sound, vibration,
-    /// pre-alert, step sound or finish sound.
+    /// finish knock, pre-alert, step sound or finish sound.
     Settings {
         #[command(subcommand)]
         action: Option<SettingsAction>,
@@ -201,6 +201,9 @@ pub enum SettingsAction {
     /// Turn the brew's vibration on or off: step boundaries, the pre-alert
     /// and the finish.
     Vibration { value: String },
+    /// Turn the finish knock on or off: the brew ends with "shave and a
+    /// haircut, two bits" rather than two long buzzes.
+    FinishKnock { value: String },
     /// Buzz this many seconds before each step ends: 0 (off), 3, 5 or 10.
     PreAlert { value: String },
     /// Set the sound at each step boundary: a step sound id (e.g.

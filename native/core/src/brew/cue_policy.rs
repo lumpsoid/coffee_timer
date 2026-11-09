@@ -12,6 +12,7 @@ pub struct CuePolicy {
     pre_alert: PreAlertLead,
     sound: Toggle,
     vibration: Toggle,
+    finish_knock: Toggle,
     step_sound: StepSound,
     finish_sound: FinishSound,
 }
@@ -26,9 +27,29 @@ impl CuePolicy {
     /// in ms, starting with a pause.
     pub const PRE_ALERT_PATTERN_MS: [u32; 4] = [0, 50, 100, 50];
 
-    /// The end of a brew: two long buzzes, so it does not feel like one more
-    /// step boundary. Pause and buzz lengths in ms, starting with a pause.
+    /// The end of a brew with the knock off: two long buzzes, so it does
+    /// not feel like one more step boundary. Pause and buzz lengths in ms,
+    /// starting with a pause.
     pub const FINISH_PATTERN_MS: [u32; 4] = [0, 400, 200, 400];
+
+    /// The end of a brew with the knock on: "shave and a haircut, two
+    /// bits" (DA da-da DA DA, DA DA), the knock that says done. Played in
+    /// time: a 440 ms beat, each note held to just short of its beat (a
+    /// 100 ms lift, 90 ms on the half beats), a beat's rest before "two
+    /// bits", and the last note let ring. Pause and buzz lengths in ms,
+    /// starting with a pause; about 3.1 s.
+    pub const KNOCK_PATTERN_MS: [u32; 14] = [
+        0, 340, 100, 130, 90, 130, 90, 340, 100, 340, // DA da-da DA DA
+        540, 340, 100, 500, // DA DA
+    ];
+
+    /// How hard each entry of [`Self::KNOCK_PATTERN_MS`] buzzes, 1–255, 0
+    /// for the pauses: soft, with the accents where a tapped knock puts
+    /// them, on "shave" and on "two bits", the last the strongest.
+    pub const KNOCK_STRENGTHS: [u8; 14] = [
+        0, 140, 0, 70, 0, 70, 0, 100, 0, 100, // DA da-da DA DA
+        0, 140, 0, 180, // DA DA
+    ];
 
     /// The cues `settings` allow.
     pub fn of(settings: &Settings) -> Self {
@@ -36,6 +57,7 @@ impl CuePolicy {
             pre_alert: settings.pre_alert(),
             sound: settings.sound(),
             vibration: settings.vibration(),
+            finish_knock: settings.finish_knock(),
             step_sound: settings.step_sound(),
             finish_sound: settings.finish_sound(),
         }
@@ -53,6 +75,7 @@ impl CuePolicy {
             lead > 0 && step.duration().seconds() > lead && step.remaining().seconds() == lead;
         (due && self.vibration.is_on()).then(|| Effect::VibratePattern {
             pattern_ms: Self::PRE_ALERT_PATTERN_MS.to_vec(),
+            strengths: Vec::new(),
         })
     }
 
@@ -66,14 +89,20 @@ impl CuePolicy {
         )
     }
 
-    /// The finish's cues: the two long buzzes, then the finish sound.
+    /// The finish's cues: the knock or the two long buzzes, then the finish
+    /// sound.
     pub(crate) fn finish(self) -> Vec<Effect> {
-        self.buzz_then_sound(
-            Effect::VibratePattern {
-                pattern_ms: Self::FINISH_PATTERN_MS.to_vec(),
+        let buzz = match self.finish_knock {
+            Toggle::On => Effect::VibratePattern {
+                pattern_ms: Self::KNOCK_PATTERN_MS.to_vec(),
+                strengths: Self::KNOCK_STRENGTHS.to_vec(),
             },
-            self.finish_sound.into(),
-        )
+            Toggle::Off => Effect::VibratePattern {
+                pattern_ms: Self::FINISH_PATTERN_MS.to_vec(),
+                strengths: Vec::new(),
+            },
+        };
+        self.buzz_then_sound(buzz, self.finish_sound.into())
     }
 
     fn buzz_then_sound(self, buzz: Effect, sound: Sound) -> Vec<Effect> {
