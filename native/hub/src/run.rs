@@ -14,7 +14,7 @@ use coffee_timer_core::brew::{BrewController, Effect};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::{DeleteError, EditorController, SaveError};
 use coffee_timer_core::model::{
-    self, AccentColor, CoffeeDose, ModelError, PreAlertLead, RecipeId, StepId,
+    self, AccentColor, CoffeeDose, ModelError, PreAlertLead, RecipeId, Sound, StepId,
 };
 use coffee_timer_core::ports::StoreError;
 use coffee_timer_core::settings::SettingsController;
@@ -26,11 +26,12 @@ use crate::signals::{
     AddStep, AdjustBrewRatio, BackToRecipeDose, BrewReady, BrewUpdate, CloseEditor, DeleteRecipe,
     DuplicateRecipe, EditRecipe, EditorReady, EditorUpdate, ExportRecipes, ImportRecipes,
     LeaveBrew, MoveRecipe, MoveStep, NewDraft, NudgeStepDuration, OpenBrew, PauseBrew, PinRecipe,
-    PlatformEffect, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep, ResetBrew,
-    ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetBrewCoffee, SetPreAlert, SetRecipeCoffee,
-    SetRecipeDescription, SetRecipeGrind, SetRecipeName, SetRecipePourSpeed, SetRecipeWater,
-    SetSound, SetStepDuration, SetStepName, SetStepWater, SetTheme, SetVibration, SettingsReady,
-    SettingsUpdate, StartBrew, UndoRemoveRecipe, UnpinRecipe,
+    PlatformEffect, PreviewSound, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep,
+    ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetBrewCoffee, SetFinishSound,
+    SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeGrind, SetRecipeName,
+    SetRecipePourSpeed, SetRecipeWater, SetSound, SetStepDuration, SetStepName, SetStepSound,
+    SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
+    UndoRemoveRecipe, UnpinRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -108,6 +109,9 @@ pub async fn run(mut c: Controllers) {
     let set_sound = SetSound::get_dart_signal_receiver();
     let set_vibration = SetVibration::get_dart_signal_receiver();
     let set_pre_alert = SetPreAlert::get_dart_signal_receiver();
+    let set_step_sound = SetStepSound::get_dart_signal_receiver();
+    let set_finish_sound = SetFinishSound::get_dart_signal_receiver();
+    let preview_sound = PreviewSound::get_dart_signal_receiver();
 
     // The brew's one-second beat: exists exactly while a brew runs.
     let mut ticker: Option<Interval> = None;
@@ -303,6 +307,19 @@ pub async fn run(mut c: Controllers) {
                 report(set_pre_alert_seconds(&mut c.settings, pack.message.seconds));
                 show_settings(&c.settings);
             }
+            Some(pack) = set_step_sound.recv() => {
+                report(set_sound_id(&pack.message.sound, |sound| c.settings.set_step_sound(sound)));
+                show_settings(&c.settings);
+            }
+            Some(pack) = set_finish_sound.recv() => {
+                report(set_sound_id(&pack.message.sound, |sound| c.settings.set_finish_sound(sound)));
+                show_settings(&c.settings);
+            }
+            Some(pack) = preview_sound.recv() => {
+                if let Some(sound) = report(Sound::try_parse(&pack.message.sound)) {
+                    show_effects(&[Effect::PlaySound { sound }]);
+                }
+            }
 
             else => break,
         }
@@ -458,6 +475,15 @@ fn set_pre_alert_seconds(
     Ok(())
 }
 
+/// Runs `action` on the sound `id` names.
+fn set_sound_id(
+    id: &str,
+    action: impl FnOnce(Sound) -> Result<(), StoreError>,
+) -> Result<(), Box<dyn Error>> {
+    action(Sound::try_parse(id)?)?;
+    Ok(())
+}
+
 /// Runs `action` on the step row `row` names.
 fn on_row<E: Error + 'static>(
     row: &str,
@@ -470,6 +496,11 @@ fn on_row<E: Error + 'static>(
 /// Sends the brew view, then carries out `effects`.
 fn show_brew(brew: &BrewController, effects: &[Effect]) {
     BrewUpdate::from(brew.state()).send_signal_to_dart();
+    show_effects(effects);
+}
+
+/// Carries out `effects`.
+fn show_effects(effects: &[Effect]) {
     for effect in effects {
         PlatformEffect::from(effect.clone()).send_signal_to_dart();
     }

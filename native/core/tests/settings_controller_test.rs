@@ -3,7 +3,7 @@
 
 use coffee_timer_core::fakes::FakeSettingsStore;
 use coffee_timer_core::model::{
-    AccentColor, AccentOption, PreAlertLead, Settings, ThemeSelection, Toggle,
+    AccentColor, AccentOption, PreAlertLead, Settings, Sound, ThemeSelection, Toggle,
 };
 use coffee_timer_core::settings::SettingsController;
 
@@ -88,6 +88,8 @@ fn failed_write_leaves_state_unchanged() -> TestResult {
     assert!(controller.set_sound(Toggle::Off).is_err());
     assert!(controller.set_vibration(Toggle::Off).is_err());
     assert!(controller.set_pre_alert(PreAlertLead::Off).is_err());
+    assert!(controller.set_step_sound(Sound::Kalimba).is_err());
+    assert!(controller.set_finish_sound(Sound::Tingsha).is_err());
     assert_eq!(*controller.state(), dark_red());
     Ok(())
 }
@@ -98,10 +100,14 @@ fn cue_setters_change_state_and_persist() -> TestResult {
     controller.set_sound(Toggle::Off)?;
     controller.set_vibration(Toggle::Off)?;
     controller.set_pre_alert(PreAlertLead::Seconds10)?;
+    controller.set_step_sound(Sound::Kalimba)?;
+    controller.set_finish_sound(Sound::Tingsha)?;
     let expected = Settings::FALLBACK
         .with_sound(Toggle::Off)
         .with_vibration(Toggle::Off)
-        .with_pre_alert(PreAlertLead::Seconds10);
+        .with_pre_alert(PreAlertLead::Seconds10)
+        .with_step_sound(Sound::Kalimba)
+        .with_finish_sound(Sound::Tingsha);
     assert_eq!(*controller.state(), expected);
 
     controller.load()?;

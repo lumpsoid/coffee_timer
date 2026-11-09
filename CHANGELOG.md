@@ -7,6 +7,12 @@ version may change behaviour.
 
 ## [Unreleased]
 
+### Added
+
+- Settings > Sounds: choose the sound between steps and the one at the
+  end of a brew from eight sounds, each shown with its length. Tapping a
+  sound previews it, even with sound off.
+
 ## [0.1.0] - 2026-11-06
 
 The first public release.

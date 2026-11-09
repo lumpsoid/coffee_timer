@@ -1,8 +1,8 @@
 use crate::brew::{Effect, RunningStep};
-use crate::model::{PreAlertLead, Settings, Toggle};
+use crate::model::{PreAlertLead, Settings, Sound, Toggle};
 
-/// The cues a brew gives, as named config: the buzz and sound at a step
-/// boundary and at the finish, and the pre-alert's two quick taps a few
+/// The cues a brew gives, as named config: the buzz and the chosen sound
+/// at a step boundary and at the finish, and the pre-alert's two quick taps a few
 /// seconds before a step ends. Built from the user's [`Settings`] on every
 /// tick ([`crate::brew::BrewController::tick`]), so muting is decided
 /// here: with sound off no cue plays the sound, with vibration off none
@@ -12,6 +12,8 @@ pub struct CuePolicy {
     pre_alert: PreAlertLead,
     sound: Toggle,
     vibration: Toggle,
+    step_sound: Sound,
+    finish_sound: Sound,
 }
 
 impl CuePolicy {
@@ -34,6 +36,8 @@ impl CuePolicy {
             pre_alert: settings.pre_alert(),
             sound: settings.sound(),
             vibration: settings.vibration(),
+            step_sound: settings.step_sound(),
+            finish_sound: settings.finish_sound(),
         }
     }
 
@@ -52,23 +56,29 @@ impl CuePolicy {
         })
     }
 
-    /// A step boundary's cues: a buzz, then the sound.
+    /// A step boundary's cues: a buzz, then the step sound.
     pub(crate) fn step_boundary(self) -> Vec<Effect> {
-        self.buzz_then_sound(Effect::Vibrate {
-            ms: Self::STEP_BUZZ_MS,
-        })
+        self.buzz_then_sound(
+            Effect::Vibrate {
+                ms: Self::STEP_BUZZ_MS,
+            },
+            self.step_sound,
+        )
     }
 
-    /// The finish's cues: the two long buzzes, then the sound.
+    /// The finish's cues: the two long buzzes, then the finish sound.
     pub(crate) fn finish(self) -> Vec<Effect> {
-        self.buzz_then_sound(Effect::VibratePattern {
-            pattern_ms: Self::FINISH_PATTERN_MS.to_vec(),
-        })
+        self.buzz_then_sound(
+            Effect::VibratePattern {
+                pattern_ms: Self::FINISH_PATTERN_MS.to_vec(),
+            },
+            self.finish_sound,
+        )
     }
 
-    fn buzz_then_sound(self, buzz: Effect) -> Vec<Effect> {
+    fn buzz_then_sound(self, buzz: Effect, sound: Sound) -> Vec<Effect> {
         let buzz = self.vibration.is_on().then_some(buzz);
-        let sound = self.sound.is_on().then_some(Effect::PlayStepSound);
+        let sound = self.sound.is_on().then_some(Effect::PlaySound { sound });
         buzz.into_iter().chain(sound).collect()
     }
 }

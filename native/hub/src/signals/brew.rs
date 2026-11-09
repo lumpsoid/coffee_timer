@@ -216,7 +216,10 @@ pub struct BrewTimer {
 /// and keeps nothing.
 #[derive(Serialize, RustSignal)]
 pub enum PlatformEffect {
-    PlayStepSound,
+    /// Play a sound: its id, the asset `sounds/<id>.mp3`.
+    PlaySound {
+        sound: String,
+    },
     Vibrate {
         ms: u32,
     },

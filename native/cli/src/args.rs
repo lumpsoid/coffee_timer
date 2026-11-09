@@ -124,8 +124,8 @@ pub enum Command {
         )]
         pause_for: u32,
     },
-    /// Show settings, or change the theme, accent, sound, vibration or
-    /// pre-alert.
+    /// Show settings, or change the theme, accent, sound, vibration,
+    /// pre-alert, step sound or finish sound.
     Settings {
         #[command(subcommand)]
         action: Option<SettingsAction>,
@@ -196,11 +196,16 @@ pub enum SettingsAction {
     Theme { value: String },
     /// Set the accent: an option name (e.g. Teal) or #AARRGGBB / #RRGGBB.
     Accent { value: String },
-    /// Turn the brew's step sound on or off.
+    /// Turn the brew's sounds on or off: at each step and at the finish.
     Sound { value: String },
     /// Turn the brew's vibration on or off: step boundaries, the pre-alert
     /// and the finish.
     Vibration { value: String },
     /// Buzz this many seconds before each step ends: 0 (off), 3, 5 or 10.
     PreAlert { value: String },
+    /// Set the sound at each step boundary: a sound id (e.g. kalimba).
+    StepSound { value: String },
+    /// Set the sound when the brew finishes: a sound id (e.g.
+    /// singing-bowl).
+    FinishSound { value: String },
 }

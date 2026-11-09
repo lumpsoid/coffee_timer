@@ -1,8 +1,8 @@
 //! Port of `test/domain/settings_test.dart`.
 
 use coffee_timer_core::model::{
-    AccentColor, AccentOption, ModelError, PreAlertLead, Settings, StoredSettings, ThemeSelection,
-    Toggle,
+    AccentColor, AccentOption, ModelError, PreAlertLead, Settings, Sound, StoredSettings,
+    ThemeSelection, Toggle,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -122,6 +122,16 @@ fn with_theme_changes_only_the_theme() {
     let next = base.with_theme(ThemeSelection::Dark);
     assert_eq!(next.theme(), ThemeSelection::Dark);
     assert_eq!(next.accent(), base.accent());
+    let next = base.with_step_sound(Sound::Tingsha);
+    assert_eq!(
+        (next.step_sound(), next.finish_sound(), next.sound()),
+        (Sound::Tingsha, Sound::SingingBowl, Toggle::On)
+    );
+    let next = base.with_finish_sound(Sound::Tingsha);
+    assert_eq!(
+        (next.finish_sound(), next.step_sound(), next.sound()),
+        (Sound::Tingsha, Sound::BreathAndBowl, Toggle::On)
+    );
 }
 
 #[test]
@@ -158,12 +168,16 @@ fn from_storage_reads_valid_values() -> TestResult {
         sound: Some("off"),
         vibration: Some("off"),
         pre_alert: Some("10"),
+        step_sound: Some("kalimba"),
+        finish_sound: Some("water-drop"),
     });
     assert_eq!(settings.theme(), ThemeSelection::Dark);
     assert_eq!(settings.accent(), AccentColor::try_from_hex("#FFF44336")?);
     assert_eq!(settings.sound(), Toggle::Off);
     assert_eq!(settings.vibration(), Toggle::Off);
     assert_eq!(settings.pre_alert(), PreAlertLead::Seconds10);
+    assert_eq!(settings.step_sound(), Sound::Kalimba);
+    assert_eq!(settings.finish_sound(), Sound::WaterDrop);
     Ok(())
 }
 
@@ -225,6 +239,52 @@ fn from_storage_falls_back_per_cue_field() {
 }
 
 #[test]
+fn from_storage_falls_back_per_sound_field() {
+    for bad in ["", "Kalimba", "kalimba.mp3", " tingsha", "step-change"] {
+        let settings = Settings::from_storage(StoredSettings {
+            step_sound: Some(bad),
+            finish_sound: Some("kalimba"),
+            ..StoredSettings::default()
+        });
+        assert_eq!(settings.step_sound(), Sound::DEFAULT_STEP, "{bad:?}");
+        assert_eq!(
+            settings.finish_sound(),
+            Sound::Kalimba,
+            "the good field stays"
+        );
+
+        let settings = Settings::from_storage(StoredSettings {
+            step_sound: Some("kalimba"),
+            finish_sound: Some(bad),
+            ..StoredSettings::default()
+        });
+        assert_eq!(settings.finish_sound(), Sound::DEFAULT_FINISH, "{bad:?}");
+        assert_eq!(
+            settings.step_sound(),
+            Sound::Kalimba,
+            "the good field stays"
+        );
+    }
+}
+
+#[test]
+fn every_stored_sound_round_trips() {
+    for sound in Sound::ALL {
+        let settings = Settings::from_storage(StoredSettings {
+            step_sound: Some(sound.id()),
+            finish_sound: Some(sound.id()),
+            ..StoredSettings::default()
+        });
+        assert_eq!(
+            settings,
+            Settings::FALLBACK
+                .with_step_sound(sound)
+                .with_finish_sound(sound)
+        );
+    }
+}
+
+#[test]
 fn every_stored_cue_value_round_trips() {
     for sound in Toggle::ALL {
         for vibration in Toggle::ALL {
@@ -257,6 +317,12 @@ fn fallback_cues_are_sound_and_vibration_on_with_a_3_s_pre_alert() {
 }
 
 #[test]
+fn fallback_sounds_are_breath_and_bowl_then_singing_bowl() {
+    assert_eq!(Settings::FALLBACK.step_sound(), Sound::BreathAndBowl);
+    assert_eq!(Settings::FALLBACK.finish_sound(), Sound::SingingBowl);
+}
+
+#[test]
 fn with_cue_operations_change_only_their_field() {
     let base = Settings::new(ThemeSelection::Dark, AccentOption::ALL[1].color());
     let next = base.with_sound(Toggle::Off);
@@ -279,6 +345,16 @@ fn with_cue_operations_change_only_their_field() {
         (PreAlertLead::Off, Toggle::On, Toggle::On)
     );
     assert_eq!(next.accent(), base.accent());
+    let next = base.with_step_sound(Sound::Tingsha);
+    assert_eq!(
+        (next.step_sound(), next.finish_sound(), next.sound()),
+        (Sound::Tingsha, Sound::SingingBowl, Toggle::On)
+    );
+    let next = base.with_finish_sound(Sound::Tingsha);
+    assert_eq!(
+        (next.finish_sound(), next.step_sound(), next.sound()),
+        (Sound::Tingsha, Sound::BreathAndBowl, Toggle::On)
+    );
 }
 
 // Toggle
@@ -344,6 +420,47 @@ fn pre_alert_parses_its_seconds_only() {
     );
 }
 
+// Sound
+
+#[test]
+fn sounds_are_the_shipped_assets_with_their_lengths() {
+    let rows: Vec<(&str, &str, String)> = Sound::ALL
+        .into_iter()
+        .map(|sound| (sound.id(), sound.label(), sound.length_label()))
+        .collect();
+    let one = || "1.0 s".to_owned();
+    assert_eq!(
+        rows,
+        [
+            ("temple-block", "Temple block", one()),
+            ("wooden-clappers", "Wooden clappers", one()),
+            ("tingsha", "Tingsha", one()),
+            ("water-drop", "Water drop", one()),
+            ("kalimba", "Kalimba", one()),
+            ("breath-and-bowl", "Breath and bowl", one()),
+            ("bamboo-tock", "Bamboo tock", one()),
+            ("singing-bowl", "Singing bowl", "2.0 s".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn sound_parses_its_id_only() {
+    for sound in Sound::ALL {
+        assert_eq!(Sound::try_parse(sound.id()), Ok(sound));
+    }
+    for raw in ["", "Kalimba", "kalimba.mp3", "step-change"] {
+        assert_eq!(
+            Sound::try_parse(raw),
+            Err(ModelError::UnknownSound(raw.to_owned()))
+        );
+    }
+    assert_eq!(
+        ModelError::UnknownSound("gong".to_owned()).to_string(),
+        "No sound named \"gong\""
+    );
+}
+
 // AccentOption
 
 #[test]
@@ -389,4 +506,13 @@ fn accent_option_named_ignores_case_and_rejects_unknown_names() {
     );
     assert_eq!(AccentOption::named("Mauve"), None);
     assert_eq!(AccentOption::named(""), None);
+}
+
+#[test]
+fn every_sound_has_its_asset() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/sounds");
+    for sound in Sound::ALL {
+        let asset = dir.join(format!("{}.mp3", sound.id()));
+        assert!(asset.is_file(), "{}", asset.display());
+    }
 }

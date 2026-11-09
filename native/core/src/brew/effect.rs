@@ -1,4 +1,5 @@
 use crate::brew::BrewNotice;
+use crate::model::Sound;
 
 /// A one-shot platform instruction, already decided by a controller. The
 /// shell carries it out and keeps nothing.
@@ -12,7 +13,9 @@ pub enum Effect {
     VibratePattern {
         pattern_ms: Vec<u32>,
     },
-    PlayStepSound,
+    PlaySound {
+        sound: Sound,
+    },
     /// Keep the screen awake (`true`) or let it sleep again (`false`).
     KeepScreenOn(bool),
     /// Show or refresh the ongoing notification of a running brew. While it

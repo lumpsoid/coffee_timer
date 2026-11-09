@@ -10,7 +10,7 @@ use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::editor::{EditError, EditorController, StepPreset};
 use coffee_timer_core::model::{
     AccentColor, AccentOption, BrewMetrics, CoffeeDose, Pin, PreAlertLead, RecipeId, Settings,
-    StepId, ThemeSelection, Toggle,
+    Sound, StepId, ThemeSelection, Toggle,
 };
 use coffee_timer_core::settings::SettingsController;
 
@@ -311,6 +311,12 @@ pub fn settings(
         }
         Some(SettingsAction::PreAlert { value }) => {
             settings.set_pre_alert(PreAlertLead::try_parse(value)?)?;
+        }
+        Some(SettingsAction::StepSound { value }) => {
+            settings.set_step_sound(Sound::try_parse(value)?)?;
+        }
+        Some(SettingsAction::FinishSound { value }) => {
+            settings.set_finish_sound(Sound::try_parse(value)?)?;
         }
     }
     render::settings(out, settings.state())?;

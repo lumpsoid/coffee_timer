@@ -575,16 +575,16 @@ tick 1   00:01 A  Next: Zero · 0:00  |  1:current 2:pending 3:pending
 [notify A · 00:01 | Next: Zero]
 tick 2   00:00 Zero  Next: B · 0:01  |  1:done 2:current 3:pending
 [vibrate 100ms]
-[sound]
+[sound breath-and-bowl]
 [notify Zero · 00:00 | Next: B]
 tick 3   00:01 B  Last step  |  1:done 2:done 3:current
 [vibrate 100ms]
-[sound]
+[sound breath-and-bowl]
 [notify B · 00:01]
 tick 4   done 0:03  |  1:done 2:done 3:done
 [screen off]
 [vibrate pattern 0/400/200/400ms]
-[sound]
+[sound singing-bowl]
 [notify off]
 "
     );
@@ -621,12 +621,12 @@ tick 2   00:01 A  Next: B · 0:01  |  1:current 2:pending
 [notify A · 00:01 | Next: B]
 tick 3   00:01 B  Last step  |  1:done 2:current
 [vibrate 100ms]
-[sound]
+[sound breath-and-bowl]
 [notify B · 00:01]
 tick 4   done 0:04  |  1:done 2:done
 [screen off]
 [vibrate pattern 0/400/200/400ms]
-[sound]
+[sound singing-bowl]
 [notify off]
 "
     );
@@ -728,7 +728,8 @@ fn brew_of_an_unknown_id_is_the_core_error() -> TestResult {
 }
 
 /// The cue lines `settings` prints at the defaults.
-const DEFAULT_CUES: &str = "Sound: on\nVibration: on\nPre-alert: 3 s\n";
+const DEFAULT_CUES: &str = "Sound: on\nVibration: on\nPre-alert: 3 s\n\
+Step sound: breath-and-bowl\nFinish sound: singing-bowl\n";
 
 const ACCENT_OPTIONS: &str = "\
 Themes: light, dark, system
@@ -744,6 +745,15 @@ Accent options:
   Cyan    #FF00BCD4
   Lime    #FFCDDC39
 Pre-alert options: 0, 3, 5, 10 (seconds; 0 is off)
+Sound options:
+  temple-block     Temple block     1.0 s
+  wooden-clappers  Wooden clappers  1.0 s
+  tingsha          Tingsha          1.0 s
+  water-drop       Water drop       1.0 s
+  kalimba          Kalimba          1.0 s
+  breath-and-bowl  Breath and bowl  1.0 s
+  bamboo-tock      Bamboo tock      1.0 s
+  singing-bowl     Singing bowl     2.0 s
 ";
 
 #[test]
@@ -804,7 +814,8 @@ fn settings_set_sound_vibration_and_pre_alert_persist() -> TestResult {
     assert_eq!(
         session.run(&["settings", "pre-alert", "10"])?,
         format!(
-            "Theme: system\nAccent: #FF2196F3\nSound: off\nVibration: off\nPre-alert: 10 s\n{ACCENT_OPTIONS}"
+            "Theme: system\nAccent: #FF2196F3\nSound: off\nVibration: off\nPre-alert: 10 s\n\
+             Step sound: breath-and-bowl\nFinish sound: singing-bowl\n{ACCENT_OPTIONS}"
         )
     );
     session.run(&["settings", "pre-alert", "0"])?;
@@ -847,6 +858,51 @@ fn settings_reject_an_unknown_toggle_or_pre_alert() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn settings_set_step_and_finish_sounds_persist() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["settings", "step-sound", "kalimba"])?;
+    assert!(
+        session
+            .run(&["settings", "finish-sound", "water-drop"])?
+            .contains("Pre-alert: 3 s\nStep sound: kalimba\nFinish sound: water-drop\n")
+    );
+    let reopened = session.reopened()?.run(&["settings"])?;
+    assert!(
+        reopened.contains("Step sound: kalimba\nFinish sound: water-drop\n"),
+        "{reopened}"
+    );
+    Ok(())
+}
+
+#[test]
+fn settings_reject_an_unknown_sound() -> TestResult {
+    let mut session = Session::new()?;
+    for action in ["step-sound", "finish-sound"] {
+        assert_eq!(
+            session.run(&["settings", action, "gong"]).err().as_deref(),
+            Some("No sound named \"gong\""),
+            "{action}"
+        );
+    }
+    assert!(session.run(&["settings"])?.contains(DEFAULT_CUES));
+    Ok(())
+}
+
+#[test]
+fn brew_plays_the_chosen_sounds() -> TestResult {
+    let out = brewed_short(&[
+        &["settings", "step-sound", "tingsha"],
+        &["settings", "finish-sound", "kalimba"],
+    ])?;
+    assert!(
+        out.contains("[vibrate 100ms]\n[sound tingsha]\n[notify B · 00:01]\n"),
+        "{out}"
+    );
+    assert!(out.ends_with("[sound kalimba]\n[notify off]\n"), "{out}");
+    Ok(())
+}
+
 /// What `brew r1 --fast` prints for a recipe `A=4, B=1` under the settings
 /// `setup` sets.
 fn brewed_short(setup: &[&[&str]]) -> Result<String, Box<dyn std::error::Error>> {
@@ -861,7 +917,7 @@ fn brewed_short(setup: &[&[&str]]) -> Result<String, Box<dyn std::error::Error>>
 #[test]
 fn brew_with_sound_off_prints_no_sound() -> TestResult {
     let out = brewed_short(&[&["settings", "sound", "off"]])?;
-    assert!(!out.contains("[sound]"), "{out}");
+    assert!(!out.contains("[sound "), "{out}");
     assert!(out.contains("[vibrate pattern 0/50/100/50ms]\n"), "{out}");
     assert!(
         out.contains("[vibrate 100ms]\n[notify B · 00:01]\n"),
@@ -878,9 +934,12 @@ fn brew_with_sound_off_prints_no_sound() -> TestResult {
 fn brew_with_vibration_off_prints_no_buzz() -> TestResult {
     let out = brewed_short(&[&["settings", "vibration", "off"]])?;
     assert!(!out.contains("[vibrate"), "{out}");
-    assert!(out.contains("[sound]\n[notify B · 00:01]\n"), "{out}");
     assert!(
-        out.ends_with("[screen off]\n[sound]\n[notify off]\n"),
+        out.contains("[sound breath-and-bowl]\n[notify B · 00:01]\n"),
+        "{out}"
+    );
+    assert!(
+        out.ends_with("[screen off]\n[sound singing-bowl]\n[notify off]\n"),
         "{out}"
     );
     Ok(())
@@ -893,7 +952,7 @@ fn brew_with_both_off_prints_only_screen_and_notification_effects() -> TestResul
         &["settings", "vibration", "off"],
     ])?;
     assert!(
-        !out.contains("[vibrate") && !out.contains("[sound]"),
+        !out.contains("[vibrate") && !out.contains("[sound "),
         "{out}"
     );
     assert!(out.ends_with("[screen off]\n[notify off]\n"), "{out}");

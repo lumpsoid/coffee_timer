@@ -137,7 +137,9 @@ fn timer(view: &BrewView, step: &RunningStep) -> BrewTimer {
 impl From<Effect> for PlatformEffect {
     fn from(effect: Effect) -> Self {
         match effect {
-            Effect::PlayStepSound => Self::PlayStepSound,
+            Effect::PlaySound { sound } => Self::PlaySound {
+                sound: sound.id().to_owned(),
+            },
             Effect::Vibrate { ms } => Self::Vibrate { ms },
             Effect::VibratePattern { pattern_ms } => Self::VibratePattern { pattern_ms },
             Effect::KeepScreenOn(on) => Self::KeepScreenOn { on },
@@ -155,7 +157,7 @@ mod tests {
     use coffee_timer_core::catalog::RecipeCatalog;
     use coffee_timer_core::fakes::FakeRecipeStore;
     use coffee_timer_core::model::{
-        Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepId, WaterAmount,
+        Recipe, RecipeId, RecipeName, RecipeStep, Settings, Sound, StepId, WaterAmount,
     };
 
     use super::*;
@@ -333,6 +335,17 @@ mod tests {
         assert_eq!(statuses(&recipe), ["done", "done"]);
         assert_eq!(finished.total_label, "0:30");
         assert_eq!(finished.poured_label, None, "no step pours");
+        Ok(())
+    }
+
+    #[test]
+    fn a_sound_effect_carries_its_id() -> TestResult {
+        let PlatformEffect::PlaySound { sound } = PlatformEffect::from(Effect::PlaySound {
+            sound: Sound::WaterDrop,
+        }) else {
+            return Err("not a sound".into());
+        };
+        assert_eq!(sound, "water-drop");
         Ok(())
     }
 }

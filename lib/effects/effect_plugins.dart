@@ -7,7 +7,9 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 /// The platform plugins a `PlatformEffect` reaches: the border a test
 /// replaces with a fake.
 abstract interface class EffectPlugins {
-  Future<void> playStepSound();
+  /// Plays the [asset] (`sounds/kalimba.mp3`) from its start, cutting off
+  /// whatever plays.
+  Future<void> playSound(String asset);
 
   Future<void> vibrate(int ms);
 
@@ -25,14 +27,14 @@ abstract interface class EffectPlugins {
 
 /// [EffectPlugins] on `audioplayers`, `vibration` and `wakelock_plus`,
 /// Flutter's `Clipboard`, and the app's own Android brew-notification
-/// channel (`MainActivity.kt`), which other platforms skip. The step sound
-/// is loaded once, when this is created.
+/// channel (`MainActivity.kt`), which other platforms skip. One player
+/// plays every sound; a sound is loaded when it is asked for after a
+/// different one.
 class PluginEffects implements EffectPlugins {
   PluginEffects() : _player = AudioPlayer() {
-    _loaded = _load();
+    _ready = _player.setReleaseMode(ReleaseMode.stop);
   }
 
-  static const _stepSound = 'sounds/breath-and-bowl.mp3';
   static const _brewNotification = MethodChannel(
     'coffee_timer/brew_notification',
   );
@@ -40,16 +42,19 @@ class PluginEffects implements EffectPlugins {
       !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
   final AudioPlayer _player;
-  late final Future<void> _loaded;
+  late final Future<void> _ready;
 
-  Future<void> _load() async {
-    await _player.setReleaseMode(ReleaseMode.stop);
-    await _player.setSource(AssetSource(_stepSound));
-  }
+  /// The asset the player holds; null until the first sound.
+  String? _loaded;
 
   @override
-  Future<void> playStepSound() async {
-    await _loaded;
+  Future<void> playSound(String asset) async {
+    await _ready;
+    await _player.stop();
+    if (asset != _loaded) {
+      await _player.setSource(AssetSource(asset));
+      _loaded = asset;
+    }
     await _player.resume();
   }
 

@@ -83,10 +83,12 @@ again.
   accents), `Toggle` (`On` / `Off`, stored and typed as `on` / `off`: the
   brew's sound and its vibration), `PreAlertLead` (`Off`, 3, 5 or 10 s,
   default 3 s, stored and typed as its seconds, labelled `Off` / `3 s`),
-  and `Settings`. `Settings::from_storage` takes the raw rows as
+  `Sound` (the eight shipped sounds, each with its id, the asset's file
+  stem, stored and typed as is; its name; and its length, labelled
+  `1.0 s`), and `Settings`. `Settings::from_storage` takes the raw rows as
   `StoredSettings` (one `Option<&str>` per key) and falls back per field
   to `Settings::FALLBACK` (system, Material blue, sound and vibration on,
-  3 s).
+  3 s, `breath-and-bowl` between steps, `singing-bowl` at the finish).
 - **`ModelError`** carries user-facing texts that match the legacy app's.
 
 Tests: [`recipe_test.rs`](../native/core/tests/recipe_test.rs),
@@ -221,7 +223,8 @@ without git it is the version alone. The CLI's `--version` and the hub's
 [`native/core/src/settings`](../native/core/src/settings)
 
 `SettingsController` owns `Settings`. It provides `load`, `set_theme`,
-`set_accent`, `set_sound`, `set_vibration` and `set_pre_alert`, and writes
+`set_accent`, `set_sound`, `set_vibration`, `set_pre_alert`,
+`set_step_sound` and `set_finish_sound`, and writes
 through its `SettingsStore` first.
 
 Test:
@@ -240,9 +243,10 @@ Test:
   every call.
 - `CuePolicy` (`CuePolicy::of(&Settings)`) is the one home of the brew's
   cues and of muting them: the step boundary's buzz (`STEP_BUZZ_MS` = 100)
-  and sound, the finish's buzz pattern (`FINISH_PATTERN_MS`) and sound,
+  and the chosen step sound, the finish's buzz pattern
+  (`FINISH_PATTERN_MS`) and the chosen finish sound (`PlaySound { sound }`),
   and the pre-alert (`PRE_ALERT_MS` = 40) at the settings' lead. With
-  sound off it gives no `PlayStepSound`, with vibration off no `Vibrate`
+  sound off it gives no `PlaySound`, with vibration off no `Vibrate`
   or `VibratePattern`. The pre-alert fires on the tick that leaves exactly
   the lead, for steps longer than the lead.
 - `BrewState` is `Empty`, `Idle(BrewView)`, `Running(BrewView,
@@ -352,8 +356,8 @@ The store implements the core's ports. It makes no decisions.
   (grams are clamped into bounds).
   [`settings_rows.rs`](../native/store/src/settings_rows.rs) stores key/value
   rows: `theme`, `accent_color`, `sound` and `vibration` (`on` / `off`)
-  and `pre_alert_seconds`. A missing row loads its fallback, so the cue
-  rows needed no migration.
+  `pre_alert_seconds`, and `step_sound` and `finish_sound` (sound ids). A
+  missing row loads its fallback, so the cue rows needed no migration.
 - **`UuidIds`** ([`uuid_ids.rs`](../native/store/src/uuid_ids.rs)) is the
   production `IdGen`, which produces UUID v7 text. The hub and the CLI share
   it.
@@ -375,7 +379,8 @@ decides nothing: core produces every label, status and error text.
 - [`args.rs`](../native/cli/src/args.rs) defines the clap arguments: `list`,
   `show` (with `--coffee`, `--ratio-steps` and `--save`), `new`, `duplicate`, `pin`, `unpin`, `delete`,
   `export` (ids, `--out`), `import` (a file or `-`), `brew` and `settings`
-  (`theme`, `accent`, `sound`, `vibration`, `pre-alert`), plus the global `--db`.
+  (`theme`, `accent`, `sound`, `vibration`, `pre-alert`, `step-sound`,
+  `finish-sound`), plus the global `--db`.
   `brew` ticks with the stored settings.
 - [`lib.rs`](../native/cli/src/lib.rs) provides `Controllers::boot` (build
   and load), `run` (dispatch one command) and `default_db_path`.
@@ -429,7 +434,7 @@ makes no business decisions.
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `MoveRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SetBrewCoffee`, `BackToRecipeDose`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetRecipePourSpeed`, `SetRecipeGrind`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
-| settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert` | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds`, the `pre_alerts` options and `app_version`) |
+| settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert`, `SetStepSound`, `SetFinishSound`, `PreviewSound` (answered by a `PlatformEffect::PlaySound`, whatever the mute) | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds`, the `pre_alerts` options, `step_sound`, `finish_sound`, the `sounds` options and `app_version`) |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial
 mappings. The loops are not unit tested; they are kept thin enough to
@@ -461,7 +466,8 @@ The GUI renders, sends intents, and performs effects. It holds no business
   Flutter's `Clipboard.setData`). `EffectPlugins` is the
   test border, and `PluginEffects` is the production implementation.
 - **[`pages/`](../lib/pages)** has `RecipeListPage`, `BrewPage`,
-  `EditorPage` and `SettingsPage`. The list's long-press Export sends
+  `EditorPage`, `SettingsPage` and `SoundsPage` (Settings > Sounds: the
+  step and finish pickers; a row tap previews and selects). The list's long-press Export sends
   `ExportRecipes` with the row's id, the app bar's menu sends it with
   none (every recipe) or reads the clipboard and sends its text as
   `ImportRecipes`, or enters reorder mode: a `ReorderableListView` of the
