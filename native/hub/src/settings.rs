@@ -1,9 +1,9 @@
 //! Settings ↔ settings signals.
 
-use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, ThemeSelection};
+use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, Sound, ThemeSelection};
 use coffee_timer_core::version::APP_VERSION;
 
-use crate::signals::{AccentChoice, PreAlertChoice, SettingsUpdate, ThemeChoice};
+use crate::signals::{AccentChoice, PreAlertChoice, SettingsUpdate, SoundChoice, ThemeChoice};
 
 impl From<&Settings> for SettingsUpdate {
     fn from(settings: &Settings) -> Self {
@@ -28,6 +28,16 @@ impl From<&Settings> for SettingsUpdate {
                     label: lead.label(),
                 })
                 .collect(),
+            step_sound: settings.step_sound().id().to_owned(),
+            finish_sound: settings.finish_sound().id().to_owned(),
+            sounds: Sound::ALL
+                .into_iter()
+                .map(|sound| SoundChoice {
+                    id: sound.id().to_owned(),
+                    label: sound.label().to_owned(),
+                    length_label: sound.length_label(),
+                })
+                .collect(),
             app_version: APP_VERSION.to_owned(),
         }
     }
@@ -50,5 +60,36 @@ impl From<ThemeChoice> for ThemeSelection {
             ThemeChoice::Dark => Self::Dark,
             ThemeChoice::System => Self::System,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use coffee_timer_core::model::{Settings, Sound};
+
+    use crate::signals::SettingsUpdate;
+
+    #[test]
+    fn carries_the_chosen_sounds_and_every_option() {
+        let settings = Settings::FALLBACK
+            .with_step_sound(Sound::Kalimba)
+            .with_finish_sound(Sound::Tingsha);
+        let update = SettingsUpdate::from(&settings);
+        assert_eq!(update.step_sound, "kalimba");
+        assert_eq!(update.finish_sound, "tingsha");
+        let rows: Vec<(&str, &str, &str)> = update
+            .sounds
+            .iter()
+            .map(|row| {
+                (
+                    row.id.as_str(),
+                    row.label.as_str(),
+                    row.length_label.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(rows.len(), Sound::ALL.len());
+        assert_eq!(rows[0], ("temple-block", "Temple block", "1.0 s"));
+        assert_eq!(rows[7], ("singing-bowl", "Singing bowl", "2.0 s"));
     }
 }

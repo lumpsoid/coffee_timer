@@ -10,7 +10,8 @@ use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
     BrewMetrics, CoffeeDose, LabelStyle, ModelError, Pin, PreAlertLead, Recipe, RecipeId,
-    RecipeName, RecipeStep, Settings, StepDuration, StepId, Toggle, WaterAmount, WaterScaleError,
+    RecipeName, RecipeStep, Settings, Sound, StepDuration, StepId, Toggle, WaterAmount,
+    WaterScaleError,
 };
 
 use StepStatus::{Current, Done, Pending};
@@ -21,6 +22,13 @@ type TestResult = Result<(), Box<dyn std::error::Error>>;
 const SETTINGS: Settings = Settings::FALLBACK;
 
 const BUZZ: Effect = Effect::Vibrate { ms: 100 };
+/// The default sounds: at each step boundary, and at the finish.
+const STEP_SOUND: Effect = Effect::PlaySound {
+    sound: Sound::BreathAndBowl,
+};
+const FINISH_SOUND: Effect = Effect::PlaySound {
+    sound: Sound::SingingBowl,
+};
 const SCREEN_ON: Effect = Effect::KeepScreenOn(true);
 const SCREEN_OFF: Effect = Effect::KeepScreenOn(false);
 const HIDE: Effect = Effect::HideBrewNotification;
@@ -33,10 +41,10 @@ fn finish_buzz() -> Effect {
     }
 }
 
-/// After the last step: screen-on off, the finish buzz, the sound, then
+/// After the last step: screen-on off, the finish buzz, the finish sound, then
 /// the notification gone.
 fn ended() -> [Effect; 4] {
-    [SCREEN_OFF, finish_buzz(), Effect::PlayStepSound, HIDE]
+    [SCREEN_OFF, finish_buzz(), FINISH_SOUND, HIDE]
 }
 
 /// The brew notification: `title`, and the next step's name if any.
@@ -263,7 +271,7 @@ fn a_brew_runs_tick_by_tick_to_the_end() -> TestResult {
     // Boundary: the next step shows its full duration at once.
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:01", None)]
+        [BUZZ, STEP_SOUND, show("Step 2 · 00:01", None)]
     );
     assert_eq!(timer(&brew), running(1, "00:01"));
     assert_eq!(statuses(&brew), [Done, Current]);
@@ -300,7 +308,7 @@ fn a_zero_second_first_step_shows_00_00_for_one_tick() -> TestResult {
 
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:02", None)]
+        [BUZZ, STEP_SOUND, show("Step 2 · 00:02", None)]
     );
     assert_eq!(timer(&brew), running(1, "00:02"));
     Ok(())
@@ -313,7 +321,7 @@ fn a_zero_second_last_step_shows_00_00_for_one_tick_then_ends() -> TestResult {
 
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:00", None)]
+        [BUZZ, STEP_SOUND, show("Step 2 · 00:00", None)]
     );
     assert_eq!(timer(&brew), running(1, "00:00"));
 
@@ -329,16 +337,12 @@ fn a_zero_second_middle_step_shows_00_00_for_one_tick() -> TestResult {
 
     assert_eq!(
         brew.tick(&SETTINGS),
-        [
-            BUZZ,
-            Effect::PlayStepSound,
-            show("Step 2 · 00:00", Some("Step 3"))
-        ]
+        [BUZZ, STEP_SOUND, show("Step 2 · 00:00", Some("Step 3"))]
     );
     assert_eq!(timer(&brew), running(1, "00:00"));
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Step 3 · 00:01", None)]
+        [BUZZ, STEP_SOUND, show("Step 3 · 00:01", None)]
     );
     assert_eq!(timer(&brew), running(2, "00:01"));
     assert_eq!(brew.tick(&SETTINGS), ended());
@@ -382,7 +386,7 @@ fn start_from_a_middle_step() -> TestResult {
     );
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Step 3 · 00:01", None)]
+        [BUZZ, STEP_SOUND, show("Step 3 · 00:01", None)]
     );
     assert_eq!(timer(&brew), running(2, "00:01"));
     assert_eq!(statuses(&brew), [Done, Done, Current]);
@@ -591,7 +595,7 @@ fn an_edit_to_another_recipe_changes_nothing() -> TestResult {
     assert_eq!(timer(&brew), running(0, "00:01"));
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:02", None)]
+        [BUZZ, STEP_SOUND, show("Step 2 · 00:02", None)]
     );
     Ok(())
 }
@@ -1035,7 +1039,7 @@ fn resume_counts_down_from_where_it_was_held_in_the_same_run() -> TestResult {
     brew.tick(&SETTINGS);
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Step 2 · 00:02", None)]
+        [BUZZ, STEP_SOUND, show("Step 2 · 00:02", None)]
     );
     Ok(())
 }
@@ -1292,7 +1296,7 @@ fn the_last_tick_finishes_with_the_finish_buzz_and_the_sound() -> TestResult {
     brew.start(0)?;
     assert_eq!(
         brew.tick(&SETTINGS),
-        [SCREEN_OFF, finish_buzz(), Effect::PlayStepSound, HIDE,]
+        [SCREEN_OFF, finish_buzz(), FINISH_SOUND, HIDE,]
     );
     assert!(!brew.state().is_running());
     assert_eq!(finished(&brew), Some("0:01"));
@@ -1586,7 +1590,30 @@ fn the_pre_alert_setting_sets_the_lead_or_turns_it_off() -> TestResult {
 
 // sound and vibration settings
 
-const SOUND: Effect = Effect::PlayStepSound;
+#[test]
+fn each_cue_plays_the_sound_chosen_for_it() -> TestResult {
+    for step_sound in Sound::ALL {
+        for finish_sound in Sound::ALL {
+            let settings = SETTINGS
+                .with_step_sound(step_sound)
+                .with_finish_sound(finish_sound);
+            let ticks = brew_effects(&settings)?;
+            let sounds = |tick: &[Effect]| -> Vec<Sound> {
+                tick.iter()
+                    .filter_map(|effect| match effect {
+                        Effect::PlaySound { sound } => Some(*sound),
+                        _ => None,
+                    })
+                    .collect()
+            };
+            let case = format!("{step_sound:?} then {finish_sound:?}");
+            assert_eq!(sounds(&ticks[4]), [step_sound], "{case}: step boundary");
+            let last = ticks.last().ok_or("no ticks")?;
+            assert_eq!(sounds(last), [finish_sound], "{case}: finish");
+        }
+    }
+    Ok(())
+}
 
 /// Whether `effect` buzzes.
 fn buzzes(effect: &Effect) -> bool {
@@ -1622,7 +1649,8 @@ fn every_sound_and_vibration_combination_gives_only_its_cues() -> TestResult {
                 let all: Vec<&Effect> = ticks.iter().flatten().collect();
                 let case = format!("sound {sound:?}, vibration {vibration:?}, {lead:?}");
                 assert_eq!(
-                    all.iter().any(|effect| **effect == SOUND),
+                    all.iter()
+                        .any(|effect| matches!(effect, Effect::PlaySound { .. })),
                     sound.is_on(),
                     "{case}: sound"
                 );
@@ -1638,10 +1666,9 @@ fn every_sound_and_vibration_combination_gives_only_its_cues() -> TestResult {
                 );
 
                 let buzz = vibration.is_on().then_some(BUZZ);
-                let sounded = sound.is_on().then_some(SOUND);
                 let boundary: Vec<Effect> = buzz
                     .into_iter()
-                    .chain(sounded.clone())
+                    .chain(sound.is_on().then_some(STEP_SOUND))
                     .chain([notify("Step 2 · 00:05", None)])
                     .collect();
                 assert_eq!(ticks[4], boundary, "{case}: the step boundary");
@@ -1650,7 +1677,7 @@ fn every_sound_and_vibration_combination_gives_only_its_cues() -> TestResult {
                 let end: Vec<Effect> = [SCREEN_OFF]
                     .into_iter()
                     .chain(finish_buzz)
-                    .chain(sounded)
+                    .chain(sound.is_on().then_some(FINISH_SOUND))
                     .chain([HIDE])
                     .collect();
                 assert_eq!(ticks.last(), Some(&end), "{case}: the finish");
@@ -1667,7 +1694,7 @@ fn the_default_settings_give_every_cue() -> TestResult {
         ticks[1],
         [pre_alert(), show("Step 1 · 00:03", Some("Step 2"))]
     );
-    assert_eq!(ticks[4], [BUZZ, SOUND, show("Step 2 · 00:05", None)]);
+    assert_eq!(ticks[4], [BUZZ, STEP_SOUND, show("Step 2 · 00:05", None)]);
     assert_eq!(ticks.last().map(Vec::as_slice), Some(ended().as_slice()));
     Ok(())
 }
@@ -1688,7 +1715,7 @@ fn a_setting_changed_mid_brew_applies_from_the_next_tick() -> TestResult {
     brew.tick(&SETTINGS);
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, SOUND, show("Step 3 · 00:01", None)],
+        [BUZZ, STEP_SOUND, show("Step 3 · 00:01", None)],
         "back on for the next boundary"
     );
     Ok(())
@@ -1853,7 +1880,7 @@ fn saving_the_ratio_keeps_a_running_brew_where_it_is() -> TestResult {
 
     assert_eq!(
         brew.tick(&SETTINGS),
-        [BUZZ, Effect::PlayStepSound, show("Pour · 00:03", None)]
+        [BUZZ, STEP_SOUND, show("Pour · 00:03", None)]
     );
     assert_eq!(pour_to(&brew).as_deref(), Some("Pour to 255g"));
     Ok(())

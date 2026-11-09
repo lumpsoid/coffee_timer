@@ -25,6 +25,7 @@ pub enum ModelError {
     UnknownTheme(String),
     UnknownToggle(String),
     UnknownPreAlert(String),
+    UnknownSound(String),
     StepIndexOutOfRange { index: usize, len: usize },
 }
 
@@ -82,6 +83,7 @@ impl fmt::Display for ModelError {
             Self::UnknownPreAlert(raw) => {
                 write!(f, "Pre-alert \"{raw}\" is not 0, 3, 5 or 10 seconds")
             }
+            Self::UnknownSound(raw) => write!(f, "No sound named \"{raw}\""),
             Self::StepIndexOutOfRange { index, len } => {
                 write!(f, "Step {index} is out of range for {len} steps")
             }

@@ -8,7 +8,7 @@ use coffee_timer_core::brew::{
 };
 use coffee_timer_core::catalog::{CatalogChange, RecipeSummary};
 use coffee_timer_core::editor::EditorState;
-use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, ThemeSelection};
+use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, Sound, ThemeSelection};
 
 /// One list row; a pinned recipe's name is followed by `[pinned]`.
 pub fn summary(out: &mut impl Write, summary: &RecipeSummary) -> io::Result<()> {
@@ -115,7 +115,7 @@ pub fn effects(out: &mut impl Write, effects: &[Effect]) -> io::Result<()> {
                 let pattern: Vec<String> = pattern_ms.iter().map(u32::to_string).collect();
                 writeln!(out, "[vibrate pattern {}ms]", pattern.join("/"))?;
             }
-            Effect::PlayStepSound => writeln!(out, "[sound]")?,
+            Effect::PlaySound { sound } => writeln!(out, "[sound {}]", sound.id())?,
             Effect::KeepScreenOn(true) => writeln!(out, "[screen on]")?,
             Effect::KeepScreenOn(false) => writeln!(out, "[screen off]")?,
             Effect::ShowBrewNotification(notice) => match &notice.next {
@@ -141,6 +141,8 @@ pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
     writeln!(out, "Sound: {}", settings.sound().storage_value())?;
     writeln!(out, "Vibration: {}", settings.vibration().storage_value())?;
     writeln!(out, "Pre-alert: {}", settings.pre_alert().label())?;
+    writeln!(out, "Step sound: {}", settings.step_sound().id())?;
+    writeln!(out, "Finish sound: {}", settings.finish_sound().id())?;
     let themes: Vec<&str> = ThemeSelection::ALL
         .into_iter()
         .map(ThemeSelection::storage_value)
@@ -159,6 +161,16 @@ pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
         "Pre-alert options: {} (seconds; 0 is off)",
         leads.join(", ")
     )?;
+    writeln!(out, "Sound options:")?;
+    for sound in Sound::ALL {
+        writeln!(
+            out,
+            "  {:<16} {:<16} {}",
+            sound.id(),
+            sound.label(),
+            sound.length_label()
+        )?;
+    }
     Ok(())
 }
 

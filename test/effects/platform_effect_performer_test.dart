@@ -12,10 +12,10 @@ class _FakePlugins implements EffectPlugins {
   bool failSound = false;
 
   @override
-  Future<void> playStepSound() async {
+  Future<void> playSound(String asset) async {
     await Future<void>.delayed(const Duration(milliseconds: 5));
     if (failSound) throw StateError('no audio');
-    calls.add('sound');
+    calls.add('sound $asset');
   }
 
   @override
@@ -52,7 +52,7 @@ void main() {
   });
 
   test('each variant is one plugin call', () async {
-    await performer.perform(const PlatformEffectPlayStepSound());
+    await performer.perform(const PlatformEffectPlaySound(sound: 'kalimba'));
     await performer.perform(const PlatformEffectVibrate(ms: 100));
     await performer.perform(
       const PlatformEffectVibratePattern(patternMs: [0, 400, 200, 400]),
@@ -74,7 +74,7 @@ void main() {
     );
 
     expect(plugins.calls, [
-      'sound',
+      'sound sounds/kalimba.mp3',
       'vibrate 100',
       'vibrate pattern 0/400/200/400',
       'screen true',
@@ -92,14 +92,14 @@ void main() {
 
     effects
       ..add(const PlatformEffectVibrate(ms: 100))
-      ..add(const PlatformEffectPlayStepSound())
+      ..add(const PlatformEffectPlaySound(sound: 'tingsha'))
       ..add(const PlatformEffectKeepScreenOn(on: false));
     await effects.close();
     await performer.perform(const PlatformEffectVibrate(ms: 1));
 
     expect(plugins.calls, [
       'vibrate 100',
-      'sound',
+      'sound sounds/tingsha.mp3',
       'screen false',
       'vibrate 1',
     ]);
@@ -107,7 +107,9 @@ void main() {
 
   test('a failed call does not hold up the next', () async {
     plugins.failSound = true;
-    unawaited(performer.perform(const PlatformEffectPlayStepSound()));
+    unawaited(
+      performer.perform(const PlatformEffectPlaySound(sound: 'tingsha')),
+    );
     await performer.perform(const PlatformEffectVibrate(ms: 100));
 
     expect(plugins.calls, ['vibrate 100']);

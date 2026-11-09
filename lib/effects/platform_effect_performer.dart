@@ -27,7 +27,9 @@ class PlatformEffectPerformer {
   }
 
   Future<void> _call(PlatformEffect effect) => switch (effect) {
-    PlatformEffectPlayStepSound() => _plugins.playStepSound(),
+    PlatformEffectPlaySound(:final sound) => _plugins.playSound(
+      'sounds/$sound.mp3',
+    ),
     PlatformEffectVibrate(:final ms) => _plugins.vibrate(ms),
     PlatformEffectVibratePattern(:final patternMs) => _plugins.vibratePattern(
       patternMs,

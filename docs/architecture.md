@@ -35,7 +35,7 @@ and not on each other. Dart sees only the generated signal classes.
 | Controller | State object | Owns |
 |---|---|---|
 | [`RecipeCatalog`](../native/core/src/catalog/recipe_catalog.rs) | `Vec<Recipe>` and the pinned ids, plus the last `RemovedRecipe` | the recipe list, its pins and persistence, and the one removal that can be undone (shared) |
-| [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme, accent and brew cues (sound, vibration, pre-alert), and their persistence |
+| [`SettingsController`](../native/core/src/settings/settings_controller.rs) | [`Settings`](../native/core/src/model/settings.rs) | the theme, accent and brew cues (sound, vibration, pre-alert, step and finish sounds), and their persistence |
 | [`BrewController`](../native/core/src/brew/brew_controller.rs) | [`BrewState`](../native/core/src/brew/brew_state.rs): `Empty` / `Idle(view)` / `Running(view, step)` / `Paused(view, step)` / `Finished(view, finished)` | the open recipe and its timer |
 | [`EditorController`](../native/core/src/editor/editor_controller.rs) | [`EditorState`](../native/core/src/editor/editor_state.rs): `Closed` / `Open(Draft)` | one draft, new or of an existing recipe |
 
@@ -218,7 +218,7 @@ finds the recipe unchanged.
 An [`Effect`](../native/core/src/brew/effect.rs) is a platform command that
 a controller has already decided on: `Vibrate { ms }`,
 `VibratePattern { pattern_ms }` (pause and buzz lengths, starting with a
-pause), `PlayStepSound`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
+pause), `PlaySound { sound }`, `KeepScreenOn(bool)`, `ShowBrewNotification(BrewNotice)` or
 `HideBrewNotification`. Only `BrewController` returns effects. The hub maps
 each effect to a `PlatformEffect` signal and sends it after the brew view.
 The hub also sends `PlatformEffect::CopyToClipboard { text }` itself for
@@ -269,7 +269,7 @@ clock. Time arrives as `tick()`, one call per second while
 - `tick()` takes one second off the current step, and never goes below zero.
   Every tick that leaves the brew running returns `ShowBrewNotification`
   last. When a step reaches zero, the next step begins and the tick returns
-  `Vibrate` + `PlayStepSound` before it. The tick that leaves a step
+  `Vibrate` + `PlaySound` (the chosen step sound) before it. The tick that leaves a step
   exactly the pre-alert lead (3 s by default) returns
   `VibratePattern [0, 50, 100, 50]` before the notification: two quick
   taps, unlike a step boundary's single buzz, that the step is about to end.
@@ -283,13 +283,13 @@ clock. Time arrives as `tick()`, one call per second while
   finish effects. After the last step, the brew is
   `Finished` and the tick returns `KeepScreenOn(false)` +
   `VibratePattern [0, 400, 200, 400]` (two long buzzes, unlike a step
-  boundary) + `PlayStepSound` + `HideBrewNotification`. The hide comes
+  boundary) + `PlaySound` (the chosen finish sound) + `HideBrewNotification`. The hide comes
   last, so the app is still kept awake for the final buzz and sound. A
   0-second step shows `00:00` for one tick.
 - **Muting and the pre-alert lead are settings, decided in core.**
   `tick(&Settings)` builds `CuePolicy::of(settings)` on every call, and
   only `CuePolicy` makes the cue effects: with sound off a tick returns
-  no `PlayStepSound`, with vibration off no `Vibrate` (step boundary or
+  no `PlaySound`, with vibration off no `Vibrate` (step boundary or
   pre-alert) and no finish `VibratePattern`, and the pre-alert comes at
   the settings' lead (off, 3, 5 or 10 s). The screen and notification
   effects are never muted. The settings are passed in, not copied into the

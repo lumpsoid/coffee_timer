@@ -119,6 +119,8 @@ SettingsUpdate settings({
   bool sound = true,
   bool vibration = true,
   int preAlertSeconds = 3,
+  String stepSound = 'breath-and-bowl',
+  String finishSound = 'singing-bowl',
 }) => SettingsUpdate(
   theme: theme,
   accent: accent,
@@ -135,6 +137,21 @@ SettingsUpdate settings({
     PreAlertChoice(seconds: 3, label: '3 s'),
     PreAlertChoice(seconds: 5, label: '5 s'),
     PreAlertChoice(seconds: 10, label: '10 s'),
+  ],
+  stepSound: stepSound,
+  finishSound: finishSound,
+  sounds: const [
+    SoundChoice(id: 'kalimba', label: 'Kalimba', lengthLabel: '1.0 s'),
+    SoundChoice(
+      id: 'breath-and-bowl',
+      label: 'Breath and bowl',
+      lengthLabel: '1.0 s',
+    ),
+    SoundChoice(
+      id: 'singing-bowl',
+      label: 'Singing bowl',
+      lengthLabel: '2.0 s',
+    ),
   ],
   appVersion: '0.1.0 (2391c1d)',
 );

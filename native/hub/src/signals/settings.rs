@@ -17,7 +17,7 @@ pub struct SetAccent {
     pub argb: u32,
 }
 
-/// Turn the brew's step sound on or off.
+/// Turn the brew's sounds on or off: the master mute over both choices.
 #[derive(Deserialize, DartSignal)]
 pub struct SetSound {
     pub on: bool,
@@ -35,6 +35,27 @@ pub struct SetPreAlert {
     pub seconds: u32,
 }
 
+/// One of `SettingsUpdate::sounds`' `id`, to play at each step boundary;
+/// any other is refused.
+#[derive(Deserialize, DartSignal)]
+pub struct SetStepSound {
+    pub sound: String,
+}
+
+/// One of `SettingsUpdate::sounds`' `id`, to play when the brew finishes;
+/// any other is refused.
+#[derive(Deserialize, DartSignal)]
+pub struct SetFinishSound {
+    pub sound: String,
+}
+
+/// Play one of `SettingsUpdate::sounds` once, as a `PlatformEffect`, even
+/// with the sound off. Changes nothing.
+#[derive(Deserialize, DartSignal)]
+pub struct PreviewSound {
+    pub sound: String,
+}
+
 /// The settings and the choices offered. Dart replaces its state with each
 /// one; the app theme follows it.
 #[derive(Serialize, RustSignal)]
@@ -46,7 +67,7 @@ pub struct SettingsUpdate {
     pub themes: Vec<ThemeChoice>,
     /// The accent picker's options, in order.
     pub accents: Vec<AccentChoice>,
-    /// Whether a brew plays its step sound.
+    /// Whether a brew plays its sounds.
     pub sound: bool,
     /// Whether a brew buzzes.
     pub vibration: bool,
@@ -54,6 +75,12 @@ pub struct SettingsUpdate {
     pub pre_alert_seconds: u32,
     /// The pre-alert picker's options, in order.
     pub pre_alerts: Vec<PreAlertChoice>,
+    /// The sound at each step boundary, one of `sounds`' `id`.
+    pub step_sound: String,
+    /// The sound at the finish, one of `sounds`' `id`.
+    pub finish_sound: String,
+    /// The sound pickers' options, in order.
+    pub sounds: Vec<SoundChoice>,
     /// The app's version and commit, `0.1.0 (2391c1d)`.
     pub app_version: String,
 }
@@ -71,6 +98,14 @@ pub enum ThemeChoice {
 pub struct PreAlertChoice {
     pub seconds: u32,
     pub label: String,
+}
+
+/// A sound option: its id, name (`Temple block`) and length (`1.0 s`).
+#[derive(Serialize, SignalPiece)]
+pub struct SoundChoice {
+    pub id: String,
+    pub label: String,
+    pub length_label: String,
 }
 
 #[derive(Serialize, SignalPiece)]

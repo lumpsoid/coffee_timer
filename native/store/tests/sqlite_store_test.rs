@@ -6,8 +6,8 @@ use std::path::Path;
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
     AccentColor, CoffeeDose, GrindClicks, Pin, PourSpeed, PreAlertLead, Recipe, RecipeId,
-    RecipeName, RecipeStep, Settings, StepDuration, StepId, StoredSettings, ThemeSelection, Toggle,
-    WaterAmount,
+    RecipeName, RecipeStep, Settings, Sound, StepDuration, StepId, StoredSettings, ThemeSelection,
+    Toggle, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
 use coffee_timer_core::settings::SettingsController;
@@ -665,6 +665,11 @@ fn settings_round_trip() -> TestResult {
             }
         }
     }
+    for sound in Sound::ALL {
+        let sounds = second.with_step_sound(sound).with_finish_sound(sound);
+        store.save(sounds)?;
+        assert_eq!(store.load()?, sounds);
+    }
     Ok(())
 }
 
@@ -676,7 +681,8 @@ fn cue_settings_are_stored_as_key_value_rows() -> TestResult {
     store.save(
         Settings::FALLBACK
             .with_sound(Toggle::Off)
-            .with_pre_alert(PreAlertLead::Seconds10),
+            .with_pre_alert(PreAlertLead::Seconds10)
+            .with_step_sound(Sound::Kalimba),
     )?;
     let raw = Connection::open(&path)?;
     let row = |key: &str| -> rusqlite::Result<String> {
@@ -687,6 +693,8 @@ fn cue_settings_are_stored_as_key_value_rows() -> TestResult {
     assert_eq!(row("sound")?, "off");
     assert_eq!(row("vibration")?, "on");
     assert_eq!(row("pre_alert_seconds")?, "10");
+    assert_eq!(row("step_sound")?, "kalimba");
+    assert_eq!(row("finish_sound")?, "singing-bowl");
     Ok(())
 }
 
@@ -698,12 +706,15 @@ fn malformed_cue_rows_fall_back_per_field() -> TestResult {
     let raw = Connection::open(&path)?;
     raw.execute(
         "INSERT INTO settings (key, value) VALUES ('theme', 'dark'), ('sound', 'loud'),
-         ('vibration', 'off'), ('pre_alert_seconds', '7')",
+         ('vibration', 'off'), ('pre_alert_seconds', '7'), ('step_sound', 'gong'),
+         ('finish_sound', 'tingsha')",
         [],
     )?;
     assert_eq!(
         store.load()?,
-        Settings::new(ThemeSelection::Dark, AccentColor::FALLBACK).with_vibration(Toggle::Off)
+        Settings::new(ThemeSelection::Dark, AccentColor::FALLBACK)
+            .with_vibration(Toggle::Off)
+            .with_finish_sound(Sound::Tingsha)
     );
     Ok(())
 }
