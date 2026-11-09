@@ -13,8 +13,10 @@ abstract interface class EffectPlugins {
 
   Future<void> vibrate(int ms);
 
-  /// Alternating pause and buzz lengths in ms, starting with a pause.
-  Future<void> vibratePattern(List<int> patternMs);
+  /// Alternating pause and buzz lengths in ms, starting with a pause, and
+  /// each entry's strength, 1–255 (0 for the pauses); empty for the
+  /// device's default.
+  Future<void> vibratePattern(List<int> patternMs, List<int> strengths);
 
   Future<void> keepScreenOn({required bool on});
 
@@ -62,8 +64,8 @@ class PluginEffects implements EffectPlugins {
   Future<void> vibrate(int ms) => Vibration.vibrate(duration: ms);
 
   @override
-  Future<void> vibratePattern(List<int> patternMs) =>
-      Vibration.vibrate(pattern: patternMs);
+  Future<void> vibratePattern(List<int> patternMs, List<int> strengths) =>
+      Vibration.vibrate(pattern: patternMs, intensities: strengths);
 
   @override
   Future<void> keepScreenOn({required bool on}) =>

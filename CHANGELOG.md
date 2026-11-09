@@ -13,6 +13,10 @@ version may change behaviour.
   sounds, and the one at the end of a brew from twelve longer ones that
   ring out and resolve, each shown with its length. Tapping a sound
   previews it, even with sound off.
+- A brew ends with a knock you can feel: "shave and a haircut, two bits"
+  in vibration, played in time, softer than before and with each note at
+  its own strength (on phones that can vary it). Settings > Finish knock
+  turns it off for the old two long buzzes.
 
 ### Changed
 

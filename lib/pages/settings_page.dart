@@ -7,9 +7,10 @@ import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:flutter/material.dart';
 
 /// The theme picker, the accent colour picker and the brew's cues (sound,
-/// vibration, pre-alert, and a link to the sound pickers), over the
-/// options Rust offers, and the app's version at the foot. Every control
-/// shows Rust's state and sends the change; none keeps its own.
+/// vibration, the finish knock, pre-alert, and a link to the sound
+/// pickers), over the options Rust offers, and the app's version at the
+/// foot. Every control shows Rust's state and sends the change; none
+/// keeps its own.
 class SettingsPage extends StatelessWidget {
   const SettingsPage({required this.settings, super.key});
 
@@ -44,6 +45,18 @@ class SettingsPage extends StatelessWidget {
 
   Widget _settings(BuildContext context, SettingsUpdate state) {
     final ink = Theme.of(context).colorScheme.onSurface;
+    // Scrolls on a short screen; otherwise fills it, the version at the foot.
+    return CustomScrollView(
+      slivers: [
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: _controls(context, state, ink),
+        ),
+      ],
+    );
+  }
+
+  Widget _controls(BuildContext context, SettingsUpdate state, Color ink) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -99,6 +112,12 @@ class SettingsPage extends StatelessWidget {
           subtitle: const Text('Buzz at each step and before it ends'),
           value: state.vibration,
           onChanged: (on) => SetVibration(on: on).sendSignalToRust(),
+        ),
+        SwitchListTile(
+          title: const Text('Finish knock'),
+          subtitle: const Text('End with "shave and a haircut, two bits"'),
+          value: state.finishKnock,
+          onChanged: (on) => SetFinishKnock(on: on).sendSignalToRust(),
         ),
         const SizedBox(height: 8),
         DropdownButtonFormField<int>(

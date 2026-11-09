@@ -103,14 +103,16 @@ to.
   save attempt onward.
 - **Settings.** Sets the theme (light, dark or system) and one of ten accent
   colours, and the brew's cues: sound on or off, vibration on or
-  off (step boundaries, the pre-alert and the finish buzz), and the
+  off (step boundaries, the pre-alert and the finish buzz), the finish
+  knock on or off (the brew ends with "shave and a haircut, two bits",
+  each note at its own strength, rather than two long buzzes), and the
   pre-alert before each step ends: off, 3 s (the default), 5 s or 10 s.
   Settings > Sounds picks the sound between steps (default Breath and
   bowl) from the seven short step sounds, and the one at the end of a
   brew (default Singing bowl) from the twelve longer end-of-brew sounds,
   each listed with its length; tapping one previews it, even with sound
   off.
-  Sound and vibration start on. A change made during a brew applies from
+  Sound, vibration and the finish knock start on. A change made during a brew applies from
   its next second. The foot of the page shows the app's version and the
   commit it was built from, `Version 0.1.0 (2391c1d)`.
 
@@ -213,6 +215,7 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings theme dark
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings accent Teal   # or #AARRGGBB / #RRGGBB
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings sound off        # on | off
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings vibration off    # on | off
+cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings finish-knock off # on | off
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings pre-alert 5      # 0 (off) | 3 | 5 | 10
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings step-sound kalimba         # a step sound id
 cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings finish-sound singing-bowl  # an end-of-brew sound id
@@ -225,7 +228,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings finish-sound singing-b
 - `brew` ticks once per second until the last step ends, and prints the
   countdown, the next-step preview, each step's status and the effects
   (`[vibrate 100ms]` at a step boundary,
-  `[vibrate pattern 0/50/100/50ms]` for the pre-alert 3 s before a step ends, `[vibrate pattern 0/400/200/400ms]`, `[sound <id>]`,
+  `[vibrate pattern 0/50/100/50ms]` for the pre-alert 3 s before a step ends, `[vibrate pattern 0/340/…/500ms at 0/140/…/180]` for the finish knock (each
+  buzz's strength after `at`), `[vibrate pattern 0/400/200/400ms]` with the
+  knock off, `[sound <id>]`,
   `[screen on]`/`[screen off]`, `[notify …]`/`[notify off]`). It follows
   the stored settings: with sound off it prints no `[sound …]`, with
   vibration off no `[vibrate …]`, and the pre-alert comes at the stored

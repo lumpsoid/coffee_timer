@@ -309,6 +309,9 @@ pub fn settings(
         Some(SettingsAction::Vibration { value }) => {
             settings.set_vibration(Toggle::try_parse(value)?)?;
         }
+        Some(SettingsAction::FinishKnock { value }) => {
+            settings.set_finish_knock(Toggle::try_parse(value)?)?;
+        }
         Some(SettingsAction::PreAlert { value }) => {
             settings.set_pre_alert(PreAlertLead::try_parse(value)?)?;
         }

@@ -18,7 +18,8 @@ use StepStatus::{Current, Done, Pending};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
-/// The default settings: sound and vibration on, a 3 s pre-alert.
+/// The default settings: sound, vibration and the finish knock on, a 3 s
+/// pre-alert.
 const SETTINGS: Settings = Settings::FALLBACK;
 
 const BUZZ: Effect = Effect::Vibrate { ms: 100 };
@@ -34,10 +35,14 @@ const SCREEN_OFF: Effect = Effect::KeepScreenOn(false);
 const HIDE: Effect = Effect::HideBrewNotification;
 /// A running brew stops silently.
 const STOPPED: [Effect; 2] = [SCREEN_OFF, HIDE];
-/// The finish buzz: two long buzzes, unlike a step boundary's one.
+/// The finish buzz at the defaults: the knock, each note at its own
+/// strength.
 fn finish_buzz() -> Effect {
     Effect::VibratePattern {
-        pattern_ms: vec![0, 400, 200, 400],
+        pattern_ms: vec![
+            0, 340, 100, 130, 90, 130, 90, 340, 100, 340, 540, 340, 100, 500,
+        ],
+        strengths: vec![0, 140, 0, 70, 0, 70, 0, 100, 0, 100, 0, 140, 0, 180],
     }
 }
 
@@ -1291,6 +1296,32 @@ fn brewed(
 }
 
 #[test]
+fn with_the_finish_knock_off_the_finish_buzzes_twice_long() -> TestResult {
+    let (mut brew, _catalog) = opened(&[1])?;
+    brew.start(0)?;
+    let two_long = Effect::VibratePattern {
+        pattern_ms: vec![0, 400, 200, 400],
+        strengths: vec![],
+    };
+    assert_eq!(
+        brew.tick(&SETTINGS.with_finish_knock(Toggle::Off)),
+        [SCREEN_OFF, two_long, FINISH_SOUND, HIDE]
+    );
+    Ok(())
+}
+
+#[test]
+fn with_vibration_off_the_finish_knock_is_silent_too() -> TestResult {
+    let (mut brew, _catalog) = opened(&[1])?;
+    brew.start(0)?;
+    assert_eq!(
+        brew.tick(&SETTINGS.with_vibration(Toggle::Off)),
+        [SCREEN_OFF, FINISH_SOUND, HIDE]
+    );
+    Ok(())
+}
+
+#[test]
 fn the_last_tick_finishes_with_the_finish_buzz_and_the_sound() -> TestResult {
     let (mut brew, _catalog) = opened(&[1])?;
     brew.start(0)?;
@@ -1431,6 +1462,7 @@ fn a_recipe_that_pours_nothing_has_no_poured_label() -> TestResult {
 fn pre_alert() -> Effect {
     Effect::VibratePattern {
         pattern_ms: vec![0, 50, 100, 50],
+        strengths: vec![],
     }
 }
 

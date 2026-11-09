@@ -22,8 +22,10 @@ class _FakePlugins implements EffectPlugins {
   Future<void> vibrate(int ms) async => calls.add('vibrate $ms');
 
   @override
-  Future<void> vibratePattern(List<int> patternMs) async =>
-      calls.add('vibrate pattern ${patternMs.join('/')}');
+  Future<void> vibratePattern(List<int> patternMs, List<int> strengths) async =>
+      calls.add(
+        'vibrate pattern ${patternMs.join('/')} at ${strengths.join('/')}',
+      );
 
   @override
   Future<void> keepScreenOn({required bool on}) async =>
@@ -55,7 +57,10 @@ void main() {
     await performer.perform(const PlatformEffectPlaySound(sound: 'kalimba'));
     await performer.perform(const PlatformEffectVibrate(ms: 100));
     await performer.perform(
-      const PlatformEffectVibratePattern(patternMs: [0, 400, 200, 400]),
+      const PlatformEffectVibratePattern(
+        patternMs: [0, 400, 200, 400],
+        strengths: [0, 120, 0, 200],
+      ),
     );
     await performer.perform(const PlatformEffectKeepScreenOn(on: true));
     await performer.perform(const PlatformEffectKeepScreenOn(on: false));
@@ -76,7 +81,7 @@ void main() {
     expect(plugins.calls, [
       'sound sounds/kalimba.mp3',
       'vibrate 100',
-      'vibrate pattern 0/400/200/400',
+      'vibrate pattern 0/400/200/400 at 0/120/0/200',
       'screen true',
       'screen false',
       'notify Bloom · 00:35 | Next: Pour',

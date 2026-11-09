@@ -31,9 +31,8 @@ class PlatformEffectPerformer {
       'sounds/$sound.mp3',
     ),
     PlatformEffectVibrate(:final ms) => _plugins.vibrate(ms),
-    PlatformEffectVibratePattern(:final patternMs) => _plugins.vibratePattern(
-      patternMs,
-    ),
+    PlatformEffectVibratePattern(:final patternMs, :final strengths) =>
+      _plugins.vibratePattern(patternMs, strengths),
     PlatformEffectKeepScreenOn(:final on) => _plugins.keepScreenOn(on: on),
     PlatformEffectShowBrewNotification(:final title, :final next) =>
       _plugins.showBrewNotification(title: title, next: next),

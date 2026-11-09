@@ -29,6 +29,13 @@ pub struct SetVibration {
     pub on: bool,
 }
 
+/// Turn the finish knock on or off: the brew ends with "shave and a
+/// haircut, two bits" rather than two long buzzes.
+#[derive(Deserialize, DartSignal)]
+pub struct SetFinishKnock {
+    pub on: bool,
+}
+
 /// One of `SettingsUpdate::pre_alerts`' `seconds`; any other is refused.
 #[derive(Deserialize, DartSignal)]
 pub struct SetPreAlert {
@@ -71,6 +78,8 @@ pub struct SettingsUpdate {
     pub sound: bool,
     /// Whether a brew buzzes.
     pub vibration: bool,
+    /// Whether the finish buzzes the knock.
+    pub finish_knock: bool,
     /// The pre-alert lead, one of `pre_alerts`' `seconds`; 0 is off.
     pub pre_alert_seconds: u32,
     /// The pre-alert picker's options, in order.
