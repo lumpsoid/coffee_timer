@@ -18,6 +18,9 @@ version may change behaviour.
 
 - The end-of-brew singing bowl is 3 s and rings down to silence instead of
   being cut off.
+- Every sound plays at the same loudness, so changing the sound does not
+  make the cue louder or quieter at one volume. The wooden knocks were
+  about 11 dB quieter than the counter bell.
 
 ## [0.1.0] - 2026-11-06
 
