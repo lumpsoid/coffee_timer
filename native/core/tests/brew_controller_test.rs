@@ -9,9 +9,9 @@ use coffee_timer_core::brew::{
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::fakes::FakeRecipeStore;
 use coffee_timer_core::model::{
-    BrewMetrics, CoffeeDose, LabelStyle, ModelError, Pin, PreAlertLead, Recipe, RecipeId,
-    RecipeName, RecipeStep, Settings, Sound, StepDuration, StepId, Toggle, WaterAmount,
-    WaterScaleError,
+    BrewMetrics, CoffeeDose, FinishSound, LabelStyle, ModelError, Pin, PreAlertLead, Recipe,
+    RecipeId, RecipeName, RecipeStep, Settings, Sound, StepDuration, StepId, StepSound, Toggle,
+    WaterAmount, WaterScaleError,
 };
 
 use StepStatus::{Current, Done, Pending};
@@ -24,10 +24,10 @@ const SETTINGS: Settings = Settings::FALLBACK;
 const BUZZ: Effect = Effect::Vibrate { ms: 100 };
 /// The default sounds: at each step boundary, and at the finish.
 const STEP_SOUND: Effect = Effect::PlaySound {
-    sound: Sound::BreathAndBowl,
+    sound: Sound::Step(StepSound::BreathAndBowl),
 };
 const FINISH_SOUND: Effect = Effect::PlaySound {
-    sound: Sound::SingingBowl,
+    sound: Sound::Finish(FinishSound::SingingBowl),
 };
 const SCREEN_ON: Effect = Effect::KeepScreenOn(true);
 const SCREEN_OFF: Effect = Effect::KeepScreenOn(false);
@@ -1592,8 +1592,8 @@ fn the_pre_alert_setting_sets_the_lead_or_turns_it_off() -> TestResult {
 
 #[test]
 fn each_cue_plays_the_sound_chosen_for_it() -> TestResult {
-    for step_sound in Sound::ALL {
-        for finish_sound in Sound::ALL {
+    for step_sound in StepSound::ALL {
+        for finish_sound in FinishSound::ALL {
             let settings = SETTINGS
                 .with_step_sound(step_sound)
                 .with_finish_sound(finish_sound);
@@ -1607,9 +1607,13 @@ fn each_cue_plays_the_sound_chosen_for_it() -> TestResult {
                     .collect()
             };
             let case = format!("{step_sound:?} then {finish_sound:?}");
-            assert_eq!(sounds(&ticks[4]), [step_sound], "{case}: step boundary");
+            assert_eq!(
+                sounds(&ticks[4]),
+                [Sound::from(step_sound)],
+                "{case}: step boundary"
+            );
             let last = ticks.last().ok_or("no ticks")?;
-            assert_eq!(sounds(last), [finish_sound], "{case}: finish");
+            assert_eq!(sounds(last), [Sound::from(finish_sound)], "{case}: finish");
         }
     }
     Ok(())

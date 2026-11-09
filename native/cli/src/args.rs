@@ -203,9 +203,10 @@ pub enum SettingsAction {
     Vibration { value: String },
     /// Buzz this many seconds before each step ends: 0 (off), 3, 5 or 10.
     PreAlert { value: String },
-    /// Set the sound at each step boundary: a sound id (e.g. kalimba).
+    /// Set the sound at each step boundary: a step sound id (e.g.
+    /// kalimba).
     StepSound { value: String },
-    /// Set the sound when the brew finishes: a sound id (e.g.
-    /// singing-bowl).
+    /// Set the sound when the brew finishes: an end-of-brew sound id
+    /// (e.g. gong).
     FinishSound { value: String },
 }

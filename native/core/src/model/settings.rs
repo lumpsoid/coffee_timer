@@ -1,4 +1,6 @@
-use crate::model::{AccentColor, PreAlertLead, Sound, StoredSettings, ThemeSelection, Toggle};
+use crate::model::{
+    AccentColor, FinishSound, PreAlertLead, StepSound, StoredSettings, ThemeSelection, Toggle,
+};
 
 /// User settings. Change only through the named operations below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -8,23 +10,23 @@ pub struct Settings {
     sound: Toggle,
     vibration: Toggle,
     pre_alert: PreAlertLead,
-    step_sound: Sound,
-    finish_sound: Sound,
+    step_sound: StepSound,
+    finish_sound: FinishSound,
 }
 
 impl Settings {
     /// Defaults used before anything is loaded, and what
     /// [`Settings::from_storage`] gives for nothing stored: the system
     /// theme, Material blue, sound and vibration on, a 3 s pre-alert,
-    /// [`Sound::DEFAULT_STEP`] and [`Sound::DEFAULT_FINISH`].
+    /// [`StepSound::DEFAULT`] and [`FinishSound::DEFAULT`].
     pub const FALLBACK: Self = Self {
         theme: ThemeSelection::System,
         accent: AccentColor::FALLBACK,
         sound: Toggle::On,
         vibration: Toggle::On,
         pre_alert: PreAlertLead::DEFAULT,
-        step_sound: Sound::DEFAULT_STEP,
-        finish_sound: Sound::DEFAULT_FINISH,
+        step_sound: StepSound::DEFAULT,
+        finish_sound: FinishSound::DEFAULT,
     };
 
     /// `theme` and `accent`, with the fallback cues.
@@ -46,10 +48,6 @@ impl Settings {
             raw.and_then(|raw| Toggle::try_parse(raw).ok())
                 .unwrap_or(fallback)
         };
-        let sound = |raw: Option<&str>, fallback: Sound| {
-            raw.and_then(|raw| Sound::try_parse(raw).ok())
-                .unwrap_or(fallback)
-        };
         Self {
             theme: ThemeSelection::from_storage(stored.theme),
             accent: stored
@@ -62,8 +60,14 @@ impl Settings {
                 .pre_alert
                 .and_then(|raw| PreAlertLead::try_parse(raw).ok())
                 .unwrap_or(fallback.pre_alert),
-            step_sound: sound(stored.step_sound, fallback.step_sound),
-            finish_sound: sound(stored.finish_sound, fallback.finish_sound),
+            step_sound: stored
+                .step_sound
+                .and_then(|raw| StepSound::try_parse(raw).ok())
+                .unwrap_or(fallback.step_sound),
+            finish_sound: stored
+                .finish_sound
+                .and_then(|raw| FinishSound::try_parse(raw).ok())
+                .unwrap_or(fallback.finish_sound),
         }
     }
 
@@ -87,11 +91,11 @@ impl Settings {
         Self { pre_alert, ..self }
     }
 
-    pub fn with_step_sound(self, step_sound: Sound) -> Self {
+    pub fn with_step_sound(self, step_sound: StepSound) -> Self {
         Self { step_sound, ..self }
     }
 
-    pub fn with_finish_sound(self, finish_sound: Sound) -> Self {
+    pub fn with_finish_sound(self, finish_sound: FinishSound) -> Self {
         Self {
             finish_sound,
             ..self
@@ -123,12 +127,12 @@ impl Settings {
     }
 
     /// What plays at each step boundary.
-    pub fn step_sound(self) -> Sound {
+    pub fn step_sound(self) -> StepSound {
         self.step_sound
     }
 
     /// What plays when the brew finishes.
-    pub fn finish_sound(self) -> Sound {
+    pub fn finish_sound(self) -> FinishSound {
         self.finish_sound
     }
 }

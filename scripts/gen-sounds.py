@@ -5,6 +5,12 @@ Every sound is generated here from damped sine modes and band-limited noise,
 so the files carry no third-party license. The noise is seeded: a rerun
 writes the same audio.
 
+Every sound is brought to the same loudness (`TARGET_LUFS`, measured as in
+ITU-R BS.1770: K-weighted, the loudest 400 ms window), not the same peak,
+so switching sounds does not make the cue louder or quieter at one volume.
+A short click that would pass `CEILING_DB` to get there is held down by a
+peak limiter.
+
 Needs numpy and the `lame` encoder. Run from the repo root:
 
     python3 scripts/gen-sounds.py
@@ -18,6 +24,8 @@ from pathlib import Path
 import numpy as np
 
 SR = 44100
+TARGET_LUFS = -16.0
+CEILING_DB = -1.0
 OUT = Path(__file__).resolve().parent.parent / "assets" / "sounds"
 rng = np.random.default_rng(7)
 
@@ -56,11 +64,66 @@ def place(total, parts):
     return buf
 
 
-def write(name, sig, peak_db=-3.0, tail=0.15):
-    """Normalize to `peak_db`, cosine-fade the last `tail` seconds, encode to MP3."""
-    sig = sig / np.max(np.abs(sig)) * 10 ** (peak_db / 20)
+def k_weighted(sig):
+    """`sig` through BS.1770's K-weighting (high shelf, then high pass),
+    applied as its magnitude response in the frequency domain."""
+    n = 1 << int(np.ceil(np.log2(len(sig) + SR)))
+    z = np.exp(-1j * 2 * np.pi * np.fft.rfftfreq(n, 1 / SR) / SR)
+
+    def biquad(b, a):
+        return (b[0] + b[1] * z + b[2] * z**2) / (a[0] + a[1] * z + a[2] * z**2)
+
+    A, w0 = 10 ** (4.0 / 40), 2 * np.pi * 1500 / SR
+    al, c, r = np.sin(w0) / np.sqrt(2), np.cos(w0), np.sqrt(A)
+    shelf = biquad(
+        [A * ((A + 1) + (A - 1) * c + 2 * r * al), -2 * A * ((A - 1) + (A + 1) * c),
+         A * ((A + 1) + (A - 1) * c - 2 * r * al)],
+        [(A + 1) - (A - 1) * c + 2 * r * al, 2 * ((A - 1) - (A + 1) * c),
+         (A + 1) - (A - 1) * c - 2 * r * al],
+    )
+    w0 = 2 * np.pi * 38 / SR
+    al, c = np.sin(w0), np.cos(w0)
+    high_pass = biquad([(1 + c) / 2, -(1 + c), (1 + c) / 2], [1 + al, -2 * c, 1 - al])
+    return np.fft.irfft(np.fft.rfft(sig, n) * np.abs(shelf * high_pass), n)[: len(sig)]
+
+
+def loudness(sig):
+    """Max momentary loudness in LUFS: the loudest 400 ms window, 100 ms hops."""
+    power = np.concatenate([k_weighted(sig) ** 2, np.zeros(int(0.4 * SR))])
+    win, hop = int(0.4 * SR), int(0.1 * SR)
+    sums = np.cumsum(np.concatenate([[0.0], power]))
+    means = (sums[win::hop] - sums[:-win:hop]) / win
+    return -0.691 + 10 * np.log10(np.max(means))
+
+
+def limit(sig, ceiling_db=CEILING_DB, release=0.05):
+    """Hold peaks to `ceiling_db`: the gain dips instantly (2 ms ahead) and
+    recovers over `release` seconds."""
+    ceiling = 10 ** (ceiling_db / 20)
+    need = np.minimum(1.0, ceiling / np.maximum(np.abs(sig), 1e-12))
+    ahead = int(0.002 * SR)
+    need = np.min(np.lib.stride_tricks.sliding_window_view(
+        np.concatenate([need, np.ones(ahead)]), ahead + 1), axis=1)
+    k = np.exp(-1 / (release * SR))
+    gain = np.empty_like(need)
+    g = 1.0
+    for i, n in enumerate(need):
+        g = n if n < g else n + (g - n) * k
+        gain[i] = g
+    return sig * gain
+
+
+def write(name, sig, tail=0.15):
+    """Cosine-fade the last `tail` seconds, bring to `TARGET_LUFS` with peaks
+    held under `CEILING_DB`, encode to MP3."""
     n = int(SR * tail)
+    sig = sig.copy()
     sig[-n:] *= 0.5 * (1 + np.cos(np.linspace(0, np.pi, n)))
+    gain = 1.0
+    for _ in range(12):  # limiting takes a little loudness; make it back
+        out = limit(sig * gain)
+        gain *= 10 ** ((TARGET_LUFS - loudness(out)) / 20)
+    sig = limit(sig * gain)
     with tempfile.TemporaryDirectory() as tmp:
         wav = Path(tmp) / f"{name}.wav"
         with wave.open(str(wav), "wb") as w:
@@ -89,7 +152,7 @@ write("wooden-clappers", place(1.0, [(0, clap), (0.2, 0.7 * clap)]))
 # Tingsha: two small cymbals struck together; detuned so they shimmer.
 TING = [(1, 1.0, 3.5), (2.32, 0.3, 6), (4.1, 0.1, 9)]
 ting = modes(1.0, 2350, TING) + modes(1.0, 2361, TING)
-write("tingsha", place(1.0, [(0, ting)]), peak_db=-5, tail=0.35)
+write("tingsha", place(1.0, [(0, ting)]), tail=0.35)
 
 # Water drop: a drop, then a smaller echo drop.
 DROP = [(1, 1.0, 28), (2.1, 0.15, 45)]
@@ -118,6 +181,107 @@ tock = modes(0.6, 330, BAMBOO, sweep=lambda t: 1 + 0.12 * np.exp(-t * 40))
 tock[: int(SR * 0.003)] += 0.5 * noise_band(0.003, 1000, 5000)
 write("bamboo-tock", place(1.0, [(0, tock)]))
 
-# Singing bowl: A5 with a slow beat between two close partials, 2 s.
+# Singing bowl: A5 with a slow beat between two close partials, 3 s: long
+# enough to ring down to near silence before the fade.
 SINGING_BOWL = [(1, 1.0, 2.4), (1.004, 0.8, 2.4), (2.71, 0.3, 3.84), (5.1, 0.08, 6.0)]
-write("singing-bowl", modes(2.0, 880.0, SINGING_BOWL, attack=0.012), tail=0.7)
+write("singing-bowl", modes(3.0, 880.0, SINGING_BOWL, attack=0.012), tail=1.2)
+
+# --- End of brew ---
+# A step sound marks one boundary of many; the finish marks the only end. So
+# each finish sound is longer, rings out, and resolves (a falling cadence, a
+# slowing rhythm, a strike let ring), and is long enough to ring down to
+# near silence before the fade.
+
+BOWL = [(1, 1.0, 1.6), (1.004, 0.8, 1.6), (2.71, 0.3, 2.8), (5.1, 0.08, 5.0)]
+KAL_RING = [(1, 1.0, 3.2), (5.4, 0.25, 30), (11.1, 0.06, 55)]
+TING_RING = [(1, 1.0, 2.2), (2.32, 0.3, 3.5), (4.1, 0.1, 5)]
+BELL = [(1, 1.0, 2.2), (2.76, 0.45, 3.5), (5.40, 0.2, 6), (8.93, 0.08, 9)]
+TUBE = [(1, 1.0, 2.0), (2.76, 0.35, 3.0), (5.40, 0.12, 4.5)]
+D4, D5, FS5, A5 = 293.66, 587.33, 739.99, 880.0
+
+# Bowl, struck twice: a second softer strike while the first still rings.
+write("bowl-twice", place(4.6, [(0, modes(4.6, 660, BOWL, attack=0.012)),
+                                 (0.7, 0.75 * modes(3.9, 660, BOWL, attack=0.012))]), tail=1.5)
+
+# Bowl cadence: a high bowl, then a low one a fifth below — V to I.
+write("bowl-cadence", place(4.6, [(0, 0.8 * modes(4.6, 659.25, BOWL, attack=0.012)),
+                                   (0.55, modes(4.05, 440.0, BOWL, attack=0.015))]), tail=1.5)
+
+# Kalimba cadence: three tines falling 5-3-1 in D, closing on a low D under
+# the tonic.
+write("kalimba-cadence", place(2.6, [
+    (0.00, 0.85 * modes(1.0, A5, KAL_RING)),
+    (0.18, 0.85 * modes(1.0, FS5, KAL_RING)),
+    (0.36, modes(2.2, D5, KAL_RING) + 0.7 * modes(2.2, D4, KAL_RING)),
+]), tail=0.8)
+
+# Kalimba rise: a D-major arpeggio up to the octave, the top note let ring.
+write("kalimba-rise", place(2.6, [
+    (0.00, 0.8 * modes(1.0, D5, KAL_RING)),
+    (0.13, 0.8 * modes(1.0, FS5, KAL_RING)),
+    (0.26, 0.85 * modes(1.0, A5, KAL_RING)),
+    (0.42, modes(2.1, 2 * D5, KAL_RING) + 0.5 * modes(2.1, D5, KAL_RING)),
+]), tail=0.8)
+
+
+# Tingsha, three times: the cymbals struck three times, the last let ring.
+def tingsha_ring(dur):
+    return modes(dur, 2350, TING_RING) + modes(dur, 2361, TING_RING)
+
+
+write("tingsha-three", place(3.8, [(0, 0.6 * tingsha_ring(0.5)), (0.35, 0.6 * tingsha_ring(0.5)),
+                                    (0.7, tingsha_ring(3.1))]), tail=1.3)
+
+# Counter bell: the service bell on a café counter, rung twice.
+write("counter-bell", place(3.4, [(0, 0.8 * modes(3.4, 2093, BELL, attack=0.001)),
+                                   (0.28, modes(3.1, 2093, BELL, attack=0.001))]), tail=1.2)
+
+# Wind chimes: five pentatonic tubes brushed in a falling run, each left to
+# ring.
+CHIMES = [(0.00, 1567.98), (0.11, 1318.51), (0.24, 1174.66), (0.40, 987.77), (0.60, 783.99)]
+write("wind-chimes", place(4.0, [(s, (0.7 + 0.3 * i / 4) * modes(4.0 - s, f, TUBE, attack=0.003))
+                                  for i, (s, f) in enumerate(CHIMES)]), tail=1.3)
+
+# Last drops: the brew's last drips slowing to a stop, the final one a
+# deeper drop that rings into the cup.
+drips = [(0.0, 700, 0.8), (0.22, 820, 0.6), (0.52, 640, 0.7), (0.95, 760, 0.5)]
+parts = [(s, a * modes(0.4, f, DROP, attack=0.001, sweep=rise)) for s, f, a in drips]
+parts.append((1.5, modes(0.5, 420, DROP, attack=0.001, sweep=rise)
+              + 0.25 * modes(0.5, 880, [(1, 1.0, 6)], attack=0.01)))
+write("last-drops", place(2.4, parts), tail=0.4)
+
+# Gong: a low gong whose upper partials bloom a moment after the strike,
+# sliding a little flat as it rings.
+t = t_of(4.4)
+low = modes(4.4, 196, [(1, 1.0, 1.6), (1.52, 0.5, 2.0), (2.31, 0.3, 2.4)], attack=0.02,
+            sweep=lambda t: 1 - 0.015 * (1 - np.exp(-t * 2)))
+bloom = modes(4.4, 196, [(3.17, 0.35, 1.8), (4.45, 0.25, 2.5), (5.9, 0.12, 3.2)], attack=0.02)
+bloom *= 1 - np.exp(-t * 4)
+strike = np.zeros_like(t)
+strike[: int(SR * 0.01)] = 0.2 * noise_band(0.01, 200, 2000)
+write("gong", low + bloom + strike, tail=1.4)
+
+# Spoon on cup: a teaspoon tapping a ceramic cup, two light taps then a
+# firmer one that rings — the stir is done.
+CUP = [(1, 1.0, 3.0), (1.007, 0.5, 3.0), (2.24, 0.4, 5), (3.9, 0.15, 8), (5.8, 0.06, 12)]
+
+
+def tap(dur, amp):
+    sig = modes(dur, 1480, CUP, attack=0.0005)
+    sig[: int(SR * 0.002)] += 0.6 * noise_band(0.002, 3000, 12000)
+    return amp * sig
+
+
+write("spoon-on-cup", place(3.2, [(0, tap(0.6, 0.45)), (0.16, tap(0.6, 0.4)),
+                                  (0.5, tap(2.7, 1.0))]), tail=1.3)
+
+# Music box: a comb's tines plucked in a falling phrase, A-F#-E-D, the last
+# held over its octave below.
+COMB = [(1, 1.0, 2.6), (3.0, 0.12, 9), (5.9, 0.05, 16)]
+A6, FS6, E6, D6 = 1760.0, 1479.98, 1318.51, 1174.66
+write("music-box", place(3.9, [
+    (0.00, 0.7 * modes(1.2, A6, COMB, attack=0.001)),
+    (0.20, 0.7 * modes(1.2, FS6, COMB, attack=0.001)),
+    (0.40, 0.7 * modes(1.2, E6, COMB, attack=0.001)),
+    (0.70, modes(3.2, D6, COMB, attack=0.001) + 0.5 * modes(3.2, D6 / 2, COMB, attack=0.001)),
+]), tail=1.3)

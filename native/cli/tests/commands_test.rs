@@ -745,15 +745,27 @@ Accent options:
   Cyan    #FF00BCD4
   Lime    #FFCDDC39
 Pre-alert options: 0, 3, 5, 10 (seconds; 0 is off)
-Sound options:
-  temple-block     Temple block     1.0 s
-  wooden-clappers  Wooden clappers  1.0 s
-  tingsha          Tingsha          1.0 s
-  water-drop       Water drop       1.0 s
-  kalimba          Kalimba          1.0 s
-  breath-and-bowl  Breath and bowl  1.0 s
-  bamboo-tock      Bamboo tock      1.0 s
-  singing-bowl     Singing bowl     2.0 s
+Step sound options:
+  temple-block     Temple block         1.0 s
+  wooden-clappers  Wooden clappers      1.0 s
+  tingsha          Tingsha              1.0 s
+  water-drop       Water drop           1.0 s
+  kalimba          Kalimba              1.0 s
+  breath-and-bowl  Breath and bowl      1.0 s
+  bamboo-tock      Bamboo tock          1.0 s
+Finish sound options:
+  singing-bowl     Singing bowl         3.0 s
+  bowl-twice       Bowl struck twice    4.6 s
+  bowl-cadence     Bowl cadence         4.6 s
+  kalimba-cadence  Kalimba cadence      2.6 s
+  kalimba-rise     Kalimba rise         2.6 s
+  tingsha-three    Tingsha three times  3.8 s
+  counter-bell     Counter bell         3.4 s
+  wind-chimes      Wind chimes          4.0 s
+  last-drops       Last drops           2.4 s
+  gong             Gong                 4.4 s
+  spoon-on-cup     Spoon on cup         3.2 s
+  music-box        Music box            3.9 s
 ";
 
 #[test]
@@ -864,25 +876,38 @@ fn settings_set_step_and_finish_sounds_persist() -> TestResult {
     session.run(&["settings", "step-sound", "kalimba"])?;
     assert!(
         session
-            .run(&["settings", "finish-sound", "water-drop"])?
-            .contains("Pre-alert: 3 s\nStep sound: kalimba\nFinish sound: water-drop\n")
+            .run(&["settings", "finish-sound", "gong"])?
+            .contains("Pre-alert: 3 s\nStep sound: kalimba\nFinish sound: gong\n")
     );
     let reopened = session.reopened()?.run(&["settings"])?;
     assert!(
-        reopened.contains("Step sound: kalimba\nFinish sound: water-drop\n"),
+        reopened.contains("Step sound: kalimba\nFinish sound: gong\n"),
         "{reopened}"
     );
     Ok(())
 }
 
 #[test]
-fn settings_reject_an_unknown_sound() -> TestResult {
+fn settings_reject_an_unknown_sound_or_one_of_the_other_kind() -> TestResult {
     let mut session = Session::new()?;
-    for action in ["step-sound", "finish-sound"] {
+    for (action, raw, error) in [
+        ("step-sound", "bell", "No step sound named \"bell\""),
+        ("step-sound", "gong", "No step sound named \"gong\""),
+        (
+            "finish-sound",
+            "bell",
+            "No end-of-brew sound named \"bell\"",
+        ),
+        (
+            "finish-sound",
+            "kalimba",
+            "No end-of-brew sound named \"kalimba\"",
+        ),
+    ] {
         assert_eq!(
-            session.run(&["settings", action, "gong"]).err().as_deref(),
-            Some("No sound named \"gong\""),
-            "{action}"
+            session.run(&["settings", action, raw]).err().as_deref(),
+            Some(error),
+            "{action} {raw}"
         );
     }
     assert!(session.run(&["settings"])?.contains(DEFAULT_CUES));
@@ -893,13 +918,16 @@ fn settings_reject_an_unknown_sound() -> TestResult {
 fn brew_plays_the_chosen_sounds() -> TestResult {
     let out = brewed_short(&[
         &["settings", "step-sound", "tingsha"],
-        &["settings", "finish-sound", "kalimba"],
+        &["settings", "finish-sound", "kalimba-rise"],
     ])?;
     assert!(
         out.contains("[vibrate 100ms]\n[sound tingsha]\n[notify B · 00:01]\n"),
         "{out}"
     );
-    assert!(out.ends_with("[sound kalimba]\n[notify off]\n"), "{out}");
+    assert!(
+        out.ends_with("[sound kalimba-rise]\n[notify off]\n"),
+        "{out}"
+    );
     Ok(())
 }
 

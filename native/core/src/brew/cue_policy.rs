@@ -1,5 +1,5 @@
 use crate::brew::{Effect, RunningStep};
-use crate::model::{PreAlertLead, Settings, Sound, Toggle};
+use crate::model::{FinishSound, PreAlertLead, Settings, Sound, StepSound, Toggle};
 
 /// The cues a brew gives, as named config: the buzz and the chosen sound
 /// at a step boundary and at the finish, and the pre-alert's two quick taps a few
@@ -12,8 +12,8 @@ pub struct CuePolicy {
     pre_alert: PreAlertLead,
     sound: Toggle,
     vibration: Toggle,
-    step_sound: Sound,
-    finish_sound: Sound,
+    step_sound: StepSound,
+    finish_sound: FinishSound,
 }
 
 impl CuePolicy {
@@ -62,7 +62,7 @@ impl CuePolicy {
             Effect::Vibrate {
                 ms: Self::STEP_BUZZ_MS,
             },
-            self.step_sound,
+            self.step_sound.into(),
         )
     }
 
@@ -72,7 +72,7 @@ impl CuePolicy {
             Effect::VibratePattern {
                 pattern_ms: Self::FINISH_PATTERN_MS.to_vec(),
             },
-            self.finish_sound,
+            self.finish_sound.into(),
         )
     }
 

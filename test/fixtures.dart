@@ -140,18 +140,21 @@ SettingsUpdate settings({
   ],
   stepSound: stepSound,
   finishSound: finishSound,
-  sounds: const [
+  stepSounds: const [
     SoundChoice(id: 'kalimba', label: 'Kalimba', lengthLabel: '1.0 s'),
     SoundChoice(
       id: 'breath-and-bowl',
       label: 'Breath and bowl',
       lengthLabel: '1.0 s',
     ),
+  ],
+  finishSounds: const [
     SoundChoice(
       id: 'singing-bowl',
       label: 'Singing bowl',
-      lengthLabel: '2.0 s',
+      lengthLabel: '3.0 s',
     ),
+    SoundChoice(id: 'gong', label: 'Gong', lengthLabel: '4.4 s'),
   ],
   appVersion: '0.1.0 (2391c1d)',
 );
