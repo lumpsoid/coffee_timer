@@ -157,7 +157,7 @@ mod tests {
     use coffee_timer_core::catalog::RecipeCatalog;
     use coffee_timer_core::fakes::FakeRecipeStore;
     use coffee_timer_core::model::{
-        Recipe, RecipeId, RecipeName, RecipeStep, Settings, Sound, StepId, WaterAmount,
+        Recipe, RecipeId, RecipeName, RecipeStep, Settings, Sound, StepId, StepSound, WaterAmount,
     };
 
     use super::*;
@@ -341,7 +341,7 @@ mod tests {
     #[test]
     fn a_sound_effect_carries_its_id() -> TestResult {
         let PlatformEffect::PlaySound { sound } = PlatformEffect::from(Effect::PlaySound {
-            sound: Sound::WaterDrop,
+            sound: Sound::Step(StepSound::WaterDrop),
         }) else {
             return Err("not a sound".into());
         };

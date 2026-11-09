@@ -9,9 +9,15 @@ version may change behaviour.
 
 ### Added
 
-- Settings > Sounds: choose the sound between steps and the one at the
-  end of a brew from eight sounds, each shown with its length. Tapping a
-  sound previews it, even with sound off.
+- Settings > Sounds: choose the sound between steps from seven short
+  sounds, and the one at the end of a brew from twelve longer ones that
+  ring out and resolve, each shown with its length. Tapping a sound
+  previews it, even with sound off.
+
+### Changed
+
+- The end-of-brew singing bowl is 3 s and rings down to silence instead of
+  being cut off.
 
 ## [0.1.0] - 2026-11-06
 

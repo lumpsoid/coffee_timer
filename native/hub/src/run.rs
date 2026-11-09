@@ -14,7 +14,8 @@ use coffee_timer_core::brew::{BrewController, Effect};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::{DeleteError, EditorController, SaveError};
 use coffee_timer_core::model::{
-    self, AccentColor, CoffeeDose, ModelError, PreAlertLead, RecipeId, Sound, StepId,
+    self, AccentColor, CoffeeDose, FinishSound, ModelError, PreAlertLead, RecipeId, Sound, StepId,
+    StepSound,
 };
 use coffee_timer_core::ports::StoreError;
 use coffee_timer_core::settings::SettingsController;
@@ -308,11 +309,11 @@ pub async fn run(mut c: Controllers) {
                 show_settings(&c.settings);
             }
             Some(pack) = set_step_sound.recv() => {
-                report(set_sound_id(&pack.message.sound, |sound| c.settings.set_step_sound(sound)));
+                report(set_step_sound_id(&mut c.settings, &pack.message.sound));
                 show_settings(&c.settings);
             }
             Some(pack) = set_finish_sound.recv() => {
-                report(set_sound_id(&pack.message.sound, |sound| c.settings.set_finish_sound(sound)));
+                report(set_finish_sound_id(&mut c.settings, &pack.message.sound));
                 show_settings(&c.settings);
             }
             Some(pack) = preview_sound.recv() => {
@@ -475,12 +476,13 @@ fn set_pre_alert_seconds(
     Ok(())
 }
 
-/// Runs `action` on the sound `id` names.
-fn set_sound_id(
-    id: &str,
-    action: impl FnOnce(Sound) -> Result<(), StoreError>,
-) -> Result<(), Box<dyn Error>> {
-    action(Sound::try_parse(id)?)?;
+fn set_step_sound_id(settings: &mut SettingsController, id: &str) -> Result<(), Box<dyn Error>> {
+    settings.set_step_sound(StepSound::try_parse(id)?)?;
+    Ok(())
+}
+
+fn set_finish_sound_id(settings: &mut SettingsController, id: &str) -> Result<(), Box<dyn Error>> {
+    settings.set_finish_sound(FinishSound::try_parse(id)?)?;
     Ok(())
 }
 

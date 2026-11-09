@@ -1,4 +1,6 @@
-use crate::model::{AccentColor, PreAlertLead, Settings, Sound, ThemeSelection, Toggle};
+use crate::model::{
+    AccentColor, FinishSound, PreAlertLead, Settings, StepSound, ThemeSelection, Toggle,
+};
 use crate::ports::{SettingsStore, StoreError};
 
 /// Owner of the user's settings. Every change is written through the store
@@ -46,11 +48,11 @@ impl SettingsController {
         self.apply(self.state.with_pre_alert(pre_alert))
     }
 
-    pub fn set_step_sound(&mut self, sound: Sound) -> Result<(), StoreError> {
+    pub fn set_step_sound(&mut self, sound: StepSound) -> Result<(), StoreError> {
         self.apply(self.state.with_step_sound(sound))
     }
 
-    pub fn set_finish_sound(&mut self, sound: Sound) -> Result<(), StoreError> {
+    pub fn set_finish_sound(&mut self, sound: FinishSound) -> Result<(), StoreError> {
         self.apply(self.state.with_finish_sound(sound))
     }
 

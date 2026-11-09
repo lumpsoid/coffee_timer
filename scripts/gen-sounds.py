@@ -118,6 +118,107 @@ tock = modes(0.6, 330, BAMBOO, sweep=lambda t: 1 + 0.12 * np.exp(-t * 40))
 tock[: int(SR * 0.003)] += 0.5 * noise_band(0.003, 1000, 5000)
 write("bamboo-tock", place(1.0, [(0, tock)]))
 
-# Singing bowl: A5 with a slow beat between two close partials, 2 s.
+# Singing bowl: A5 with a slow beat between two close partials, 3 s: long
+# enough to ring down to near silence before the fade.
 SINGING_BOWL = [(1, 1.0, 2.4), (1.004, 0.8, 2.4), (2.71, 0.3, 3.84), (5.1, 0.08, 6.0)]
-write("singing-bowl", modes(2.0, 880.0, SINGING_BOWL, attack=0.012), tail=0.7)
+write("singing-bowl", modes(3.0, 880.0, SINGING_BOWL, attack=0.012), tail=1.2)
+
+# --- End of brew ---
+# A step sound marks one boundary of many; the finish marks the only end. So
+# each finish sound is longer, rings out, and resolves (a falling cadence, a
+# slowing rhythm, a strike let ring), and is long enough to ring down to
+# near silence before the fade.
+
+BOWL = [(1, 1.0, 1.6), (1.004, 0.8, 1.6), (2.71, 0.3, 2.8), (5.1, 0.08, 5.0)]
+KAL_RING = [(1, 1.0, 3.2), (5.4, 0.25, 30), (11.1, 0.06, 55)]
+TING_RING = [(1, 1.0, 2.2), (2.32, 0.3, 3.5), (4.1, 0.1, 5)]
+BELL = [(1, 1.0, 2.2), (2.76, 0.45, 3.5), (5.40, 0.2, 6), (8.93, 0.08, 9)]
+TUBE = [(1, 1.0, 2.0), (2.76, 0.35, 3.0), (5.40, 0.12, 4.5)]
+D4, D5, FS5, A5 = 293.66, 587.33, 739.99, 880.0
+
+# Bowl, struck twice: a second softer strike while the first still rings.
+write("bowl-twice", place(4.6, [(0, modes(4.6, 660, BOWL, attack=0.012)),
+                                 (0.7, 0.75 * modes(3.9, 660, BOWL, attack=0.012))]), tail=1.5)
+
+# Bowl cadence: a high bowl, then a low one a fifth below — V to I.
+write("bowl-cadence", place(4.6, [(0, 0.8 * modes(4.6, 659.25, BOWL, attack=0.012)),
+                                   (0.55, modes(4.05, 440.0, BOWL, attack=0.015))]), tail=1.5)
+
+# Kalimba cadence: three tines falling 5-3-1 in D, closing on a low D under
+# the tonic.
+write("kalimba-cadence", place(2.6, [
+    (0.00, 0.85 * modes(1.0, A5, KAL_RING)),
+    (0.18, 0.85 * modes(1.0, FS5, KAL_RING)),
+    (0.36, modes(2.2, D5, KAL_RING) + 0.7 * modes(2.2, D4, KAL_RING)),
+]), tail=0.8)
+
+# Kalimba rise: a D-major arpeggio up to the octave, the top note let ring.
+write("kalimba-rise", place(2.6, [
+    (0.00, 0.8 * modes(1.0, D5, KAL_RING)),
+    (0.13, 0.8 * modes(1.0, FS5, KAL_RING)),
+    (0.26, 0.85 * modes(1.0, A5, KAL_RING)),
+    (0.42, modes(2.1, 2 * D5, KAL_RING) + 0.5 * modes(2.1, D5, KAL_RING)),
+]), tail=0.8)
+
+
+# Tingsha, three times: the cymbals struck three times, the last let ring.
+def tingsha_ring(dur):
+    return modes(dur, 2350, TING_RING) + modes(dur, 2361, TING_RING)
+
+
+write("tingsha-three", place(3.8, [(0, 0.6 * tingsha_ring(0.5)), (0.35, 0.6 * tingsha_ring(0.5)),
+                                    (0.7, tingsha_ring(3.1))]), peak_db=-5, tail=1.3)
+
+# Counter bell: the service bell on a café counter, rung twice.
+write("counter-bell", place(3.4, [(0, 0.8 * modes(3.4, 2093, BELL, attack=0.001)),
+                                   (0.28, modes(3.1, 2093, BELL, attack=0.001))]), peak_db=-4, tail=1.2)
+
+# Wind chimes: five pentatonic tubes brushed in a falling run, each left to
+# ring.
+CHIMES = [(0.00, 1567.98), (0.11, 1318.51), (0.24, 1174.66), (0.40, 987.77), (0.60, 783.99)]
+write("wind-chimes", place(4.0, [(s, (0.7 + 0.3 * i / 4) * modes(4.0 - s, f, TUBE, attack=0.003))
+                                  for i, (s, f) in enumerate(CHIMES)]), peak_db=-4, tail=1.3)
+
+# Last drops: the brew's last drips slowing to a stop, the final one a
+# deeper drop that rings into the cup.
+drips = [(0.0, 700, 0.8), (0.22, 820, 0.6), (0.52, 640, 0.7), (0.95, 760, 0.5)]
+parts = [(s, a * modes(0.4, f, DROP, attack=0.001, sweep=rise)) for s, f, a in drips]
+parts.append((1.5, modes(0.5, 420, DROP, attack=0.001, sweep=rise)
+              + 0.25 * modes(0.5, 880, [(1, 1.0, 6)], attack=0.01)))
+write("last-drops", place(2.4, parts), tail=0.4)
+
+# Gong: a low gong whose upper partials bloom a moment after the strike,
+# sliding a little flat as it rings.
+t = t_of(4.4)
+low = modes(4.4, 196, [(1, 1.0, 1.6), (1.52, 0.5, 2.0), (2.31, 0.3, 2.4)], attack=0.02,
+            sweep=lambda t: 1 - 0.015 * (1 - np.exp(-t * 2)))
+bloom = modes(4.4, 196, [(3.17, 0.35, 1.8), (4.45, 0.25, 2.5), (5.9, 0.12, 3.2)], attack=0.02)
+bloom *= 1 - np.exp(-t * 4)
+strike = np.zeros_like(t)
+strike[: int(SR * 0.01)] = 0.2 * noise_band(0.01, 200, 2000)
+write("gong", low + bloom + strike, tail=1.4)
+
+# Spoon on cup: a teaspoon tapping a ceramic cup, two light taps then a
+# firmer one that rings — the stir is done.
+CUP = [(1, 1.0, 3.0), (1.007, 0.5, 3.0), (2.24, 0.4, 5), (3.9, 0.15, 8), (5.8, 0.06, 12)]
+
+
+def tap(dur, amp):
+    sig = modes(dur, 1480, CUP, attack=0.0005)
+    sig[: int(SR * 0.002)] += 0.6 * noise_band(0.002, 3000, 12000)
+    return amp * sig
+
+
+write("spoon-on-cup", place(3.2, [(0, tap(0.6, 0.45)), (0.16, tap(0.6, 0.4)),
+                                  (0.5, tap(2.7, 1.0))]), peak_db=-4, tail=1.3)
+
+# Music box: a comb's tines plucked in a falling phrase, A-F#-E-D, the last
+# held over its octave below.
+COMB = [(1, 1.0, 2.6), (3.0, 0.12, 9), (5.9, 0.05, 16)]
+A6, FS6, E6, D6 = 1760.0, 1479.98, 1318.51, 1174.66
+write("music-box", place(3.9, [
+    (0.00, 0.7 * modes(1.2, A6, COMB, attack=0.001)),
+    (0.20, 0.7 * modes(1.2, FS6, COMB, attack=0.001)),
+    (0.40, 0.7 * modes(1.2, E6, COMB, attack=0.001)),
+    (0.70, modes(3.2, D6, COMB, attack=0.001) + 0.5 * modes(3.2, D6 / 2, COMB, attack=0.001)),
+]), peak_db=-4, tail=1.3)

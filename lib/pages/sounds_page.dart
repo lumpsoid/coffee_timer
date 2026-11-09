@@ -3,9 +3,10 @@ import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:flutter/material.dart';
 
-/// The two sound pickers, between steps and at the end of a brew, over the
-/// sounds Rust offers, each row with the sound's length. Tapping a row
-/// plays it and makes it the choice; the page keeps nothing of its own.
+/// The two sound pickers, between steps and at the end of a brew, each
+/// over the sounds Rust offers for it, each row with the sound's length.
+/// Tapping a row plays it and makes it the choice; the page keeps nothing
+/// of its own.
 class SoundsPage extends StatelessWidget {
   const SoundsPage({required this.settings, super.key});
 
@@ -35,7 +36,7 @@ class SoundsPage extends StatelessWidget {
       children: [
         RuledHeading(text: 'Between steps', ink: ink),
         const SizedBox(height: 8),
-        for (final sound in state.sounds)
+        for (final sound in state.stepSounds)
           _SoundRow(
             key: ValueKey(('step', sound.id)),
             sound: sound,
@@ -45,7 +46,7 @@ class SoundsPage extends StatelessWidget {
         const SizedBox(height: 20),
         RuledHeading(text: 'End of brew', ink: ink),
         const SizedBox(height: 8),
-        for (final sound in state.sounds)
+        for (final sound in state.finishSounds)
           _SoundRow(
             key: ValueKey(('finish', sound.id)),
             sound: sound,

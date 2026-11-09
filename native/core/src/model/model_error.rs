@@ -26,6 +26,8 @@ pub enum ModelError {
     UnknownToggle(String),
     UnknownPreAlert(String),
     UnknownSound(String),
+    UnknownStepSound(String),
+    UnknownFinishSound(String),
     StepIndexOutOfRange { index: usize, len: usize },
 }
 
@@ -84,6 +86,10 @@ impl fmt::Display for ModelError {
                 write!(f, "Pre-alert \"{raw}\" is not 0, 3, 5 or 10 seconds")
             }
             Self::UnknownSound(raw) => write!(f, "No sound named \"{raw}\""),
+            Self::UnknownStepSound(raw) => write!(f, "No step sound named \"{raw}\""),
+            Self::UnknownFinishSound(raw) => {
+                write!(f, "No end-of-brew sound named \"{raw}\"")
+            }
             Self::StepIndexOutOfRange { index, len } => {
                 write!(f, "Step {index} is out of range for {len} steps")
             }

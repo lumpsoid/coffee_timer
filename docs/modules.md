@@ -83,9 +83,12 @@ again.
   accents), `Toggle` (`On` / `Off`, stored and typed as `on` / `off`: the
   brew's sound and its vibration), `PreAlertLead` (`Off`, 3, 5 or 10 s,
   default 3 s, stored and typed as its seconds, labelled `Off` / `3 s`),
-  `Sound` (the eight shipped sounds, each with its id, the asset's file
-  stem, stored and typed as is; its name; and its length, labelled
-  `1.0 s`), and `Settings`. `Settings::from_storage` takes the raw rows as
+  `StepSound` (the seven 1 s step sounds) and `FinishSound` (the twelve
+  longer end-of-brew sounds), each with its id, the asset's file stem,
+  stored and typed as is, and its name; `Sound`, either of the two, which
+  a cue or preview plays and which gives the length, labelled `1.0 s`;
+  and `Settings`, whose step sound can only be a `StepSound` and finish
+  sound only a `FinishSound`. `Settings::from_storage` takes the raw rows as
   `StoredSettings` (one `Option<&str>` per key) and falls back per field
   to `Settings::FALLBACK` (system, Material blue, sound and vibration on,
   3 s, `breath-and-bowl` between steps, `singing-bowl` at the finish).
@@ -434,7 +437,7 @@ makes no business decisions.
 | recipe list | `RecipeListReady`, `RemoveRecipe`, `UndoRemoveRecipe`, `PinRecipe`, `UnpinRecipe`, `MoveRecipe`, `ExportRecipes`, `ImportRecipes` | `RecipeListUpdate` (`Snapshot` / `Upserted { recipe, index }` / `Removed { id, undo_notice }` / `Failed` / `Notice`), `PlatformEffect::CopyToClipboard` |
 | brew | `BrewReady`, `OpenBrew`, `StartBrew`, `PauseBrew`, `ResumeBrew`, `ResetBrew`, `AdjustBrewRatio`, `SetBrewCoffee`, `BackToRecipeDose`, `SaveBrewRatio`, `LeaveBrew` | `BrewUpdate` (`Empty` / `Idle` / `Running` / `Paused` / `Finished`), `PlatformEffect` |
 | editor | `EditorReady`, `NewDraft`, `EditRecipe`, `DuplicateRecipe`, `SetRecipeName`, `SetRecipeDescription`, `SetRecipeCoffee`, `SetRecipeWater`, `SetRecipePourSpeed`, `SetRecipeGrind`, `SetStepName`, `SetStepDuration`, `NudgeStepDuration`, `SetStepWater`, `AddStep`, `RemoveStep`, `MoveStep`, `SaveRecipe`, `DeleteRecipe`, `CloseEditor` | `EditorUpdate` (`Closed` / `Open`) |
-| settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert`, `SetStepSound`, `SetFinishSound`, `PreviewSound` (answered by a `PlatformEffect::PlaySound`, whatever the mute) | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds`, the `pre_alerts` options, `step_sound`, `finish_sound`, the `sounds` options and `app_version`) |
+| settings | `SettingsReady`, `SetTheme`, `SetAccent`, `SetSound`, `SetVibration`, `SetPreAlert`, `SetStepSound`, `SetFinishSound`, `PreviewSound` (answered by a `PlatformEffect::PlaySound`, whatever the mute) | `SettingsUpdate` (with `sound`, `vibration`, `pre_alert_seconds`, the `pre_alerts` options, `step_sound`, `finish_sound`, the `step_sounds` and `finish_sounds` options and `app_version`) |
 
 Tests: unit tests in `brew.rs` and `recipe_list.rs` cover the non-trivial
 mappings. The loops are not unit tested; they are kept thin enough to

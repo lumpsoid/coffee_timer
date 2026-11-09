@@ -35,21 +35,21 @@ pub struct SetPreAlert {
     pub seconds: u32,
 }
 
-/// One of `SettingsUpdate::sounds`' `id`, to play at each step boundary;
+/// One of `SettingsUpdate::step_sounds`' `id`, to play at each step boundary;
 /// any other is refused.
 #[derive(Deserialize, DartSignal)]
 pub struct SetStepSound {
     pub sound: String,
 }
 
-/// One of `SettingsUpdate::sounds`' `id`, to play when the brew finishes;
+/// One of `SettingsUpdate::finish_sounds`' `id`, to play when the brew finishes;
 /// any other is refused.
 #[derive(Deserialize, DartSignal)]
 pub struct SetFinishSound {
     pub sound: String,
 }
 
-/// Play one of `SettingsUpdate::sounds` once, as a `PlatformEffect`, even
+/// Play one of `SettingsUpdate::step_sounds` or `finish_sounds` once, as a `PlatformEffect`, even
 /// with the sound off. Changes nothing.
 #[derive(Deserialize, DartSignal)]
 pub struct PreviewSound {
@@ -75,12 +75,14 @@ pub struct SettingsUpdate {
     pub pre_alert_seconds: u32,
     /// The pre-alert picker's options, in order.
     pub pre_alerts: Vec<PreAlertChoice>,
-    /// The sound at each step boundary, one of `sounds`' `id`.
+    /// The sound at each step boundary, one of `step_sounds`' `id`.
     pub step_sound: String,
-    /// The sound at the finish, one of `sounds`' `id`.
+    /// The sound at the finish, one of `finish_sounds`' `id`.
     pub finish_sound: String,
-    /// The sound pickers' options, in order.
-    pub sounds: Vec<SoundChoice>,
+    /// The step sound picker's options, in order.
+    pub step_sounds: Vec<SoundChoice>,
+    /// The end-of-brew sound picker's options, in order.
+    pub finish_sounds: Vec<SoundChoice>,
     /// The app's version and commit, `0.1.0 (2391c1d)`.
     pub app_version: String,
 }

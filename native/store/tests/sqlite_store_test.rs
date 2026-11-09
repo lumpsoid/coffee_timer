@@ -5,9 +5,9 @@ use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, CoffeeDose, GrindClicks, Pin, PourSpeed, PreAlertLead, Recipe, RecipeId,
-    RecipeName, RecipeStep, Settings, Sound, StepDuration, StepId, StoredSettings, ThemeSelection,
-    Toggle, WaterAmount,
+    AccentColor, CoffeeDose, FinishSound, GrindClicks, Pin, PourSpeed, PreAlertLead, Recipe,
+    RecipeId, RecipeName, RecipeStep, Settings, StepDuration, StepId, StepSound, StoredSettings,
+    ThemeSelection, Toggle, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
 use coffee_timer_core::settings::SettingsController;
@@ -665,8 +665,13 @@ fn settings_round_trip() -> TestResult {
             }
         }
     }
-    for sound in Sound::ALL {
-        let sounds = second.with_step_sound(sound).with_finish_sound(sound);
+    for sound in StepSound::ALL {
+        let sounds = second.with_step_sound(sound);
+        store.save(sounds)?;
+        assert_eq!(store.load()?, sounds);
+    }
+    for sound in FinishSound::ALL {
+        let sounds = second.with_finish_sound(sound);
         store.save(sounds)?;
         assert_eq!(store.load()?, sounds);
     }
@@ -682,7 +687,7 @@ fn cue_settings_are_stored_as_key_value_rows() -> TestResult {
         Settings::FALLBACK
             .with_sound(Toggle::Off)
             .with_pre_alert(PreAlertLead::Seconds10)
-            .with_step_sound(Sound::Kalimba),
+            .with_step_sound(StepSound::Kalimba),
     )?;
     let raw = Connection::open(&path)?;
     let row = |key: &str| -> rusqlite::Result<String> {
@@ -707,14 +712,14 @@ fn malformed_cue_rows_fall_back_per_field() -> TestResult {
     raw.execute(
         "INSERT INTO settings (key, value) VALUES ('theme', 'dark'), ('sound', 'loud'),
          ('vibration', 'off'), ('pre_alert_seconds', '7'), ('step_sound', 'gong'),
-         ('finish_sound', 'tingsha')",
+         ('finish_sound', 'music-box')",
         [],
     )?;
     assert_eq!(
         store.load()?,
         Settings::new(ThemeSelection::Dark, AccentColor::FALLBACK)
             .with_vibration(Toggle::Off)
-            .with_finish_sound(Sound::Tingsha)
+            .with_finish_sound(FinishSound::MusicBox)
     );
     Ok(())
 }

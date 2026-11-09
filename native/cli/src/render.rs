@@ -8,7 +8,9 @@ use coffee_timer_core::brew::{
 };
 use coffee_timer_core::catalog::{CatalogChange, RecipeSummary};
 use coffee_timer_core::editor::EditorState;
-use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, Sound, ThemeSelection};
+use coffee_timer_core::model::{
+    AccentOption, FinishSound, PreAlertLead, Settings, Sound, StepSound, ThemeSelection,
+};
 
 /// One list row; a pinned recipe's name is followed by `[pinned]`.
 pub fn summary(out: &mut impl Write, summary: &RecipeSummary) -> io::Result<()> {
@@ -161,11 +163,18 @@ pub fn settings(out: &mut impl Write, settings: &Settings) -> io::Result<()> {
         "Pre-alert options: {} (seconds; 0 is off)",
         leads.join(", ")
     )?;
-    writeln!(out, "Sound options:")?;
-    for sound in Sound::ALL {
+    writeln!(out, "Step sound options:")?;
+    sound_options(out, StepSound::ALL.map(Sound::from))?;
+    writeln!(out, "Finish sound options:")?;
+    sound_options(out, FinishSound::ALL.map(Sound::from))
+}
+
+/// One line per sound: id, name and length.
+fn sound_options(out: &mut impl Write, sounds: impl IntoIterator<Item = Sound>) -> io::Result<()> {
+    for sound in sounds {
         writeln!(
             out,
-            "  {:<16} {:<16} {}",
+            "  {:<16} {:<20} {}",
             sound.id(),
             sound.label(),
             sound.length_label()

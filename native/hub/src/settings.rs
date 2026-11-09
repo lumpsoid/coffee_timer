@@ -1,6 +1,8 @@
 //! Settings ↔ settings signals.
 
-use coffee_timer_core::model::{AccentOption, PreAlertLead, Settings, Sound, ThemeSelection};
+use coffee_timer_core::model::{
+    AccentOption, FinishSound, PreAlertLead, Settings, Sound, StepSound, ThemeSelection,
+};
 use coffee_timer_core::version::APP_VERSION;
 
 use crate::signals::{AccentChoice, PreAlertChoice, SettingsUpdate, SoundChoice, ThemeChoice};
@@ -30,15 +32,20 @@ impl From<&Settings> for SettingsUpdate {
                 .collect(),
             step_sound: settings.step_sound().id().to_owned(),
             finish_sound: settings.finish_sound().id().to_owned(),
-            sounds: Sound::ALL
-                .into_iter()
-                .map(|sound| SoundChoice {
-                    id: sound.id().to_owned(),
-                    label: sound.label().to_owned(),
-                    length_label: sound.length_label(),
-                })
-                .collect(),
+            step_sounds: StepSound::ALL.into_iter().map(Into::into).collect(),
+            finish_sounds: FinishSound::ALL.into_iter().map(Into::into).collect(),
             app_version: APP_VERSION.to_owned(),
+        }
+    }
+}
+
+impl<S: Into<Sound>> From<S> for SoundChoice {
+    fn from(sound: S) -> Self {
+        let sound = sound.into();
+        Self {
+            id: sound.id().to_owned(),
+            label: sound.label().to_owned(),
+            length_label: sound.length_label(),
         }
     }
 }
@@ -65,20 +72,12 @@ impl From<ThemeChoice> for ThemeSelection {
 
 #[cfg(test)]
 mod tests {
-    use coffee_timer_core::model::{Settings, Sound};
+    use coffee_timer_core::model::{FinishSound, Settings, StepSound};
 
-    use crate::signals::SettingsUpdate;
+    use crate::signals::{SettingsUpdate, SoundChoice};
 
-    #[test]
-    fn carries_the_chosen_sounds_and_every_option() {
-        let settings = Settings::FALLBACK
-            .with_step_sound(Sound::Kalimba)
-            .with_finish_sound(Sound::Tingsha);
-        let update = SettingsUpdate::from(&settings);
-        assert_eq!(update.step_sound, "kalimba");
-        assert_eq!(update.finish_sound, "tingsha");
-        let rows: Vec<(&str, &str, &str)> = update
-            .sounds
+    fn rows(choices: &[SoundChoice]) -> Vec<(&str, &str, &str)> {
+        choices
             .iter()
             .map(|row| {
                 (
@@ -87,9 +86,23 @@ mod tests {
                     row.length_label.as_str(),
                 )
             })
-            .collect();
-        assert_eq!(rows.len(), Sound::ALL.len());
-        assert_eq!(rows[0], ("temple-block", "Temple block", "1.0 s"));
-        assert_eq!(rows[7], ("singing-bowl", "Singing bowl", "2.0 s"));
+            .collect()
+    }
+
+    #[test]
+    fn carries_the_chosen_sounds_and_each_pickers_options() {
+        let settings = Settings::FALLBACK
+            .with_step_sound(StepSound::Kalimba)
+            .with_finish_sound(FinishSound::Gong);
+        let update = SettingsUpdate::from(&settings);
+        assert_eq!(update.step_sound, "kalimba");
+        assert_eq!(update.finish_sound, "gong");
+        let steps = rows(&update.step_sounds);
+        assert_eq!(steps.len(), StepSound::ALL.len());
+        assert_eq!(steps[0], ("temple-block", "Temple block", "1.0 s"));
+        let finishes = rows(&update.finish_sounds);
+        assert_eq!(finishes.len(), FinishSound::ALL.len());
+        assert_eq!(finishes[0], ("singing-bowl", "Singing bowl", "3.0 s"));
+        assert_eq!(finishes[1], ("bowl-twice", "Bowl struck twice", "4.6 s"));
     }
 }
