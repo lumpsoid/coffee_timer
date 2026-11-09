@@ -7,6 +7,8 @@ version may change behaviour.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-09
+
 ### Added
 
 - Settings > Sounds: choose the sound between steps from seven short
@@ -17,6 +19,8 @@ version may change behaviour.
   in vibration, played in time, softer than before and with each note at
   its own strength (on phones that can vary it). Settings > Finish knock
   turns it off for the old two long buzzes.
+- CLI: `settings step-sound`, `settings finish-sound` and
+  `settings finish-knock on|off`.
 
 ### Changed
 
@@ -25,6 +29,10 @@ version may change behaviour.
 - Every sound plays at the same loudness, so changing the sound does not
   make the cue louder or quieter at one volume. The wooden knocks were
   about 11 dB quieter than the counter bell.
+
+### Fixed
+
+- The settings page scrolls instead of overflowing on a short screen.
 
 ## [0.1.0] - 2026-11-06
 
