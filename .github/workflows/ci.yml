@@ -43,9 +43,10 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install rinf CLI
         run: cargo install rinf_cli --locked --version "$RINF_CLI_VERSION"
+      # The Flutter version is pinned in pubspec.yaml so CI matches local dev.
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version-file: pubspec.yaml
           cache: true
       - run: flutter pub get
       # The Dart bindings are gitignored: generate them before analyzing.
