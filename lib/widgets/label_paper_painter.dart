@@ -10,22 +10,19 @@ import 'package:flutter/material.dart';
 /// grain and a printed inner frame. Pure paint; every choice arrives in the
 /// [RecipeLabel] from Rust.
 ///
-/// No [stain] leaves the ring out, for swatches that compare textures. A
-/// [boldStain] is a mug ring sized to the paper, drawn by a shader
-/// ([CoffeeRing]), for a label as large as the brew page; otherwise it is a
-/// faint fixed-size arc in the corner.
+/// No [stain] leaves the ring out, for swatches that compare textures;
+/// otherwise a mug ring sized to the paper, drawn by a shader ([CoffeeRing]),
+/// sits half off the edge at that corner.
 class LabelPaperPainter extends CustomPainter {
   const LabelPaperPainter({
     required this.colors,
     required this.texture,
     required this.stain,
-    this.boldStain = false,
   });
 
   final LabelColors colors;
   final LabelTexture texture;
   final StainCorner? stain;
-  final bool boldStain;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -35,11 +32,7 @@ class LabelPaperPainter extends CustomPainter {
       ..clipRect(Offset.zero & size);
     _paintTexture(canvas, size);
     if (stain case final corner?) {
-      if (boldStain) {
-        _paintBoldStain(canvas, size, corner);
-      } else {
-        _paintStain(canvas, size, corner);
-      }
+      _paintStain(canvas, size, corner);
     }
     _paintGrain(canvas, size);
     canvas
@@ -145,44 +138,9 @@ class LabelPaperPainter extends CustomPainter {
     }
   }
 
-  /// A coffee-ring arc, half off the edge, open on one side.
-  void _paintStain(Canvas canvas, Size size, StainCorner corner) {
-    final (center, start) = switch (corner) {
-      StainCorner.bottomRight => (
-        Offset(size.width - 27, size.height - 13),
-        0.35,
-      ),
-      StainCorner.topLeft => (const Offset(19, 5), 2.8),
-    };
-    final ring = Rect.fromCircle(center: center, radius: 40);
-    const sweep = math.pi * 1.3;
-    canvas
-      ..drawArc(
-        ring,
-        start,
-        sweep,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6
-          ..color = colors.stain.withValues(alpha: 0.06),
-      )
-      ..drawArc(
-        ring,
-        start,
-        sweep,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round
-          ..color = colors.stain.withValues(alpha: 0.16),
-      );
-  }
-
   /// A mug ring sized to the paper, half off the edge at [corner]; the
   /// shader draws it (see [CoffeeRing]).
-  void _paintBoldStain(Canvas canvas, Size size, StainCorner corner) {
+  void _paintStain(Canvas canvas, Size size, StainCorner corner) {
     final radius = (size.shortestSide * 0.38).clamp(40.0, 180.0);
     final (center, seed) = switch (corner) {
       StainCorner.bottomRight => (
@@ -222,6 +180,5 @@ class LabelPaperPainter extends CustomPainter {
   bool shouldRepaint(LabelPaperPainter oldDelegate) =>
       oldDelegate.colors != colors ||
       oldDelegate.texture != texture ||
-      oldDelegate.stain != stain ||
-      oldDelegate.boldStain != boldStain;
+      oldDelegate.stain != stain;
 }

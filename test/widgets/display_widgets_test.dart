@@ -2,6 +2,7 @@ import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/brew_dial.dart';
 import 'package:coffee_timer/widgets/coffee_ring.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
+import 'package:coffee_timer/widgets/label_paper.dart';
 import 'package:coffee_timer/widgets/label_paper_painter.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
@@ -218,6 +219,31 @@ void main() {
         }
       }
     });
+
+    testWidgets('draws no coffee ring', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: Brightness.light),
+          home: Scaffold(
+            body: RecipeSummaryTile(
+              name: 'V60',
+              description: 'clean',
+              coffeeLabel: '20 g',
+              waterLabel: '100 g',
+              timeLabel: '1:35',
+              label: label(),
+            ),
+          ),
+        ),
+      );
+      final paper = tester.widget<LabelPaper>(
+        find.descendant(
+          of: find.byType(RecipeSummaryTile),
+          matching: find.byType(LabelPaper),
+        ),
+      );
+      expect(paper.stain, isNull);
+    });
   });
 
   group('BrewDial', () {
@@ -319,11 +345,11 @@ void main() {
   });
 
   group('LabelPaperPainter', () {
-    // Plain paper, so every arc counted is the stain's.
+    // Plain paper, so the stain is the only thing besides fill, grain and
+    // frame.
     Future<RenderObject> paper(
       WidgetTester tester, {
       required StainCorner? stain,
-      bool boldStain = false,
       Size size = const Size(360, 120),
     }) async {
       await tester.pumpWidget(
@@ -334,7 +360,6 @@ void main() {
               colors: _colors,
               texture: LabelTexture.plain,
               stain: stain,
-              boldStain: boldStain,
             ),
           ),
         ),
@@ -343,27 +368,15 @@ void main() {
     }
 
     testWidgets('leaves the ring out without a stain', (tester) async {
+      await tester.runAsync(CoffeeRing.load);
       expect(
-        await paper(tester, stain: null, boldStain: true),
-        paintsExactlyCountTimes(#drawArc, 0),
+        await paper(tester, stain: null),
+        paintsExactlyCountTimes(#drawRect, 1),
       );
     });
 
-    testWidgets('a card stain is one faint arc: a band and a line', (
-      tester,
-    ) async {
-      for (final corner in StainCorner.values) {
-        expect(
-          await paper(tester, stain: corner),
-          paintsExactlyCountTimes(#drawArc, 2),
-          reason: '$corner',
-        );
-      }
-    });
-
-    testWidgets('a bold stain is the shader ring, sized to the paper', (
-      tester,
-    ) async {
+    testWidgets('a stain is the shader ring, sized to the paper, on a card as '
+        'on the page', (tester) async {
       await tester.runAsync(CoffeeRing.load);
       for (final (size, radius) in [
         (const Size(400, 560), 152.0),
@@ -374,12 +387,7 @@ void main() {
           size.height - radius * 0.3,
         );
         expect(
-          await paper(
-            tester,
-            stain: StainCorner.bottomRight,
-            boldStain: true,
-            size: size,
-          ),
+          await paper(tester, stain: StainCorner.bottomRight, size: size),
           paints
             ..rect() // the paper's fill
             ..rect(
@@ -388,10 +396,25 @@ void main() {
           reason: '$size',
         );
       }
+      const cardRadius = 45.6;
       expect(
-        await paper(tester, stain: StainCorner.topLeft, boldStain: true),
-        paintsExactlyCountTimes(#drawArc, 0),
+        await paper(tester, stain: StainCorner.topLeft),
+        paints
+          ..rect() // the paper's fill
+          ..rect(
+            rect: Rect.fromCircle(
+              center: const Offset(cardRadius * 0.45, cardRadius * 0.15),
+              radius: cardRadius * 1.2,
+            ),
+          ),
       );
+      for (final corner in StainCorner.values) {
+        expect(
+          await paper(tester, stain: corner),
+          paintsExactlyCountTimes(#drawArc, 0),
+          reason: '$corner',
+        );
+      }
     });
   });
 }
