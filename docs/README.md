@@ -15,7 +15,8 @@ to.
 - **Recipe list.** Lists every recipe with its coffee, water and total time
   (the coffee and water are the recipe's own stored grams),
   each drawn as a coffee-bag label. Short brews get a dark roast label, long
-  ones a light crema label, and each recipe has its own paper texture.
+  ones a light crema label, and each recipe has its own paper texture,
+  chosen in the editor or else picked from the recipe's id.
   Tap a recipe to brew it. Long-press it to edit, duplicate, pin (or
   unpin), export or delete it. Pinned recipes are listed first, in the order they
   had among themselves, then the rest; a small pin in the label's top-left
@@ -255,6 +256,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings finish-sound singing-b
   `--pour-speed G/S` sets how fast it pours (0.5–30 g/s, default 5).
   `--grind CLICKS` sets where to set the grinder (0–99, default none);
   `list` and `show` then print `Clicks: 22`.
+  `--texture NAME` sets the label's paper (kraft, linen, halftone,
+  pinstripe, contour, burlap or plain); without it the app picks one from
+  the id. `show` prints `Paper: <name>` for the paper used.
 - `--step NAME=SECONDS[@GRAMS]` splits at the last `=`, then the seconds at
   an `@`; `@GRAMS` is the water the step pours. `NAME=@GRAMS` leaves the
   seconds out: the step lasts as long as its pour takes at the pour speed.
