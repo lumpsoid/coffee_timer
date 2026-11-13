@@ -257,8 +257,9 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings finish-sound singing-b
   `--grind CLICKS` sets where to set the grinder (0–99, default none);
   `list` and `show` then print `Clicks: 22`.
   `--texture NAME` sets the label's paper (kraft, linen, halftone,
-  pinstripe, contour, burlap or plain); without it the app picks one from
-  the id. `show` prints `Paper: <name>` for the paper used.
+  pinstripe, contour, burlap, graph, ledger, dot_grid, crosshatch,
+  herringbone, ripple, woodgrain, laid or plain); without it the app picks
+  one from the id. `show` prints `Paper: <name>` for the paper used.
 - `--step NAME=SECONDS[@GRAMS]` splits at the last `=`, then the seconds at
   an `@`; `@GRAMS` is the water the step pours. `NAME=@GRAMS` leaves the
   seconds out: the step lasts as long as its pour takes at the pour speed.

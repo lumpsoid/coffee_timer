@@ -71,15 +71,15 @@ fn the_seeded_recipes_keep_their_labels_across_builds() -> TestResult {
     // Pinned: a change here repaints every user's existing recipes.
     let espresso = style(&recipe("espresso-uuid", "Espresso", &[30, 25])?);
     assert_eq!(espresso.tone(), LabelTone::Roast);
-    assert_eq!(espresso.texture(), LabelTexture::Linen);
+    assert_eq!(espresso.texture(), LabelTexture::Pinstripe);
     assert_eq!(espresso.shade(), LabelShade::Lighter);
-    assert_eq!(espresso.stain(), StainCorner::TopLeft);
+    assert_eq!(espresso.stain(), StainCorner::BottomRight);
 
     let pour_over = style(&recipe("pourover-uuid", "Pour Over", &[40, 30, 120])?);
     assert_eq!(pour_over.tone(), LabelTone::Caramel);
     assert_eq!(pour_over.texture(), LabelTexture::Linen);
-    assert_eq!(pour_over.shade(), LabelShade::Darker);
-    assert_eq!(pour_over.stain(), StainCorner::BottomRight);
+    assert_eq!(pour_over.shade(), LabelShade::Base);
+    assert_eq!(pour_over.stain(), StainCorner::TopLeft);
     Ok(())
 }
 
@@ -172,7 +172,10 @@ fn every_choice_round_trips_through_storage() -> TestResult {
     let distinct: HashSet<_> = LabelTexture::CHOICES.iter().collect();
     assert_eq!(distinct.len(), LabelTexture::CHOICES.len());
     assert_eq!(LabelTexture::CHOICES.last(), Some(&LabelTexture::Plain));
-    assert_eq!(LabelTexture::CHOICES[..6], LabelTexture::ALL);
+    assert_eq!(
+        LabelTexture::CHOICES[..LabelTexture::ALL.len()],
+        LabelTexture::ALL
+    );
     for texture in LabelTexture::CHOICES {
         let stored = texture.storage_value();
         assert_eq!(LabelTexture::try_parse(stored)?, texture);

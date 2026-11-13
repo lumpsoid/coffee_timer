@@ -76,8 +76,10 @@ again.
 - **`LabelStyle`** is how a recipe looks in the list, as a coffee-bag label.
   `LabelTone` (roast, caramel or crema) follows total brew time, with the
   thresholds as named constants. `LabelTexture` is hashed from the recipe id
-  unless the recipe chose one. `Plain` is only ever chosen: it sits outside
-  the hash pool (`LabelTexture::ALL`), so existing looks are unchanged.
+  unless the recipe chose one. `Plain` is only ever chosen and sits outside
+  the hash pool (`LabelTexture::ALL`). Growing the pool changes the hashed
+  texture of every recipe without a chosen paper, and the shade and stain
+  of every recipe, since all three share the hash.
   `LabelShade` and `StainCorner` always come from the hash, so a recipe
   keeps its look across renames, reorders and builds.
 - **Settings:** `ThemeSelection` (light, dark or system), `AccentColor` (ARGB,

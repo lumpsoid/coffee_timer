@@ -152,8 +152,9 @@ pub struct NewRecipe {
     /// Where to set the grinder, in clicks, 0–99. [default: none]
     #[arg(long, value_name = "CLICKS")]
     pub grind: Option<String>,
-    /// The label paper: kraft, linen, halftone, pinstripe, contour, burlap
-    /// or plain. [default: picked from the recipe's id]
+    /// The label paper: kraft, linen, halftone, pinstripe, contour, burlap,
+    /// graph, ledger, dot_grid, crosshatch, herringbone, ripple, woodgrain,
+    /// laid or plain. [default: picked from the recipe's id]
     #[arg(long, value_name = "NAME")]
     pub texture: Option<String>,
     /// A step as NAME=SECONDS, or NAME=SECONDS@GRAMS for a step that pours

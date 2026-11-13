@@ -135,6 +135,14 @@ pub enum LabelTexture {
     Pinstripe,
     Contour,
     Burlap,
+    Graph,
+    Ledger,
+    DotGrid,
+    Crosshatch,
+    Herringbone,
+    Ripple,
+    Woodgrain,
+    Laid,
     Plain,
 }
 

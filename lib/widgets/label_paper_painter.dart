@@ -133,6 +133,187 @@ class LabelPaperPainter extends CustomPainter {
         for (var x = 1.0; x < size.width; x += 5) {
           canvas.drawLine(Offset(x, 0), Offset(x, size.height), stroke);
         }
+      case LabelTexture.graph:
+        // Fine grid of 6 px cells, with heavier lines every 5 cells. Each
+        // family is one path, so the crossings don't take the alpha twice.
+        final fine = Path();
+        for (var x = 0.5; x < size.width; x += 6) {
+          fine
+            ..moveTo(x, 0)
+            ..lineTo(x, size.height);
+        }
+        for (var y = 0.5; y < size.height; y += 6) {
+          fine
+            ..moveTo(0, y)
+            ..lineTo(size.width, y);
+        }
+        stroke.color = ink(0.07);
+        canvas.drawPath(fine, stroke);
+        final major = Path();
+        for (var x = 0.5; x < size.width; x += 30) {
+          major
+            ..moveTo(x, 0)
+            ..lineTo(x, size.height);
+        }
+        for (var y = 0.5; y < size.height; y += 30) {
+          major
+            ..moveTo(0, y)
+            ..lineTo(size.width, y);
+        }
+        stroke.color = ink(0.15);
+        canvas.drawPath(major, stroke);
+      case LabelTexture.ledger:
+        // Ruled lines every 10 px, with an accent-coloured margin.
+        final rules = Path();
+        for (var y = 10.5; y < size.height; y += 10) {
+          rules
+            ..moveTo(0, y)
+            ..lineTo(size.width, y);
+        }
+        stroke.color = ink(0.12);
+        canvas.drawPath(rules, stroke);
+        final margin = Path()
+          ..moveTo(16.5, 0)
+          ..lineTo(16.5, size.height);
+        stroke.color = colors.accent.withValues(alpha: 0.25);
+        canvas.drawPath(margin, stroke);
+      case LabelTexture.dotGrid:
+        // Dots on an 8 px grid, all at one alpha.
+        final dotPaint = Paint()..color = ink(0.2);
+        for (var y = 4.0; y < size.height; y += 8) {
+          for (var x = 4.0; x < size.width; x += 8) {
+            canvas.drawCircle(Offset(x, y), 0.9, dotPaint);
+          }
+        }
+      case LabelTexture.crosshatch:
+        // Two families of lines at 45 degrees, through the centre, in one
+        // path as on the design page.
+        final halfDiagonal = Offset(size.width, size.height).distance / 2;
+        final dx = math.cos(math.pi / 4);
+        final hatch = Path();
+        for (final sign in [1.0, -1.0]) {
+          final dy = sign * math.sin(math.pi / 4);
+          for (var off = -halfDiagonal; off <= halfDiagonal; off += 8) {
+            final cx = size.width / 2 - dy * off;
+            final cy = size.height / 2 + dx * off;
+            hatch
+              ..moveTo(cx - dx * halfDiagonal, cy - dy * halfDiagonal)
+              ..lineTo(cx + dx * halfDiagonal, cy + dy * halfDiagonal);
+          }
+        }
+        stroke.color = ink(0.09);
+        canvas.drawPath(hatch, stroke);
+      case LabelTexture.herringbone:
+        // Staggered 45-degree planks in columns that alternate slope, in one
+        // path as on the design page.
+        const run = 20 * math.sqrt1_2;
+        final planks = Path();
+        for (var col = 0; col * run < size.width; col++) {
+          final x = col * run;
+          final rising = col.isEven;
+          final offset = rising ? 0.0 : 2.5;
+          for (var y = -run + offset; y < size.height; y += 5) {
+            planks
+              ..moveTo(x, rising ? y + run : y)
+              ..lineTo(x + run, rising ? y : y + run);
+          }
+        }
+        stroke.color = ink(0.13);
+        canvas.drawPath(planks, stroke);
+      case LabelTexture.ripple:
+        // Wavy lines 6 px apart, each a little further out of phase than the
+        // one above, in one path.
+        final waves = Path();
+        var row = 0;
+        for (var y0 = 3.0; y0 < size.height + 2; y0 += 6, row++) {
+          final phase = row * 0.12;
+          double wave(double x) =>
+              y0 + 2 * math.sin(2 * math.pi * x / 40 + phase);
+          waves.moveTo(0, wave(0));
+          for (var x = 2.0; x <= size.width; x += 2) {
+            waves.lineTo(x, wave(x));
+          }
+        }
+        stroke.color = ink(0.12);
+        canvas.drawPath(waves, stroke);
+      case LabelTexture.woodgrain:
+        // Grain lines 4 px apart, wobbling and bent around two seeded knots,
+        // each ringed by three ovals.
+        final random = math.Random(5);
+        final knots = [
+          for (var i = 0; i < 2; i++)
+            Offset(
+              random.nextDouble() * size.width,
+              random.nextDouble() * size.height,
+            ),
+        ];
+        double bend(double x, double y) {
+          var dy = 0.0;
+          for (final knot in knots) {
+            final dx = (x - knot.dx) / 12;
+            final dv = (y - knot.dy) / (12 * 0.6);
+            dy += 4 * math.exp(-(dx * dx + dv * dv)) * (y >= knot.dy ? 1 : -1);
+          }
+          return dy;
+        }
+
+        const tau = math.pi * 2;
+        final grain = Path();
+        for (var y0 = 2.0; y0 < size.height; y0 += 4) {
+          // Three sines with seeded phases make each line's wobble.
+          final ph = [
+            random.nextDouble() * tau,
+            random.nextDouble() * tau,
+            random.nextDouble() * tau,
+          ];
+          double at(double x) {
+            final wob =
+                3 *
+                (0.6 * math.sin(tau * x / 120 + ph[0]) +
+                    0.3 * math.sin(tau * x / (120 * 0.37) + ph[1]) +
+                    0.2 * math.sin(tau * x / (120 * 2.3) + ph[2]));
+            final y = y0 + wob;
+            return y + bend(x, y);
+          }
+
+          grain.moveTo(0, at(0));
+          for (var x = 2.0; x <= size.width; x += 2) {
+            grain.lineTo(x, at(x));
+          }
+        }
+        stroke.color = ink(0.1);
+        canvas.drawPath(grain, stroke);
+        for (final knot in knots) {
+          for (final f in [0.4, 0.7, 1.0]) {
+            canvas.drawOval(
+              Rect.fromCenter(
+                center: knot,
+                width: 2 * 12 * f,
+                height: 2 * 12 * f * 0.6,
+              ),
+              stroke,
+            );
+          }
+        }
+      case LabelTexture.laid:
+        // Laid lines 2.5 px apart, with chain lines 18 px apart in a stronger
+        // alpha, each family in one path.
+        final laidLines = Path();
+        for (var y = 0.5; y < size.height; y += 2.5) {
+          laidLines
+            ..moveTo(0, y)
+            ..lineTo(size.width, y);
+        }
+        stroke.color = ink(0.07);
+        canvas.drawPath(laidLines, stroke);
+        final chain = Path();
+        for (var x = 0.5; x < size.width; x += 18) {
+          chain
+            ..moveTo(x, 0)
+            ..lineTo(x, size.height);
+        }
+        stroke.color = ink(0.12);
+        canvas.drawPath(chain, stroke);
       // Bare paper: nothing to paint over the fill.
       case LabelTexture.plain:
     }
