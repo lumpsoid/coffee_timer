@@ -64,7 +64,7 @@ Most changes go down and back up the layers:
    page in [`lib/pages`](lib/pages).
 
 Read [docs/architecture.md](docs/architecture.md) for how it fits
-together and [docs/code-principles.md](docs/code-principles.md) for the
+together and [CODE-PRINCIPLES.md](CODE-PRINCIPLES.md) for the
 code style. [CLAUDE.md](CLAUDE.md) lists the architectural commitments.
 
 ## Before you open a pull request
