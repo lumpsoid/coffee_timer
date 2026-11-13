@@ -133,6 +133,15 @@ class LabelPaperPainter extends CustomPainter {
         for (var x = 1.0; x < size.width; x += 5) {
           canvas.drawLine(Offset(x, 0), Offset(x, size.height), stroke);
         }
+      // Not drawn yet: bare paper for now.
+      case LabelTexture.graph:
+      case LabelTexture.ledger:
+      case LabelTexture.dotGrid:
+      case LabelTexture.crosshatch:
+      case LabelTexture.herringbone:
+      case LabelTexture.ripple:
+      case LabelTexture.woodgrain:
+      case LabelTexture.laid:
       // Bare paper: nothing to paint over the fill.
       case LabelTexture.plain:
     }

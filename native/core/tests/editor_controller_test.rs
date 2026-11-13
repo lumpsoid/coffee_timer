@@ -1741,6 +1741,14 @@ fn the_texture_gallery_is_auto_then_every_choice() -> TestResult {
             "Pinstripe",
             "Contour",
             "Burlap",
+            "Graph",
+            "Ledger",
+            "Dot grid",
+            "Crosshatch",
+            "Herringbone",
+            "Ripple",
+            "Woodgrain",
+            "Laid paper",
             "Plain"
         ]
     );

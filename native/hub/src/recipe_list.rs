@@ -152,6 +152,14 @@ impl From<model::LabelTexture> for LabelTexture {
             model::LabelTexture::Pinstripe => Self::Pinstripe,
             model::LabelTexture::Contour => Self::Contour,
             model::LabelTexture::Burlap => Self::Burlap,
+            model::LabelTexture::Graph => Self::Graph,
+            model::LabelTexture::Ledger => Self::Ledger,
+            model::LabelTexture::DotGrid => Self::DotGrid,
+            model::LabelTexture::Crosshatch => Self::Crosshatch,
+            model::LabelTexture::Herringbone => Self::Herringbone,
+            model::LabelTexture::Ripple => Self::Ripple,
+            model::LabelTexture::Woodgrain => Self::Woodgrain,
+            model::LabelTexture::Laid => Self::Laid,
             model::LabelTexture::Plain => Self::Plain,
         }
     }
@@ -166,6 +174,14 @@ impl From<LabelTexture> for model::LabelTexture {
             LabelTexture::Pinstripe => Self::Pinstripe,
             LabelTexture::Contour => Self::Contour,
             LabelTexture::Burlap => Self::Burlap,
+            LabelTexture::Graph => Self::Graph,
+            LabelTexture::Ledger => Self::Ledger,
+            LabelTexture::DotGrid => Self::DotGrid,
+            LabelTexture::Crosshatch => Self::Crosshatch,
+            LabelTexture::Herringbone => Self::Herringbone,
+            LabelTexture::Ripple => Self::Ripple,
+            LabelTexture::Woodgrain => Self::Woodgrain,
+            LabelTexture::Laid => Self::Laid,
             LabelTexture::Plain => Self::Plain,
         }
     }
