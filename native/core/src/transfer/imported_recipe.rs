@@ -1,4 +1,6 @@
-use crate::model::{CoffeeDose, GrindClicks, PourSpeed, Recipe, RecipeName, WaterAmount};
+use crate::model::{
+    CoffeeDose, GrindClicks, LabelTexture, PourSpeed, Recipe, RecipeName, WaterAmount,
+};
 use crate::ports::IdGen;
 use crate::transfer::ImportedStep;
 
@@ -13,6 +15,7 @@ pub struct ImportedRecipe {
     water: WaterAmount,
     pour_speed: PourSpeed,
     grind: Option<GrindClicks>,
+    label_texture: Option<LabelTexture>,
     steps: Vec<ImportedStep>,
 }
 
@@ -33,7 +36,16 @@ impl ImportedRecipe {
             water,
             pour_speed,
             grind,
+            label_texture: None,
             steps,
+        }
+    }
+
+    /// The paper the recipe carries, if the document chose one.
+    pub(crate) fn with_label_texture(self, label_texture: Option<LabelTexture>) -> Self {
+        Self {
+            label_texture,
+            ..self
         }
     }
 
@@ -55,6 +67,7 @@ impl ImportedRecipe {
         )
         .with_pour_speed(self.pour_speed)
         .with_grind(self.grind)
+        .with_label_texture(self.label_texture)
     }
 
     pub fn name(&self) -> &RecipeName {
@@ -79,6 +92,10 @@ impl ImportedRecipe {
 
     pub fn grind(&self) -> Option<GrindClicks> {
         self.grind
+    }
+
+    pub fn label_texture(&self) -> Option<LabelTexture> {
+        self.label_texture
     }
 
     pub fn steps(&self) -> &[ImportedStep] {
