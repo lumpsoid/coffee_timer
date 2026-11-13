@@ -1,5 +1,6 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/brew_dial.dart';
+import 'package:coffee_timer/widgets/coffee_ring.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:coffee_timer/widgets/label_paper_painter.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
@@ -360,29 +361,36 @@ void main() {
       }
     });
 
-    testWidgets('a bold stain is a mug ring sized to the paper', (
+    testWidgets('a bold stain is the shader ring, sized to the paper', (
       tester,
     ) async {
-      for (final corner in StainCorner.values) {
-        // A band, an inner rim and the rim in 24 pieces.
+      await tester.runAsync(CoffeeRing.load);
+      for (final (size, radius) in [
+        (const Size(400, 560), 152.0),
+        (const Size(360, 120), 45.6),
+      ]) {
+        final center = Offset(
+          size.width - radius * 0.55,
+          size.height - radius * 0.3,
+        );
         expect(
-          await paper(tester, stain: corner, boldStain: true),
-          paintsExactlyCountTimes(#drawArc, 26),
-          reason: '$corner',
+          await paper(
+            tester,
+            stain: StainCorner.bottomRight,
+            boldStain: true,
+            size: size,
+          ),
+          paints
+            ..rect() // the paper's fill
+            ..rect(
+              rect: Rect.fromCircle(center: center, radius: radius * 1.2),
+            ),
+          reason: '$size',
         );
       }
       expect(
-        await paper(
-          tester,
-          stain: StainCorner.bottomRight,
-          boldStain: true,
-          size: const Size(400, 800),
-        ),
-        paints..circle(radius: 120),
-      );
-      expect(
-        await paper(tester, stain: StainCorner.bottomRight, boldStain: true),
-        paints..circle(radius: 40),
+        await paper(tester, stain: StainCorner.topLeft, boldStain: true),
+        paintsExactlyCountTimes(#drawArc, 0),
       );
     });
   });

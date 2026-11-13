@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:ui' show PointMode;
 
 import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/coffee_ring.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:flutter/material.dart';
 
@@ -10,9 +11,9 @@ import 'package:flutter/material.dart';
 /// [RecipeLabel] from Rust.
 ///
 /// No [stain] leaves the ring out, for swatches that compare textures. A
-/// [boldStain] is sized to the paper and drawn as a mug ring (a dark rim, a
-/// fainter inner rim, a wash inside) for a label as large as the brew page;
-/// otherwise it is a faint fixed-size arc in the corner.
+/// [boldStain] is a mug ring sized to the paper, drawn by a shader
+/// ([CoffeeRing]), for a label as large as the brew page; otherwise it is a
+/// faint fixed-size arc in the corner.
 class LabelPaperPainter extends CustomPainter {
   const LabelPaperPainter({
     required this.colors,
@@ -179,61 +180,24 @@ class LabelPaperPainter extends CustomPainter {
       );
   }
 
-  /// A mug ring sized to the paper: a soft band, a dark rim that thickens
-  /// and fades along its sweep as dried coffee does, a fainter inner rim
-  /// and a wash inside, half off the edge at [corner].
+  /// A mug ring sized to the paper, half off the edge at [corner]; the
+  /// shader draws it (see [CoffeeRing]).
   void _paintBoldStain(Canvas canvas, Size size, StainCorner corner) {
-    final radius = (size.shortestSide * 0.3).clamp(40.0, 140.0);
-    final (center, start) = switch (corner) {
+    final radius = (size.shortestSide * 0.38).clamp(40.0, 180.0);
+    final (center, seed) = switch (corner) {
       StainCorner.bottomRight => (
         Offset(size.width - radius * 0.55, size.height - radius * 0.3),
-        0.35,
+        3.0,
       ),
-      StainCorner.topLeft => (Offset(radius * 0.45, radius * 0.15), 2.8),
+      StainCorner.topLeft => (Offset(radius * 0.45, radius * 0.15), 17.0),
     };
-    final ring = Rect.fromCircle(center: center, radius: radius);
-    const sweep = math.pi * 1.55;
-    Color ink(double alpha) => colors.stain.withValues(alpha: alpha);
-    canvas
-      ..drawCircle(center, radius, Paint()..color = ink(0.035))
-      ..drawArc(
-        ring,
-        start,
-        sweep,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = radius * 0.12
-          ..color = ink(0.05),
-      )
-      ..drawArc(
-        ring.deflate(radius * 0.07),
-        start + 0.4,
-        sweep * 0.7,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5
-          ..strokeCap = StrokeCap.round
-          ..color = ink(0.12),
-      );
-    // The rim in short pieces, heavier and darker where the coffee pooled.
-    const pieces = 24;
-    for (var i = 0; i < pieces; i++) {
-      final t = i / pieces;
-      final weight = math.sin(t * math.pi);
-      canvas.drawArc(
-        ring,
-        start + sweep * t,
-        sweep / pieces + 0.01,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5 + 2.5 * weight
-          ..strokeCap = StrokeCap.round
-          ..color = ink(0.14 + 0.16 * weight),
-      );
-    }
+    CoffeeRing.paint(
+      canvas,
+      center: center,
+      radius: radius,
+      color: colors.stain.withValues(alpha: 0.5),
+      seed: seed,
+    );
   }
 
   void _paintGrain(Canvas canvas, Size size) {

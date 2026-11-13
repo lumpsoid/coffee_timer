@@ -500,7 +500,9 @@ The GUI renders, sends intents, and performs effects. It holds no business
   drawn as printed labels: `LabelColors` maps the `RecipeLabel` to colours
   (dimmed in dark theme), `LabelPaperPainter` paints the paper, texture,
   stain and frame (the brew page asks for a bold stain, a mug ring sized to
-  the page; the gallery's swatches have none), `label_parts.dart` has the name badge, tagline, spec
+  the page and drawn by the `shaders/coffee_ring.frag` fragment shader,
+  which `CoffeeRing` loads once in `main`; the gallery's swatches have
+  none), `label_parts.dart` has the name badge, tagline, spec
   row, `RuledHeading` (a caption between hairlines, heading the brew
   page's method and the editor's and settings' sections) and `LabelPinMark` (the small accent push pin a pinned card shows in
   its top-left corner, opposite the meter), and `RoastMeter` draws the beans.
