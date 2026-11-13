@@ -79,7 +79,8 @@ class _Tile extends StatelessWidget {
                   child: LabelPaper(
                     colors: colors,
                     texture: texture.paper,
-                    stain: StainCorner.bottomRight,
+                    // No ring: on a swatch this small it hides the pattern.
+                    stain: null,
                     child: const SizedBox(
                       width: _swatchWidth,
                       height: _swatchHeight,

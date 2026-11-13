@@ -192,6 +192,7 @@ class _BrewPageState extends State<BrewPage> {
       colors: colors,
       texture: recipe.label.texture,
       stain: recipe.label.stain,
+      boldStain: true,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(

@@ -17,12 +17,18 @@ class LabelPaper extends StatelessWidget {
     required this.texture,
     required this.stain,
     required this.child,
+    this.boldStain = false,
     super.key,
   });
 
   final LabelColors colors;
   final LabelTexture texture;
-  final StainCorner stain;
+
+  /// Where the coffee ring sits; none leaves it out.
+  final StainCorner? stain;
+
+  /// See [LabelPaperPainter.boldStain].
+  final bool boldStain;
   final Widget child;
 
   @override
@@ -34,7 +40,7 @@ class LabelPaper extends StatelessWidget {
           // The snapshot is kept through repaints of its child, so a new
           // look gets a new widget; a new size, a new snapshot.
           child: SnapshotWidget(
-            key: ValueKey((colors, texture, stain)),
+            key: ValueKey((colors, texture, stain, boldStain)),
             controller: _snapshot,
             autoresize: true,
             child: CustomPaint(
@@ -42,6 +48,7 @@ class LabelPaper extends StatelessWidget {
                 colors: colors,
                 texture: texture,
                 stain: stain,
+                boldStain: boldStain,
               ),
             ),
           ),

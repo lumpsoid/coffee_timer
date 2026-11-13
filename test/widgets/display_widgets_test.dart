@@ -1,6 +1,7 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/brew_dial.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
+import 'package:coffee_timer/widgets/label_paper_painter.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
@@ -313,6 +314,76 @@ void main() {
       await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (1, 0)));
       await tester.pump(const Duration(seconds: 2));
       expect(ring(tester), closeTo(0.5, 0.01));
+    });
+  });
+
+  group('LabelPaperPainter', () {
+    // Plain paper, so every arc counted is the stain's.
+    Future<RenderObject> paper(
+      WidgetTester tester, {
+      required StainCorner? stain,
+      bool boldStain = false,
+      Size size = const Size(360, 120),
+    }) async {
+      await tester.pumpWidget(
+        Center(
+          child: CustomPaint(
+            size: size,
+            painter: LabelPaperPainter(
+              colors: _colors,
+              texture: LabelTexture.plain,
+              stain: stain,
+              boldStain: boldStain,
+            ),
+          ),
+        ),
+      );
+      return tester.renderObject(find.byType(CustomPaint));
+    }
+
+    testWidgets('leaves the ring out without a stain', (tester) async {
+      expect(
+        await paper(tester, stain: null, boldStain: true),
+        paintsExactlyCountTimes(#drawArc, 0),
+      );
+    });
+
+    testWidgets('a card stain is one faint arc: a band and a line', (
+      tester,
+    ) async {
+      for (final corner in StainCorner.values) {
+        expect(
+          await paper(tester, stain: corner),
+          paintsExactlyCountTimes(#drawArc, 2),
+          reason: '$corner',
+        );
+      }
+    });
+
+    testWidgets('a bold stain is a mug ring sized to the paper', (
+      tester,
+    ) async {
+      for (final corner in StainCorner.values) {
+        // A band, an inner rim and the rim in 24 pieces.
+        expect(
+          await paper(tester, stain: corner, boldStain: true),
+          paintsExactlyCountTimes(#drawArc, 26),
+          reason: '$corner',
+        );
+      }
+      expect(
+        await paper(
+          tester,
+          stain: StainCorner.bottomRight,
+          boldStain: true,
+          size: const Size(400, 800),
+        ),
+        paints..circle(radius: 120),
+      );
+      expect(
+        await paper(tester, stain: StainCorner.bottomRight, boldStain: true),
+        paints..circle(radius: 40),
+      );
     });
   });
 }
