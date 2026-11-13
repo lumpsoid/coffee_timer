@@ -56,6 +56,7 @@ pub fn brew_page(out: &mut impl Write, state: &BrewState) -> io::Result<()> {
         view.duration_label(),
         grind(view.grind_label().as_deref()),
     )?;
+    writeln!(out, "Paper: {}", view.style().texture().label())?;
     for row in state.step_rows() {
         let pour = row
             .pour_label

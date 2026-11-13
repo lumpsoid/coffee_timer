@@ -5,9 +5,16 @@ use clap::Parser;
 use coffee_timer_cli::args::Args;
 use coffee_timer_cli::{Controllers, run};
 use coffee_timer_core::fakes::SequentialIds;
+use coffee_timer_core::model::{LabelStyle, RecipeId};
 use coffee_timer_store::SqliteStore;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+/// The paper a recipe with no chosen texture is printed on: the hash pick
+/// for its id.
+fn hashed_paper(id: &str) -> Result<&'static str, Box<dyn std::error::Error>> {
+    Ok(LabelStyle::hashed_texture(&RecipeId::try_parse(id)?).label())
+}
 
 /// A shell on a fresh seeded database: Espresso (Grind 30s, Brew 25s) and
 /// Pour Over (Grind 40s, Bloom 30s pouring 50 g, Pour 120s pouring 200 g).
@@ -57,16 +64,20 @@ fn list_shows_the_seed_in_catalog_order() -> TestResult {
 
 #[test]
 fn show_renders_the_brew_page() -> TestResult {
+    let paper = hashed_paper("pourover-uuid")?;
     assert_eq!(
         Session::new()?.run(&["show", "pourover-uuid"])?,
-        "\
+        format!(
+            "\
 pourover-uuid  Pour Over
 Light and clean
 Coffee: 15g  Water: 250g  Ratio: 1:16.7  Time: 3:10
+Paper: {paper}
   1. Grind  40s  pending
   2. Bloom  30s  50g  pending
   3. Pour  120s  200g  pending
 "
+        )
     );
     Ok(())
 }
@@ -95,17 +106,21 @@ fn show_with_ratio_steps_moves_the_water_for_that_showing() -> TestResult {
 fn show_with_save_persists_the_adjusted_water_and_pours() -> TestResult {
     let mut session = Session::new()?;
     let out = session.run(&["show", "pourover-uuid", "--ratio-steps", "3", "--save"])?;
+    let paper = hashed_paper("pourover-uuid")?;
     assert_eq!(
         out,
-        "\
+        format!(
+            "\
 upserted pourover-uuid
 pourover-uuid  Pour Over
 Light and clean
 Coffee: 15g  Water: 270g  Ratio: 1:18  Time: 3:10
+Paper: {paper}
   1. Grind  40s  pending
   2. Bloom  30s  54g  pending
   3. Pour  120s  216g  pending
 "
+        )
     );
     let reopened = session.reopened()?.run(&["show", "pourover-uuid"])?;
     assert!(
@@ -237,15 +252,19 @@ fn new_saves_a_recipe_and_it_persists() -> TestResult {
         list,
         format!("{SEED_LIST}r1  V60  Coffee: 16 g  Water: 256 g  Time: 0:35  clean\n")
     );
+    let paper = hashed_paper("r1")?;
     assert_eq!(
         reopened.run(&["show", "r1"])?,
-        "\
+        format!(
+            "\
 r1  V60
 clean
 Coffee: 16g  Water: 256g  Ratio: 1:16  Time: 0:35
+Paper: {paper}
   1. Bloom  30s  40g  pending
   2. Step 2  5s  pending
 "
+        )
     );
     Ok(())
 }
@@ -326,6 +345,44 @@ fn new_with_an_invalid_grind_prints_its_error() -> TestResult {
         error,
         "Fix the highlighted fields\n  Grind \"100\": 0–99 clicks"
     );
+    Ok(())
+}
+
+#[test]
+fn new_with_a_texture_shows_its_paper() -> TestResult {
+    let mut session = Session::new()?;
+    let out = session.run(&["new", "V60", "--texture", "linen"])?;
+    assert_eq!(out, "upserted r1\n");
+    let shown = session.reopened()?.run(&["show", "r1"])?;
+    assert!(shown.contains("Paper: Linen\n"), "{shown}");
+
+    // Plain is left out of the hash pool, so only the override can show it.
+    let out = session.run(&["new", "Chemex", "--texture", "plain"])?;
+    assert_eq!(out, "upserted r2\n");
+    let shown = session.reopened()?.run(&["show", "r2"])?;
+    assert!(shown.contains("Paper: Plain\n"), "{shown}");
+    Ok(())
+}
+
+#[test]
+fn new_without_a_texture_shows_the_hash_pick() -> TestResult {
+    let mut session = Session::new()?;
+    session.run(&["new", "V60"])?;
+    let shown = session.reopened()?.run(&["show", "r1"])?;
+    let paper = hashed_paper("r1")?;
+    assert!(shown.contains(&format!("Paper: {paper}\n")), "{shown}");
+    Ok(())
+}
+
+#[test]
+fn new_with_an_unknown_texture_prints_its_error() -> TestResult {
+    let mut session = Session::new()?;
+    let error = session
+        .run(&["new", "V60", "--texture", "velvet"])
+        .err()
+        .ok_or("expected an error")?;
+    assert_eq!(error, "Texture \"velvet\" is not a label texture");
+    assert_eq!(session.reopened()?.run(&["list"])?, SEED_LIST);
     Ok(())
 }
 
@@ -417,16 +474,20 @@ fn duplicate_saves_a_copy_at_the_end_and_it_persists() -> TestResult {
             "{SEED_LIST}r1  Pour Over copy  Coffee: 15 g  Water: 250 g  Time: 3:10  Light and clean\n"
         )
     );
+    let paper = hashed_paper("r1")?;
     assert_eq!(
         reopened.run(&["show", "r1"])?,
-        "\
+        format!(
+            "\
 r1  Pour Over copy
 Light and clean
 Coffee: 15g  Water: 250g  Ratio: 1:16.7  Time: 3:10
+Paper: {paper}
   1. Grind  40s  pending
   2. Bloom  30s  50g  pending
   3. Pour  120s  200g  pending
 "
+        )
     );
     Ok(())
 }
