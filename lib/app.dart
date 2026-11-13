@@ -8,7 +8,7 @@ import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/pages/recipe_list_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:rinf/rinf.dart';
 
 /// The app: themed from the settings holder, showing the recipe list once

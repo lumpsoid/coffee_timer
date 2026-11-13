@@ -7,8 +7,8 @@ import 'package:coffee_timer/widgets/label_paper_painter.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../fixtures.dart';
 

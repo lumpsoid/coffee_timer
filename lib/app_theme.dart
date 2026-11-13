@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The app's chrome set in the recipe label's type: titles, buttons and
 /// captions in tracked Oswald like the label's badge and captions, running

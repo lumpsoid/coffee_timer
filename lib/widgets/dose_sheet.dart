@@ -2,7 +2,7 @@ import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/coffee_tape.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Less water, the ratio, more water; the coffee on its tape; then the
 /// dose it makes; then Reset (back to the recipe's own dose) and Save (make

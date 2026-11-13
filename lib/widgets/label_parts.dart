@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:coffee_timer/widgets/label_colors.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The recipe name in a stamped badge: spaced capitals between two accent
 /// rules, a diamond at each end. Shared by the list card and the brew page.

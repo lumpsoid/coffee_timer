@@ -1,7 +1,7 @@
 import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The two sound pickers, between steps and at the end of a brew, each
 /// over the sounds Rust offers for it, each row with the sound's length.

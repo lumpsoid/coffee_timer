@@ -1,5 +1,5 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The inks of one printed recipe label: paper, text, accent, and the
 /// colour its texture and coffee stain are drawn in. Dark theme shows the

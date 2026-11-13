@@ -1,10 +1,8 @@
-import 'dart:async';
-
 import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/pages/sounds_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The theme picker, the accent colour picker and the brew's cues (sound,
 /// vibration, the finish knock, pre-alert, and a link to the sound
@@ -153,61 +151,59 @@ class SettingsPage extends StatelessWidget {
   }
 
   void _showAccentColorPicker(BuildContext context, SettingsUpdate state) {
-    unawaited(
-      showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Choose Accent Color'),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: [
-                for (final option in state.accents)
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pop();
-                      SetAccent(argb: option.argb).sendSignalToRust();
-                    },
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Stack(
-                          children: [
-                            CircleAvatar(
-                              radius: 20,
-                              backgroundColor: Color(option.argb),
-                            ),
-                            if (option.argb == state.accent)
-                              const Positioned.fill(
-                                child: Icon(
-                                  Icons.check,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
+    showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Choose Accent Color'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              for (final option in state.accents)
+                GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    SetAccent(argb: option.argb).sendSignalToRust();
+                  },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        children: [
+                          CircleAvatar(
+                            radius: 20,
+                            backgroundColor: Color(option.argb),
+                          ),
+                          if (option.argb == state.accent)
+                            const Positioned.fill(
+                              child: Icon(
+                                Icons.check,
+                                color: Colors.white,
+                                size: 20,
                               ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          option.name,
-                          style: const TextStyle(fontSize: 12),
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        option.name,
+                        style: const TextStyle(fontSize: 12),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
-              ],
-            ),
+                ),
+            ],
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
       ),
     );
   }

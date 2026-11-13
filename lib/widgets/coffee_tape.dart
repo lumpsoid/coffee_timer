@@ -1,7 +1,7 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The coffee for this brew: its grams over a gram tape under a fixed
 /// needle. Swipe the tape sideways to change it; the tape follows the
