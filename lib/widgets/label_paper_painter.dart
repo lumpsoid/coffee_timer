@@ -133,11 +133,77 @@ class LabelPaperPainter extends CustomPainter {
         for (var x = 1.0; x < size.width; x += 5) {
           canvas.drawLine(Offset(x, 0), Offset(x, size.height), stroke);
         }
-      // Not drawn yet: bare paper for now.
       case LabelTexture.graph:
+        // Fine grid of 6 px cells, with heavier lines every 5 cells. Each
+        // family is one path, so the crossings don't take the alpha twice.
+        final fine = Path();
+        for (var x = 0.5; x < size.width; x += 6) {
+          fine
+            ..moveTo(x, 0)
+            ..lineTo(x, size.height);
+        }
+        for (var y = 0.5; y < size.height; y += 6) {
+          fine
+            ..moveTo(0, y)
+            ..lineTo(size.width, y);
+        }
+        stroke.color = ink(0.07);
+        canvas.drawPath(fine, stroke);
+        final major = Path();
+        for (var x = 0.5; x < size.width; x += 30) {
+          major
+            ..moveTo(x, 0)
+            ..lineTo(x, size.height);
+        }
+        for (var y = 0.5; y < size.height; y += 30) {
+          major
+            ..moveTo(0, y)
+            ..lineTo(size.width, y);
+        }
+        stroke.color = ink(0.15);
+        canvas.drawPath(major, stroke);
       case LabelTexture.ledger:
+        // Ruled lines every 10 px, with an accent-coloured margin.
+        final rules = Path();
+        for (var y = 10.5; y < size.height; y += 10) {
+          rules
+            ..moveTo(0, y)
+            ..lineTo(size.width, y);
+        }
+        stroke.color = ink(0.12);
+        canvas.drawPath(rules, stroke);
+        final margin = Path()
+          ..moveTo(16.5, 0)
+          ..lineTo(16.5, size.height);
+        stroke.color = colors.accent.withValues(alpha: 0.25);
+        canvas.drawPath(margin, stroke);
       case LabelTexture.dotGrid:
+        // Dots on an 8 px grid, all at one alpha.
+        final dotPaint = Paint()..color = ink(0.2);
+        for (var y = 4.0; y < size.height; y += 8) {
+          for (var x = 4.0; x < size.width; x += 8) {
+            canvas.drawCircle(Offset(x, y), 0.9, dotPaint);
+          }
+        }
       case LabelTexture.crosshatch:
+        // Two families of lines at 45 degrees, through the centre, in one
+        // path as on the design page.
+        final halfDiagonal = Offset(size.width, size.height).distance / 2;
+        final dx = math.cos(math.pi / 4);
+        final hatch = Path();
+        for (final sign in [1.0, -1.0]) {
+          final dy = sign * math.sin(math.pi / 4);
+          for (var off = -halfDiagonal; off <= halfDiagonal; off += 8) {
+            final cx = size.width / 2 - dy * off;
+            final cy = size.height / 2 + dx * off;
+            hatch
+              ..moveTo(cx - dx * halfDiagonal, cy - dy * halfDiagonal)
+              ..lineTo(cx + dx * halfDiagonal, cy + dy * halfDiagonal);
+          }
+        }
+        stroke.color = ink(0.09);
+        canvas.drawPath(hatch, stroke);
+      // Not drawn yet: bare paper for now.
       case LabelTexture.herringbone:
       case LabelTexture.ripple:
       case LabelTexture.woodgrain:

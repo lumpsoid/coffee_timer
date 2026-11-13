@@ -351,6 +351,7 @@ void main() {
       WidgetTester tester, {
       required StainCorner? stain,
       Size size = const Size(360, 120),
+      LabelTexture texture = LabelTexture.plain,
     }) async {
       await tester.pumpWidget(
         Center(
@@ -358,7 +359,7 @@ void main() {
             size: size,
             painter: LabelPaperPainter(
               colors: _colors,
-              texture: LabelTexture.plain,
+              texture: texture,
               stain: stain,
             ),
           ),
@@ -372,6 +373,43 @@ void main() {
       expect(
         await paper(tester, stain: null),
         paintsExactlyCountTimes(#drawRect, 1),
+      );
+    });
+
+    testWidgets('plain paper draws no line and no circle', (tester) async {
+      final plain = await paper(tester, stain: null);
+      expect(plain, isNot(paints..line()));
+      expect(plain, isNot(paints..circle()));
+      expect(plain, isNot(paints..path()));
+    });
+
+    testWidgets('graph paper draws its grid lines', (tester) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.graph),
+        paints..path(),
+      );
+    });
+
+    testWidgets('ledger paper draws its ruled lines and margin', (
+      tester,
+    ) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.ledger),
+        paints..path(),
+      );
+    });
+
+    testWidgets('dot grid paper draws its dots', (tester) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.dotGrid),
+        paints..circle(),
+      );
+    });
+
+    testWidgets('crosshatch paper draws its diagonal lines', (tester) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.crosshatch),
+        paints..path(),
       );
     });
 
