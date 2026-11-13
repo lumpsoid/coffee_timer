@@ -7,6 +7,29 @@ version may change behaviour.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-13
+
+### Added
+
+- Eight new label papers: graph, ledger, dot grid, crosshatch,
+  herringbone, ripple, woodgrain and laid.
+- The recipe editor has a label paper gallery. Pick one of the fourteen
+  papers, plain paper, or Auto, which keeps the paper the app picks for
+  the recipe. A copied recipe keeps its chosen paper.
+- Export and import carry a recipe's chosen paper. Recipes without one
+  export exactly as before.
+- CLI: `new --texture NAME` sets a recipe's paper, and `show` prints the
+  paper it is printed on.
+
+### Changed
+
+- A recipe that has not chosen a paper may look different: with more
+  papers to pick from, its paper, shade and coffee ring can all move. A
+  recipe that chose a paper keeps it, but its shade and ring can still
+  move.
+- The coffee ring is only on the brew page, now a larger stain sized to
+  the label. Recipe cards in the list no longer show one.
+
 ## [0.2.0] - 2026-11-09
 
 ### Added
