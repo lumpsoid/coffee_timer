@@ -151,3 +151,45 @@ fn no_override_is_the_hash_pick() -> TestResult {
     assert_eq!(style(&cleared), hashed);
     Ok(())
 }
+
+// LabelTexture storage
+
+#[test]
+fn every_choice_round_trips_through_storage() -> TestResult {
+    let distinct: HashSet<_> = LabelTexture::CHOICES.iter().collect();
+    assert_eq!(distinct.len(), LabelTexture::CHOICES.len());
+    assert_eq!(LabelTexture::CHOICES.last(), Some(&LabelTexture::Plain));
+    assert_eq!(LabelTexture::CHOICES[..6], LabelTexture::ALL);
+    for texture in LabelTexture::CHOICES {
+        let stored = texture.storage_value();
+        assert_eq!(LabelTexture::try_parse(stored)?, texture);
+        assert_eq!(LabelTexture::from_storage(Some(stored)), Some(texture));
+    }
+    Ok(())
+}
+
+#[test]
+fn try_parse_refuses_anything_else() {
+    for raw in ["", "Kraft", "velvet"] {
+        assert!(
+            matches!(
+                LabelTexture::try_parse(raw),
+                Err(ModelError::UnknownTexture(_))
+            ),
+            "{raw:?}"
+        );
+    }
+    // Positive control: the same parser accepts a stored name.
+    assert_eq!(LabelTexture::try_parse("burlap"), Ok(LabelTexture::Burlap));
+}
+
+#[test]
+fn from_storage_of_nothing_or_unknown_is_no_override() {
+    assert_eq!(LabelTexture::from_storage(None), None);
+    assert_eq!(LabelTexture::from_storage(Some("velvet")), None);
+    // Positive control: a known name is an override.
+    assert_eq!(
+        LabelTexture::from_storage(Some("burlap")),
+        Some(LabelTexture::Burlap)
+    );
+}

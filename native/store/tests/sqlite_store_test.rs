@@ -1,13 +1,13 @@
-//! `SqliteStore`: schema v6 and seed, recipe doses, pour speeds, grinds, step pours, recipe pins, recipe order and reordering, appending in one transaction, step replacement,
+//! `SqliteStore`: schema v7 and seed, recipe doses, pour speeds, grinds, step pours, recipe pins, recipe order and reordering, appending in one transaction, step replacement,
 //! settings round trip and fallback, and the core controllers over it.
 
 use std::path::Path;
 
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::model::{
-    AccentColor, CoffeeDose, FinishSound, GrindClicks, Pin, PourSpeed, PreAlertLead, Recipe,
-    RecipeId, RecipeName, RecipeStep, Settings, StepDuration, StepId, StepSound, StoredSettings,
-    ThemeSelection, Toggle, WaterAmount,
+    AccentColor, CoffeeDose, FinishSound, GrindClicks, LabelTexture, Pin, PourSpeed, PreAlertLead,
+    Recipe, RecipeId, RecipeName, RecipeStep, Settings, StepDuration, StepId, StepSound,
+    StoredSettings, ThemeSelection, Toggle, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, SettingsStore};
 use coffee_timer_core::settings::SettingsController;
@@ -268,6 +268,76 @@ fn stored_grinds_out_of_range_are_clamped() -> TestResult {
 }
 
 #[test]
+fn label_textures_round_trip_and_follow_an_upsert() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let first = recipe("r1", "V60", vec![step("s1", "Pour", 90)?])?;
+    store.upsert(&first)?;
+    let textures = |store: &SqliteStore| -> Outcome<Vec<Option<LabelTexture>>> {
+        Ok(store
+            .load_all()?
+            .iter()
+            .map(Recipe::label_texture)
+            .collect())
+    };
+    assert_eq!(
+        textures(&store)?,
+        [None, None, None],
+        "seeds and new recipe"
+    );
+    store.upsert(&first.clone().with_label_texture(Some(LabelTexture::Plain)))?;
+    assert_eq!(textures(&store)?, [None, None, Some(LabelTexture::Plain)]);
+    store.upsert(&first.clone().with_label_texture(Some(LabelTexture::Burlap)))?;
+    assert_eq!(textures(&store)?, [None, None, Some(LabelTexture::Burlap)]);
+    store.upsert(&first.with_label_texture(None))?;
+    assert_eq!(textures(&store)?, [None, None, None], "cleared");
+    Ok(())
+}
+
+#[test]
+fn appended_and_reinserted_recipes_keep_their_label_texture() -> TestResult {
+    let mut store = SqliteStore::open_in_memory()?;
+    let textured = |id: &str| -> Outcome<Recipe> {
+        Ok(recipe(id, "V60", Vec::new())?.with_label_texture(Some(LabelTexture::Contour)))
+    };
+    store.append_all(&[textured("a")?])?;
+    store.insert_at(&textured("b")?, 0, Pin::Unpinned)?;
+    let textures: Vec<_> = store
+        .load_all()?
+        .iter()
+        .map(Recipe::label_texture)
+        .collect();
+    assert_eq!(
+        textures,
+        [
+            Some(LabelTexture::Contour),
+            None,
+            None,
+            Some(LabelTexture::Contour),
+        ]
+    );
+    Ok(())
+}
+
+#[test]
+fn unknown_stored_label_textures_read_as_no_override() -> TestResult {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("coffee.db");
+    drop(SqliteStore::open(&path)?);
+    Connection::open(&path)?.execute_batch(
+        "UPDATE recipe SET label_texture = 'velvet' WHERE id = 'espresso-uuid';
+         UPDATE recipe SET label_texture = 'burlap' WHERE id = 'pourover-uuid';",
+    )?;
+    let textures: Vec<_> = SqliteStore::open(&path)?
+        .load_all()?
+        .iter()
+        .map(Recipe::label_texture)
+        .collect();
+    // Positive control: a known stored name still reads as an override.
+    assert_eq!(textures, [None, Some(LabelTexture::Burlap)]);
+    Ok(())
+}
+
+#[test]
 fn step_pours_round_trip() -> TestResult {
     let mut store = SqliteStore::open_in_memory()?;
     let bloom = RecipeStep::new(
@@ -318,13 +388,13 @@ fn stored_doses_out_of_range_are_clamped() -> TestResult {
 }
 
 #[test]
-fn opened_file_is_at_schema_v6() -> TestResult {
+fn opened_file_is_at_schema_v7() -> TestResult {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("coffee.db");
     SqliteStore::open(&path)?;
     let version: u32 =
         Connection::open(&path)?.pragma_query_value(None, "user_version", |row| row.get(0))?;
-    assert_eq!(version, 6);
+    assert_eq!(version, 7);
     Ok(())
 }
 
