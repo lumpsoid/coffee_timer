@@ -413,6 +413,34 @@ void main() {
       );
     });
 
+    testWidgets('herringbone paper draws its planks', (tester) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.herringbone),
+        paints..path(),
+      );
+    });
+
+    testWidgets('ripple paper draws its wavy lines', (tester) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.ripple),
+        paints..path(),
+      );
+    });
+
+    testWidgets('woodgrain paper draws its grain lines', (tester) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.woodgrain),
+        paints..path(),
+      );
+    });
+
+    testWidgets('laid paper draws its laid and chain lines', (tester) async {
+      expect(
+        await paper(tester, stain: null, texture: LabelTexture.laid),
+        paints..path(),
+      );
+    });
+
     testWidgets('a stain is the shader ring, sized to the paper, on a card as '
         'on the page', (tester) async {
       await tester.runAsync(CoffeeRing.load);
