@@ -20,6 +20,9 @@ version: 0.3.0+4
 
 environment:
   sdk: ^3.9.2
+  # The Flutter version CI installs (flutter-action reads this key). Bump it
+  # here only; keep it equal to the local `flutter --version`.
+  flutter: 3.47.8
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
