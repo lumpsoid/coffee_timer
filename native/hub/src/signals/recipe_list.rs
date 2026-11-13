@@ -135,6 +135,7 @@ pub enum LabelTexture {
     Pinstripe,
     Contour,
     Burlap,
+    Plain,
 }
 
 /// A variation within the tone.

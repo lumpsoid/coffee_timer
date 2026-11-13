@@ -1,8 +1,8 @@
 //! Port of `test/domain/recipe_test.dart`.
 
 use coffee_timer_core::model::{
-    BrewMetrics, BrewRatio, CoffeeDose, ModelError, PourScale, Recipe, RecipeId, RecipeName,
-    RecipeStep, StepDuration, StepId, WaterAmount, WaterScaleError,
+    BrewMetrics, BrewRatio, CoffeeDose, LabelTexture, ModelError, PourScale, Recipe, RecipeId,
+    RecipeName, RecipeStep, StepDuration, StepId, WaterAmount, WaterScaleError,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -335,6 +335,17 @@ fn blank_starts_empty_and_builds_up() -> TestResult {
     assert_eq!(built.steps().len(), 1);
     assert_eq!(built.steps()[0].duration().seconds(), 20);
     assert_eq!((built.coffee().grams(), built.water().grams()), (17, 220));
+    Ok(())
+}
+
+#[test]
+fn label_texture_starts_unset_and_follows_with_label_texture() -> TestResult {
+    let base = recipe(&[30])?;
+    assert_eq!(base.label_texture(), None);
+    let linen = base.clone().with_label_texture(Some(LabelTexture::Linen));
+    assert_eq!(linen.label_texture(), Some(LabelTexture::Linen));
+    assert_eq!(linen.with_label_texture(None).label_texture(), None);
+    assert_eq!(base.label_texture(), None, "original untouched");
     Ok(())
 }
 

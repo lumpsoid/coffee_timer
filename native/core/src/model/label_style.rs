@@ -6,7 +6,9 @@ use crate::model::{BrewMetrics, LabelShade, LabelTexture, LabelTone, Recipe, Sta
 /// picked from a stable hash of the recipe id, so recipes of the same tone
 /// still look different, and a recipe keeps its look when renamed or
 /// reordered. The hash is FNV-1a, fixed here rather than `std`'s hasher,
-/// so a label never changes between builds.
+/// so a label never changes between builds. A texture the recipe chose
+/// (see [`Recipe::with_label_texture`]) replaces the hashed one; the hash
+/// still consumes its texture bits, so shade and stain do not move.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LabelStyle {
     tone: LabelTone,
@@ -18,9 +20,11 @@ pub struct LabelStyle {
 impl LabelStyle {
     pub fn of(recipe: &Recipe, metrics: &BrewMetrics) -> Self {
         let mut bits = usize::try_from(fnv1a(recipe.id().as_str())).unwrap_or_default();
+        // Taken even when overridden: the shade and stain bits must not move.
+        let hashed = take(&LabelTexture::ALL, &mut bits);
         Self {
             tone: LabelTone::for_brew_seconds(metrics.total_seconds(recipe)),
-            texture: take(&LabelTexture::ALL, &mut bits),
+            texture: recipe.label_texture().unwrap_or(hashed),
             shade: take(&LabelShade::ALL, &mut bits),
             stain: take(&StainCorner::ALL, &mut bits),
         }

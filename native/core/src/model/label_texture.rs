@@ -13,9 +13,14 @@ pub enum LabelTexture {
     Contour,
     /// Coarse jute weave.
     Burlap,
+    /// No pattern: bare paper.
+    Plain,
 }
 
 impl LabelTexture {
+    /// The hash pool: the textures a recipe with no override is picked from.
+    /// `Plain` is deliberately left out, so it is reachable only through a
+    /// recipe's override; growing this list would reshuffle every recipe.
     pub const ALL: [Self; 6] = [
         Self::Kraft,
         Self::Linen,

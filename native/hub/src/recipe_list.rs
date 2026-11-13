@@ -136,6 +136,7 @@ impl From<LabelStyle> for RecipeLabel {
                 model::LabelTexture::Pinstripe => LabelTexture::Pinstripe,
                 model::LabelTexture::Contour => LabelTexture::Contour,
                 model::LabelTexture::Burlap => LabelTexture::Burlap,
+                model::LabelTexture::Plain => LabelTexture::Plain,
             },
             shade: match style.shade() {
                 model::LabelShade::Base => LabelShade::Base,

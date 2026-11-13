@@ -126,6 +126,8 @@ class LabelPaperPainter extends CustomPainter {
         for (var x = 1.0; x < size.width; x += 5) {
           canvas.drawLine(Offset(x, 0), Offset(x, size.height), stroke);
         }
+      // Bare paper: nothing to paint over the fill.
+      case LabelTexture.plain:
     }
   }
 
