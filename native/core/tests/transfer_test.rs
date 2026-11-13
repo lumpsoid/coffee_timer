@@ -5,8 +5,8 @@ use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog};
 use coffee_timer_core::editor::EditorController;
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
-    CoffeeDose, GrindClicks, ModelError, Pin, PourSpeed, Recipe, RecipeId, RecipeName, RecipeStep,
-    StepDuration, StepId, WaterAmount,
+    CoffeeDose, GrindClicks, LabelTexture, ModelError, Pin, PourSpeed, Recipe, RecipeId,
+    RecipeName, RecipeStep, StepDuration, StepId, WaterAmount,
 };
 use coffee_timer_core::transfer::{DocumentError, ImportError, RecipeDocument};
 
@@ -112,6 +112,7 @@ fn encode_then_decode_is_the_same_recipe_apart_from_ids() -> TestResult {
     assert_eq!(back.water(), recipe.water());
     assert_eq!(back.pour_speed(), recipe.pour_speed());
     assert_eq!(back.grind(), recipe.grind());
+    assert_eq!(back.label_texture(), None, "no override was chosen");
     let steps: Vec<_> = back
         .steps()
         .iter()
@@ -124,6 +125,27 @@ fn encode_then_decode_is_the_same_recipe_apart_from_ids() -> TestResult {
         .map(|(s, id)| (id, s.name(), s.duration(), s.water()))
         .collect();
     assert_eq!(steps, want);
+    Ok(())
+}
+
+#[test]
+fn encode_then_decode_keeps_a_chosen_label_texture() -> TestResult {
+    // Plain is outside the hash pool, so it is the case most likely to break.
+    for texture in [LabelTexture::Linen, LabelTexture::Plain] {
+        let recipe = pour_over()?.with_label_texture(Some(texture));
+        let export = RecipeDocument::encode(&[&recipe])?;
+        let key = format!(r#""label_texture": "{}""#, texture.storage_value());
+        assert!(export.json().contains(&key), "{key} in {}", export.json());
+        let imported = RecipeDocument::decode(export.json())?;
+
+        let mut ids = SequentialIds::default();
+        let back = imported
+            .into_iter()
+            .next()
+            .ok_or("no recipe")?
+            .into_recipe(&mut ids);
+        assert_eq!(back.label_texture(), Some(texture));
+    }
     Ok(())
 }
 
@@ -213,6 +235,11 @@ fn decode_refuses_each_invalid_value_naming_where_it_is() -> TestResult {
             r#"{"name":"A","coffee_grams":15,"water_grams":250,"grind_clicks":100,
                "steps":[{"seconds":1}]}"#,
             "Recipe 2, grind_clicks: 0–99 clicks",
+        ),
+        (
+            r#"{"name":"A","coffee_grams":15,"water_grams":250,"label_texture":"velvet",
+               "steps":[{"seconds":1}]}"#,
+            "Recipe 2, label_texture: Texture \"velvet\" is not a label texture",
         ),
     ];
     for (second, want) in cases {

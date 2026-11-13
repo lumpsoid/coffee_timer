@@ -1,6 +1,6 @@
 use crate::model::{
-    CoffeeDose, GrindClicks, ModelError, PourSpeed, Recipe, RecipeName, RecipeStep, StepDuration,
-    WaterAmount,
+    CoffeeDose, GrindClicks, LabelTexture, ModelError, PourSpeed, Recipe, RecipeName, RecipeStep,
+    StepDuration, WaterAmount,
 };
 use crate::transfer::wire::{Document, Header, RecipeWire, StepWire};
 use crate::transfer::{DocumentError, ExportError, ImportedRecipe, ImportedStep, RecipeExport};
@@ -77,6 +77,9 @@ fn recipe_wire(recipe: &Recipe) -> RecipeWire {
         water_grams: i64::from(recipe.water().grams()),
         pour_grams_per_second: Some(recipe.pour_speed().grams_per_second()),
         grind_clicks: recipe.grind().map(|grind| i64::from(grind.clicks())),
+        label_texture: recipe
+            .label_texture()
+            .map(|texture| texture.storage_value().to_owned()),
         steps: recipe.steps().iter().map(step_wire).collect(),
     }
 }
@@ -113,6 +116,12 @@ fn imported_recipe(position: usize, recipe: RecipeWire) -> Result<ImportedRecipe
         .map(GrindClicks::try_parse)
         .transpose()
         .map_err(invalid("grind_clicks"))?;
+    let label_texture = recipe
+        .label_texture
+        .as_deref()
+        .map(LabelTexture::try_parse)
+        .transpose()
+        .map_err(invalid("label_texture"))?;
     if recipe.steps.is_empty() {
         return Err(DocumentError::NoSteps { recipe: position });
     }
@@ -128,7 +137,8 @@ fn imported_recipe(position: usize, recipe: RecipeWire) -> Result<ImportedRecipe
         pour_speed,
         grind,
         steps,
-    ))
+    )
+    .with_label_texture(label_texture))
 }
 
 /// The step at `position` (1-based) of the recipe at `recipe`.

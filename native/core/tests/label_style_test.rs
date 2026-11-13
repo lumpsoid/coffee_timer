@@ -107,3 +107,110 @@ fn recipes_of_one_tone_still_get_every_texture_shade_and_stain() -> TestResult {
     assert_eq!(stains.len(), StainCorner::ALL.len());
     Ok(())
 }
+
+#[test]
+fn the_hash_never_picks_plain() -> TestResult {
+    assert!(!LabelTexture::ALL.contains(&LabelTexture::Plain));
+    let textures: HashSet<_> = (0..200)
+        .map(|n| Ok(style(&recipe(&format!("r{n}"), "Shot", &[30])?).texture()))
+        .collect::<Result<_, ModelError>>()?;
+    // Positive control: the hash does reach every texture it picks from.
+    assert_eq!(textures.len(), LabelTexture::ALL.len());
+    assert!(!textures.contains(&LabelTexture::Plain));
+    Ok(())
+}
+
+#[test]
+fn an_override_replaces_only_the_texture() -> TestResult {
+    for id in ["espresso-uuid", "r1", "r2"] {
+        let base = recipe(id, "Shot", &[30, 25])?;
+        let before = style(&base);
+        let plain = style(&base.clone().with_label_texture(Some(LabelTexture::Plain)));
+        assert_eq!(plain.texture(), LabelTexture::Plain, "{id}");
+        assert_eq!(plain.tone(), before.tone(), "{id}");
+        assert_eq!(plain.shade(), before.shade(), "{id}");
+        assert_eq!(plain.stain(), before.stain(), "{id}");
+
+        let burlap = style(&base.with_label_texture(Some(LabelTexture::Burlap)));
+        assert_eq!(burlap.texture(), LabelTexture::Burlap, "{id}");
+        assert_eq!(burlap.shade(), before.shade(), "{id}");
+        assert_eq!(burlap.stain(), before.stain(), "{id}");
+    }
+    Ok(())
+}
+
+#[test]
+fn no_override_is_the_hash_pick() -> TestResult {
+    let base = recipe("r1", "V60", &[30])?;
+    let hashed = style(&base);
+    assert_eq!(style(&base.clone().with_label_texture(None)), hashed);
+    let cleared = base
+        .clone()
+        .with_label_texture(Some(LabelTexture::Plain))
+        .with_label_texture(None);
+    assert_eq!(style(&cleared), hashed);
+    Ok(())
+}
+
+#[test]
+fn hashed_texture_is_what_of_picks_without_an_override() -> TestResult {
+    for n in 0..50 {
+        let r = recipe(&format!("r{n}"), "Shot", &[30])?;
+        assert_eq!(
+            LabelStyle::hashed_texture(r.id()),
+            style(&r).texture(),
+            "r{n}"
+        );
+    }
+    Ok(())
+}
+
+// LabelTexture storage
+
+#[test]
+fn every_choice_round_trips_through_storage() -> TestResult {
+    let distinct: HashSet<_> = LabelTexture::CHOICES.iter().collect();
+    assert_eq!(distinct.len(), LabelTexture::CHOICES.len());
+    assert_eq!(LabelTexture::CHOICES.last(), Some(&LabelTexture::Plain));
+    assert_eq!(LabelTexture::CHOICES[..6], LabelTexture::ALL);
+    for texture in LabelTexture::CHOICES {
+        let stored = texture.storage_value();
+        assert_eq!(LabelTexture::try_parse(stored)?, texture);
+        assert_eq!(LabelTexture::from_storage(Some(stored)), Some(texture));
+    }
+    Ok(())
+}
+
+#[test]
+fn every_choice_has_its_own_label() {
+    let labels = LabelTexture::CHOICES.map(LabelTexture::label);
+    let distinct: HashSet<_> = labels.iter().collect();
+    assert_eq!(distinct.len(), labels.len());
+    assert!(labels.iter().all(|label| !label.is_empty()));
+}
+
+#[test]
+fn try_parse_refuses_anything_else() {
+    for raw in ["", "Kraft", "velvet"] {
+        assert!(
+            matches!(
+                LabelTexture::try_parse(raw),
+                Err(ModelError::UnknownTexture(_))
+            ),
+            "{raw:?}"
+        );
+    }
+    // Positive control: the same parser accepts a stored name.
+    assert_eq!(LabelTexture::try_parse("burlap"), Ok(LabelTexture::Burlap));
+}
+
+#[test]
+fn from_storage_of_nothing_or_unknown_is_no_override() {
+    assert_eq!(LabelTexture::from_storage(None), None);
+    assert_eq!(LabelTexture::from_storage(Some("velvet")), None);
+    // Positive control: a known name is an override.
+    assert_eq!(
+        LabelTexture::from_storage(Some("burlap")),
+        Some(LabelTexture::Burlap)
+    );
+}

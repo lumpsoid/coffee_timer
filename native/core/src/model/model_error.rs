@@ -23,6 +23,7 @@ pub enum ModelError {
     AccentOutOfRange(i64),
     MalformedAccentHex(String),
     UnknownTheme(String),
+    UnknownTexture(String),
     UnknownToggle(String),
     UnknownPreAlert(String),
     UnknownSound(String),
@@ -81,6 +82,7 @@ impl fmt::Display for ModelError {
             Self::UnknownTheme(raw) => {
                 write!(f, "Theme \"{raw}\" is not light, dark or system")
             }
+            Self::UnknownTexture(raw) => write!(f, "Texture \"{raw}\" is not a label texture"),
             Self::UnknownToggle(raw) => write!(f, "\"{raw}\" is not on or off"),
             Self::UnknownPreAlert(raw) => {
                 write!(f, "Pre-alert \"{raw}\" is not 0, 3, 5 or 10 seconds")

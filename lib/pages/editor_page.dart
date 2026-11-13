@@ -4,6 +4,7 @@ import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
+import 'package:coffee_timer/widgets/texture_gallery.dart';
 import 'package:flutter/material.dart';
 
 /// The recipe editor. Once subscribed it sends its opening intent ([open]:
@@ -279,6 +280,17 @@ class _EditorPageState extends State<EditorPage> {
       ),
       keyboardType: TextInputType.number,
       onChanged: (raw) => SetRecipeGrind(raw: raw).sendSignalToRust(),
+    ),
+    const SizedBox(height: 20),
+    RuledHeading(
+      text: 'Label paper',
+      ink: Theme.of(context).colorScheme.onSurface,
+    ),
+    const SizedBox(height: 8),
+    TextureGallery(
+      textures: draft.textures,
+      onPick: (texture) =>
+          SetRecipeTexture(texture: texture).sendSignalToRust(),
     ),
     const SizedBox(height: 20),
     Text('Total duration: ${draft.totalLabel}'),

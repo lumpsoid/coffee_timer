@@ -9,8 +9,8 @@ use coffee_timer_core::brew::{BrewController, RatioChange};
 use coffee_timer_core::catalog::{CatalogChange, RecipeCatalog, RecipeSummary};
 use coffee_timer_core::editor::{EditError, EditorController, StepPreset};
 use coffee_timer_core::model::{
-    AccentColor, AccentOption, BrewMetrics, CoffeeDose, FinishSound, Pin, PreAlertLead, RecipeId,
-    Settings, StepId, StepSound, ThemeSelection, Toggle,
+    AccentColor, AccentOption, BrewMetrics, CoffeeDose, FinishSound, LabelTexture, Pin,
+    PreAlertLead, RecipeId, Settings, StepId, StepSound, ThemeSelection, Toggle,
 };
 use coffee_timer_core::settings::SettingsController;
 
@@ -114,6 +114,9 @@ pub fn new_recipe(
     }
     if let Some(grind) = &recipe.grind {
         editor.set_grind(grind)?;
+    }
+    if let Some(texture) = &recipe.texture {
+        editor.set_label_texture(Some(LabelTexture::try_parse(texture)?))?;
     }
     let mut steps = recipe.steps.iter();
     if let Some(step) = steps.next() {

@@ -52,6 +52,11 @@ const MIGRATIONS: &[Migration] = &[
         sql: V6_RECIPE_GRIND,
         fresh: None,
     },
+    Migration {
+        version: 7,
+        sql: V7_RECIPE_LABEL_TEXTURE,
+        fresh: None,
+    },
 ];
 
 /// v1: tables, plus the two example recipes. Seeding is part of creating the
@@ -145,6 +150,14 @@ const V6_RECIPE_GRIND: &str = "
 ALTER TABLE recipe ADD COLUMN grind_clicks INTEGER;
 ";
 
+/// v7: a recipe may store the paper its list label is printed on, by its
+/// storage name. NULL is no override, so the label keeps the hashed texture,
+/// as every recipe before v7 has; the core reads the value leniently (an
+/// unknown name is no override).
+const V7_RECIPE_LABEL_TEXTURE: &str = "
+ALTER TABLE recipe ADD COLUMN label_texture TEXT;
+";
+
 /// Applies every pending migration in one transaction: the database ends at
 /// the latest version or is left as it was. A database newer than this build
 /// is refused rather than written with an older schema's assumptions.
@@ -196,10 +209,10 @@ mod tests {
     }
 
     #[test]
-    fn fresh_database_ends_at_v6() -> TestResult {
+    fn fresh_database_ends_at_v7() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         Ok(())
     }
 
@@ -233,7 +246,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 1)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         assert_eq!(
             doses(&conn)?,
             [
@@ -275,7 +288,7 @@ mod tests {
         conn.execute_batch(V2_RECIPE_DOSE)?;
         conn.pragma_update(None, "user_version", 2)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         assert!(pours(&conn)?.iter().all(|(_, water)| water.is_none()));
         Ok(())
     }
@@ -297,7 +310,7 @@ mod tests {
         )?;
         conn.pragma_update(None, "user_version", 3)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         assert_eq!(
             pins(&conn)?,
             [
@@ -318,7 +331,7 @@ mod tests {
         conn.execute_batch(V4_RECIPE_PIN)?;
         conn.pragma_update(None, "user_version", 4)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         let speeds: Vec<i64> = conn
             .prepare("SELECT pour_speed_tenths FROM recipe ORDER BY position")?
             .query_map([], |r| r.get(0))?
@@ -337,12 +350,32 @@ mod tests {
         conn.execute_batch(V5_RECIPE_POUR_SPEED)?;
         conn.pragma_update(None, "user_version", 5)?;
         migrate(&mut conn)?;
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         let grinds: Vec<Option<i64>> = conn
             .prepare("SELECT grind_clicks FROM recipe ORDER BY position")?
             .query_map([], |r| r.get(0))?
             .collect::<rusqlite::Result<_>>()?;
         assert_eq!(grinds, [None, None]);
+        Ok(())
+    }
+
+    #[test]
+    fn v6_recipes_have_no_label_texture() -> TestResult {
+        let mut conn = Connection::open_in_memory()?;
+        conn.execute_batch(V1_SCHEMA_AND_SEED)?;
+        conn.execute_batch(V2_RECIPE_DOSE)?;
+        conn.execute_batch(V3_STEP_WATER)?;
+        conn.execute_batch(V4_RECIPE_PIN)?;
+        conn.execute_batch(V5_RECIPE_POUR_SPEED)?;
+        conn.execute_batch(V6_RECIPE_GRIND)?;
+        conn.pragma_update(None, "user_version", 6)?;
+        migrate(&mut conn)?;
+        assert_eq!(user_version(&conn)?, 7);
+        let textures: Vec<Option<String>> = conn
+            .prepare("SELECT label_texture FROM recipe ORDER BY position")?
+            .query_map([], |r| r.get(0))?
+            .collect::<rusqlite::Result<_>>()?;
+        assert_eq!(textures, [None, None]);
         Ok(())
     }
 
@@ -353,14 +386,14 @@ mod tests {
         migrate(&mut conn)?;
         let recipes: i64 = conn.query_row("SELECT COUNT(*) FROM recipe", [], |r| r.get(0))?;
         assert_eq!(recipes, 2);
-        assert_eq!(user_version(&conn)?, 6);
+        assert_eq!(user_version(&conn)?, 7);
         Ok(())
     }
 
     #[test]
     fn newer_database_is_refused() -> TestResult {
         let mut conn = Connection::open_in_memory()?;
-        conn.pragma_update(None, "user_version", 7)?;
+        conn.pragma_update(None, "user_version", 8)?;
         assert!(migrate(&mut conn).is_err());
         Ok(())
     }

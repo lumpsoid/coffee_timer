@@ -75,9 +75,11 @@ again.
   the water for a dose of coffee.
 - **`LabelStyle`** is how a recipe looks in the list, as a coffee-bag label.
   `LabelTone` (roast, caramel or crema) follows total brew time, with the
-  thresholds as named constants. `LabelTexture`, `LabelShade` and
-  `StainCorner` come from an FNV-1a hash of the recipe id, so a recipe keeps
-  its look across renames, reorders and builds.
+  thresholds as named constants. `LabelTexture` is hashed from the recipe id
+  unless the recipe chose one. `Plain` is only ever chosen: it sits outside
+  the hash pool (`LabelTexture::ALL`), so existing looks are unchanged.
+  `LabelShade` and `StainCorner` always come from the hash, so a recipe
+  keeps its look across renames, reorders and builds.
 - **Settings:** `ThemeSelection` (light, dark or system), `AccentColor` (ARGB,
   with `#AARRGGBB` and `#RRGGBB` parsing), `AccentOption` (the ten named
   accents), `Toggle` (`On` / `Off`, stored and typed as `on` / `off`: the
@@ -193,8 +195,9 @@ write the text.
   The header is read first, so another format or version is refused for
   that. Unknown fields are ignored; a recipe without
   `pour_grams_per_second` pours at the default speed, and one without
-  `grind_clicks` has no grind. The wire structs are private
-  (`wire.rs`).
+  `grind_clicks` has no grind, and one without `label_texture` keeps its
+  hash-picked paper; an unknown name is refused like any invalid value. The
+  wire structs are private (`wire.rs`).
 - `ImportedRecipe` / `ImportedStep` are valid recipes without ids;
   `into_recipe(&mut dyn IdGen)` mints them, only once the whole document
   is valid.
@@ -348,7 +351,9 @@ The store implements the core's ports. It makes no decisions.
   `recipe.pinned` (0 or 1, default 0): every upgraded recipe is unpinned
   and keeps its position. v5 adds `recipe.pour_speed_tenths` (default 50,
   so every upgraded recipe pours at 5 g/s). v6 adds the nullable
-  `recipe.grind_clicks`: every upgraded recipe has no grind.
+  `recipe.grind_clicks`: every upgraded recipe has no grind. v7 adds the
+  nullable `recipe.label_texture` (its lower-case name): every upgraded
+  recipe has no override and keeps its hash-picked paper.
 - **Row mapping:** [`recipe_rows.rs`](../native/store/src/recipe_rows.rs)
   loads `ORDER BY position`. An upsert keeps the recipe's position and
   replaces its steps, and leaves `pinned` alone. `append_all` inserts
@@ -497,7 +502,9 @@ The GUI renders, sends intents, and performs effects. It holds no business
   stain and frame, `label_parts.dart` has the name badge, tagline, spec
   row, `RuledHeading` (a caption between hairlines, heading the brew
   page's method and the editor's and settings' sections) and `LabelPinMark` (the small accent push pin a pinned card shows in
-  its top-left corner, opposite the meter), and `RoastMeter` draws the beans. `RecipeSummaryTile` is a list row
+  its top-left corner, opposite the meter), and `RoastMeter` draws the beans.
+  `TextureGallery` is the editor's paper picker: Rust sends the tiles, and a
+  tap goes back as `SetRecipeTexture`. `RecipeSummaryTile` is a list row
   on its own label; the brew page lays the whole page on one. `BrewDial` is
   the brew timer: bezel ticks, an inner arc that sweeps per step and
   restarts on `restartKey` (it stops and fades while a step is `paused`,

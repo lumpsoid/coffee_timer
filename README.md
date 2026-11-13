@@ -23,7 +23,7 @@ Everything stays on your phone: no account, no network, no tracking.
 - **Keeps running in the background** on Android, with a notification
   showing the current step.
 - **Recipe list as coffee-bag labels.** Pin favourites, reorder, duplicate,
-  delete with undo.
+  delete with undo. Pick each label's paper, or leave it to the app.
 - **Import and export** recipes as JSON through the clipboard, to share
   them or move them to another phone.
 - **Settings:** light, dark or system theme, accent colour, sound,

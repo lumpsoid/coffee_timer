@@ -1,6 +1,6 @@
 use crate::model::{
-    CoffeeDose, GrindClicks, ModelError, PourScale, PourSpeed, RecipeId, RecipeName, RecipeStep,
-    WaterAmount, WaterScaleError,
+    CoffeeDose, GrindClicks, LabelTexture, ModelError, PourScale, PourSpeed, RecipeId, RecipeName,
+    RecipeStep, WaterAmount, WaterScaleError,
 };
 
 /// A brew recipe. Every field is a valid-by-construction value: the coffee
@@ -18,6 +18,7 @@ pub struct Recipe {
     water: WaterAmount,
     pour_speed: PourSpeed,
     grind: Option<GrindClicks>,
+    label_texture: Option<LabelTexture>,
     steps: Vec<RecipeStep>,
 }
 
@@ -41,6 +42,7 @@ impl Recipe {
             water,
             pour_speed: PourSpeed::DEFAULT,
             grind: None,
+            label_texture: None,
             steps,
         }
     }
@@ -67,6 +69,13 @@ impl Recipe {
 
     pub fn with_grind(self, grind: Option<GrindClicks>) -> Self {
         Self { grind, ..self }
+    }
+
+    pub fn with_label_texture(self, label_texture: Option<LabelTexture>) -> Self {
+        Self {
+            label_texture,
+            ..self
+        }
     }
 
     pub fn with_step_added(mut self, step: RecipeStep) -> Self {
@@ -176,6 +185,12 @@ impl Recipe {
     /// Where to set the grinder; none when the recipe does not say.
     pub fn grind(&self) -> Option<GrindClicks> {
         self.grind
+    }
+
+    /// The paper the label is printed on, if chosen; `None` leaves it to
+    /// `LabelStyle`.
+    pub fn label_texture(&self) -> Option<LabelTexture> {
+        self.label_texture
     }
 
     pub fn steps(&self) -> &[RecipeStep] {

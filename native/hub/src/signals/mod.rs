@@ -19,10 +19,10 @@ pub use brew::{
 };
 pub use editor::{
     AddStep, AddStepButton, CloseEditor, DeleteRecipe, DuplicateRecipe, DurationNudgeButton,
-    DurationNudgeChoice, EditRecipe, EditorDraft, EditorReady, EditorStep, EditorUpdate, MoveStep,
-    NewDraft, NudgeStepDuration, RemoveStep, SaveRecipe, SetRecipeCoffee, SetRecipeDescription,
-    SetRecipeGrind, SetRecipeName, SetRecipePourSpeed, SetRecipeWater, SetStepDuration,
-    SetStepName, SetStepWater, StepPresetChoice,
+    DurationNudgeChoice, EditRecipe, EditorDraft, EditorReady, EditorStep, EditorTexture,
+    EditorUpdate, MoveStep, NewDraft, NudgeStepDuration, RemoveStep, SaveRecipe, SetRecipeCoffee,
+    SetRecipeDescription, SetRecipeGrind, SetRecipeName, SetRecipePourSpeed, SetRecipeTexture,
+    SetRecipeWater, SetStepDuration, SetStepName, SetStepWater, StepPresetChoice,
 };
 pub use recipe_list::{
     ExportRecipes, ImportRecipes, LabelShade, LabelTexture, LabelTone, MoveRecipe, PinRecipe,

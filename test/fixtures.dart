@@ -38,6 +38,55 @@ EditorDraft draft({
   water: '250',
   pourSpeed: '5',
   grind: '',
+  textures: const [
+    EditorTexture(
+      paper: LabelTexture.linen,
+      label: 'Auto',
+      chosen: true,
+    ),
+    EditorTexture(
+      texture: LabelTexture.kraft,
+      paper: LabelTexture.kraft,
+      label: 'Kraft',
+      chosen: false,
+    ),
+    EditorTexture(
+      texture: LabelTexture.linen,
+      paper: LabelTexture.linen,
+      label: 'Linen',
+      chosen: false,
+    ),
+    EditorTexture(
+      texture: LabelTexture.halftone,
+      paper: LabelTexture.halftone,
+      label: 'Halftone',
+      chosen: false,
+    ),
+    EditorTexture(
+      texture: LabelTexture.pinstripe,
+      paper: LabelTexture.pinstripe,
+      label: 'Pinstripe',
+      chosen: false,
+    ),
+    EditorTexture(
+      texture: LabelTexture.contour,
+      paper: LabelTexture.contour,
+      label: 'Contour',
+      chosen: false,
+    ),
+    EditorTexture(
+      texture: LabelTexture.burlap,
+      paper: LabelTexture.burlap,
+      label: 'Burlap',
+      chosen: false,
+    ),
+    EditorTexture(
+      texture: LabelTexture.plain,
+      paper: LabelTexture.plain,
+      label: 'Plain',
+      chosen: false,
+    ),
+  ],
   totalLabel: '0:30',
   steps: const [
     EditorStep(

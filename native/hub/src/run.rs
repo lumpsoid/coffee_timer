@@ -30,9 +30,9 @@ use crate::signals::{
     PlatformEffect, PreviewSound, RecipeListReady, RecipeListUpdate, RemoveRecipe, RemoveStep,
     ResetBrew, ResumeBrew, SaveBrewRatio, SaveRecipe, SetAccent, SetBrewCoffee, SetFinishKnock,
     SetFinishSound, SetPreAlert, SetRecipeCoffee, SetRecipeDescription, SetRecipeGrind,
-    SetRecipeName, SetRecipePourSpeed, SetRecipeWater, SetSound, SetStepDuration, SetStepName,
-    SetStepSound, SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate, StartBrew,
-    UndoRemoveRecipe, UnpinRecipe,
+    SetRecipeName, SetRecipePourSpeed, SetRecipeTexture, SetRecipeWater, SetSound, SetStepDuration,
+    SetStepName, SetStepSound, SetStepWater, SetTheme, SetVibration, SettingsReady, SettingsUpdate,
+    StartBrew, UndoRemoveRecipe, UnpinRecipe,
 };
 
 const ONE_SECOND: Duration = Duration::from_secs(1);
@@ -94,6 +94,7 @@ pub async fn run(mut c: Controllers) {
     let set_recipe_water = SetRecipeWater::get_dart_signal_receiver();
     let set_recipe_pour_speed = SetRecipePourSpeed::get_dart_signal_receiver();
     let set_recipe_grind = SetRecipeGrind::get_dart_signal_receiver();
+    let set_recipe_texture = SetRecipeTexture::get_dart_signal_receiver();
     let set_step_name = SetStepName::get_dart_signal_receiver();
     let set_step_duration = SetStepDuration::get_dart_signal_receiver();
     let nudge_step_duration = NudgeStepDuration::get_dart_signal_receiver();
@@ -239,6 +240,10 @@ pub async fn run(mut c: Controllers) {
             }
             Some(pack) = set_recipe_grind.recv() => {
                 report(c.editor.set_grind(&pack.message.raw));
+                show_editor(&c.editor);
+            }
+            Some(pack) = set_recipe_texture.recv() => {
+                report(c.editor.set_label_texture(pack.message.texture.map(Into::into)));
                 show_editor(&c.editor);
             }
             Some(pack) = set_step_name.recv() => {

@@ -1,6 +1,6 @@
 use coffee_timer_core::model::{
-    CoffeeDose, GrindClicks, Pin, PourSpeed, Recipe, RecipeId, RecipeName, RecipeStep,
-    StepDuration, StepId, WaterAmount,
+    CoffeeDose, GrindClicks, LabelTexture, Pin, PourSpeed, Recipe, RecipeId, RecipeName,
+    RecipeStep, StepDuration, StepId, WaterAmount,
 };
 use coffee_timer_core::ports::{RecipeStore, StoreError};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -11,7 +11,8 @@ use crate::sqlite_store::{SqliteStore, db_error};
 /// `sqlite_recipe_repository.dart:103-125` did: a row with a blank id is
 /// dropped, a blank name reads as `Untitled`, a duration is clamped. The
 /// coffee and water grams, the pour speed and the grind are clamped too; a
-/// recipe's NULL grind is none and a step's NULL water is no pour.
+/// recipe's NULL grind is none and a step's NULL water is no pour. A recipe's
+/// NULL or unknown label texture is no override.
 impl RecipeStore for SqliteStore {
     fn load_all(&self) -> Result<Vec<Recipe>, StoreError> {
         load_all(&*self.conn()?).map_err(db_error)
@@ -63,13 +64,14 @@ struct RecipeRow {
     water_grams: i64,
     pour_speed_tenths: i64,
     grind_clicks: Option<i64>,
+    label_texture: Option<String>,
 }
 
 fn load_all(conn: &Connection) -> rusqlite::Result<Vec<Recipe>> {
     let rows = conn
         .prepare(
             "SELECT id, name, description, coffee_grams, water_grams, pour_speed_tenths,
-                 grind_clicks
+                 grind_clicks, label_texture
              FROM recipe ORDER BY position",
         )?
         .query_map([], |row| {
@@ -81,6 +83,7 @@ fn load_all(conn: &Connection) -> rusqlite::Result<Vec<Recipe>> {
                 water_grams: row.get(4)?,
                 pour_speed_tenths: row.get(5)?,
                 grind_clicks: row.get(6)?,
+                label_texture: row.get(7)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -102,7 +105,8 @@ fn load_all(conn: &Connection) -> rusqlite::Result<Vec<Recipe>> {
                 steps,
             )
             .with_pour_speed(PourSpeed::clamped_tenths(row.pour_speed_tenths))
-            .with_grind(row.grind_clicks.map(GrindClicks::clamped)),
+            .with_grind(row.grind_clicks.map(GrindClicks::clamped))
+            .with_label_texture(LabelTexture::from_storage(row.label_texture.as_deref())),
         );
     }
     Ok(recipes)
@@ -157,14 +161,16 @@ fn upsert(conn: &mut Connection, recipe: &Recipe) -> rusqlite::Result<()> {
     let id = recipe.id().as_str();
     tx.execute(
         "INSERT INTO recipe
-             (id, name, description, coffee_grams, water_grams, pour_speed_tenths, grind_clicks)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             (id, name, description, coffee_grams, water_grams, pour_speed_tenths, grind_clicks,
+              label_texture)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
          ON CONFLICT (id) DO UPDATE SET name = excluded.name,
              description = excluded.description,
              coffee_grams = excluded.coffee_grams,
              water_grams = excluded.water_grams,
              pour_speed_tenths = excluded.pour_speed_tenths,
-             grind_clicks = excluded.grind_clicks",
+             grind_clicks = excluded.grind_clicks,
+             label_texture = excluded.label_texture",
         params![
             id,
             recipe.name().as_str(),
@@ -173,6 +179,7 @@ fn upsert(conn: &mut Connection, recipe: &Recipe) -> rusqlite::Result<()> {
             recipe.water().grams(),
             recipe.pour_speed().tenths(),
             recipe.grind().map(GrindClicks::clicks),
+            recipe.label_texture().map(LabelTexture::storage_value),
         ],
     )?;
     tx.execute("DELETE FROM step WHERE recipe_id = ?1", [id])?;
@@ -188,8 +195,8 @@ fn append_all(conn: &mut Connection, recipes: &[Recipe]) -> rusqlite::Result<()>
         tx.execute(
             "INSERT INTO recipe
                  (id, name, description, coffee_grams, water_grams, pour_speed_tenths,
-                  grind_clicks)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                  grind_clicks, label_texture)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 recipe.id().as_str(),
                 recipe.name().as_str(),
@@ -198,6 +205,7 @@ fn append_all(conn: &mut Connection, recipes: &[Recipe]) -> rusqlite::Result<()>
                 recipe.water().grams(),
                 recipe.pour_speed().tenths(),
                 recipe.grind().map(GrindClicks::clicks),
+                recipe.label_texture().map(LabelTexture::storage_value),
             ],
         )?;
         insert_steps(&tx, recipe)?;
@@ -237,8 +245,8 @@ fn insert_at(
     tx.execute(
         "INSERT INTO recipe
              (position, id, name, description, coffee_grams, water_grams, pour_speed_tenths,
-              grind_clicks, pinned)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+              grind_clicks, pinned, label_texture)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             at,
             recipe.id().as_str(),
@@ -249,6 +257,7 @@ fn insert_at(
             recipe.pour_speed().tenths(),
             recipe.grind().map(GrindClicks::clicks),
             pin.is_pinned(),
+            recipe.label_texture().map(LabelTexture::storage_value),
         ],
     )?;
     insert_steps(&tx, recipe)?;

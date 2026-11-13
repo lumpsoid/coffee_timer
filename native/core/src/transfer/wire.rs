@@ -36,6 +36,9 @@ pub(super) struct RecipeWire {
     /// Missing is no grind setting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) grind_clicks: Option<i64>,
+    /// Missing is no chosen paper: the recipe's id picks it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) label_texture: Option<String>,
     pub(super) steps: Vec<StepWire>,
 }
 

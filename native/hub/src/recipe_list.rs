@@ -129,14 +129,7 @@ impl From<LabelStyle> for RecipeLabel {
                 model::LabelTone::Caramel => LabelTone::Caramel,
                 model::LabelTone::Crema => LabelTone::Crema,
             },
-            texture: match style.texture() {
-                model::LabelTexture::Kraft => LabelTexture::Kraft,
-                model::LabelTexture::Linen => LabelTexture::Linen,
-                model::LabelTexture::Halftone => LabelTexture::Halftone,
-                model::LabelTexture::Pinstripe => LabelTexture::Pinstripe,
-                model::LabelTexture::Contour => LabelTexture::Contour,
-                model::LabelTexture::Burlap => LabelTexture::Burlap,
-            },
+            texture: style.texture().into(),
             shade: match style.shade() {
                 model::LabelShade::Base => LabelShade::Base,
                 model::LabelShade::Darker => LabelShade::Darker,
@@ -146,6 +139,34 @@ impl From<LabelStyle> for RecipeLabel {
                 model::StainCorner::BottomRight => StainCorner::BottomRight,
                 model::StainCorner::TopLeft => StainCorner::TopLeft,
             },
+        }
+    }
+}
+
+impl From<model::LabelTexture> for LabelTexture {
+    fn from(texture: model::LabelTexture) -> Self {
+        match texture {
+            model::LabelTexture::Kraft => Self::Kraft,
+            model::LabelTexture::Linen => Self::Linen,
+            model::LabelTexture::Halftone => Self::Halftone,
+            model::LabelTexture::Pinstripe => Self::Pinstripe,
+            model::LabelTexture::Contour => Self::Contour,
+            model::LabelTexture::Burlap => Self::Burlap,
+            model::LabelTexture::Plain => Self::Plain,
+        }
+    }
+}
+
+impl From<LabelTexture> for model::LabelTexture {
+    fn from(texture: LabelTexture) -> Self {
+        match texture {
+            LabelTexture::Kraft => Self::Kraft,
+            LabelTexture::Linen => Self::Linen,
+            LabelTexture::Halftone => Self::Halftone,
+            LabelTexture::Pinstripe => Self::Pinstripe,
+            LabelTexture::Contour => Self::Contour,
+            LabelTexture::Burlap => Self::Burlap,
+            LabelTexture::Plain => Self::Plain,
         }
     }
 }

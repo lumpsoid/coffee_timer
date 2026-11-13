@@ -2,7 +2,7 @@ use crate::catalog::{CatalogChange, RecipeCatalog};
 use crate::editor::{
     DeleteError, Draft, DurationNudge, EditError, EditorState, SaveError, StepPreset,
 };
-use crate::model::{BrewMetrics, RecipeId, StepId};
+use crate::model::{BrewMetrics, LabelTexture, RecipeId, StepId};
 use crate::ports::IdGen;
 use crate::transfer::{ImportError, RecipeDocument, RecipeImport};
 
@@ -98,6 +98,15 @@ impl EditorController {
     /// The grind in clicks as typed (`22`); blank is none.
     pub fn set_grind(&mut self, raw: &str) -> Result<(), EditError> {
         self.draft_mut()?.set_grind(raw);
+        Ok(())
+    }
+
+    /// The label paper picked; `None` lets the recipe's id pick it.
+    pub fn set_label_texture(
+        &mut self,
+        label_texture: Option<LabelTexture>,
+    ) -> Result<(), EditError> {
+        self.draft_mut()?.set_label_texture(label_texture);
         Ok(())
     }
 

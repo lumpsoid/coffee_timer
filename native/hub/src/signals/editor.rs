@@ -1,6 +1,8 @@
 use rinf::{DartSignal, RustSignal, SignalPiece};
 use serde::{Deserialize, Serialize};
 
+use crate::signals::LabelTexture;
+
 /// The editor holder is subscribed: answer with the current `EditorUpdate`.
 #[derive(Deserialize, DartSignal)]
 pub struct EditorReady;
@@ -54,6 +56,12 @@ pub struct SetRecipePourSpeed {
 #[derive(Deserialize, DartSignal)]
 pub struct SetRecipeGrind {
     pub raw: String,
+}
+
+/// The label texture picked in the gallery; none is Auto.
+#[derive(Deserialize, DartSignal)]
+pub struct SetRecipeTexture {
+    pub texture: Option<LabelTexture>,
 }
 
 /// `row` is an `EditorStep::id`.
@@ -152,6 +160,8 @@ pub struct EditorDraft {
     pub grind: String,
     /// `Enter clicks` or `0–99 clicks`, once a save was attempted.
     pub grind_error: Option<String>,
+    /// The label texture gallery: Auto first, then each texture.
+    pub textures: Vec<EditorTexture>,
     /// Live total, `M:SS`.
     pub total_label: String,
     /// `Step pours add up to 200 g of 250 g` when the typed step pours miss
@@ -190,6 +200,19 @@ pub struct EditorStep {
     pub water_text: String,
     /// `Enter grams` or `1–2000 g`, once a save was attempted.
     pub water_error: Option<String>,
+}
+
+/// One tile of the label texture gallery.
+#[derive(Serialize, SignalPiece)]
+pub struct EditorTexture {
+    /// What choosing it sends back in `SetRecipeTexture`; none is Auto.
+    pub texture: Option<LabelTexture>,
+    /// The paper the tile shows.
+    pub paper: LabelTexture,
+    /// `Auto`, `Kraft`, …
+    pub label: String,
+    /// The tile the draft's texture names: exactly one is chosen.
+    pub chosen: bool,
 }
 
 #[derive(Serialize, SignalPiece)]

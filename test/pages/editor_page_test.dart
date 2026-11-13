@@ -2,6 +2,7 @@ import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/pages/editor_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/texture_gallery.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -86,13 +87,38 @@ void main() {
     await pumpEditor(tester);
     editor.apply(EditorUpdateOpen(draft: draft()));
     await tester.pump();
+    // The footer sits below the fold on a phone, past the gallery; scroll it
+    // into the built range.
+    await tester.dragUntilVisible(
+      find.text('Add coffee'),
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
 
+    // The label paper gallery is a Wrap too; read only the buttons' Wrap.
     final labels = tester
         .widgetList<Text>(
-          find.descendant(of: find.byType(Wrap), matching: find.byType(Text)),
+          find.descendant(
+            of: find.ancestor(
+              of: find.text('Add coffee'),
+              matching: find.byType(Wrap),
+            ),
+            matching: find.byType(Text),
+          ),
         )
         .map((text) => text.data);
     expect(labels, ['Add coffee', 'Add water', 'Wait', 'Add Step']);
+  });
+
+  testWidgets('shows the label paper gallery from the draft', (tester) async {
+    await pumpEditor(tester);
+    editor.apply(EditorUpdateOpen(draft: draft()));
+    await tester.pump();
+
+    // RuledHeading sets its caption in capitals.
+    expect(find.text('LABEL PAPER'), findsOneWidget);
+    expect(find.byType(TextureGallery), findsOneWidget);
+    expect(find.text('Plain'), findsOneWidget);
   });
 
   testWidgets('shows field errors from the draft', (tester) async {
@@ -114,6 +140,7 @@ void main() {
           pourSpeedError: '0.5–30 g/s',
           grind: '100',
           grindError: '0–99 clicks',
+          textures: [],
           totalLabel: '0:00',
           steps: [
             EditorStep(
@@ -171,6 +198,10 @@ void main() {
     );
 
     await pumpEditor(tester);
+    // This test reads the header and both cards at once. The label paper
+    // gallery pushes the cards past a phone's built range, so take a taller
+    // view; the width stays a phone's.
+    tester.view.physicalSize = const Size(1080, 5250);
     editor.apply(
       EditorUpdateOpen(
         draft: draft().copyWith(

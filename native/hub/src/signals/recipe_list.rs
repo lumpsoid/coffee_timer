@@ -127,7 +127,7 @@ pub enum LabelTone {
     Crema,
 }
 
-#[derive(Serialize, SignalPiece)]
+#[derive(Serialize, Deserialize, SignalPiece, Clone, Copy)]
 pub enum LabelTexture {
     Kraft,
     Linen,
@@ -135,6 +135,7 @@ pub enum LabelTexture {
     Pinstripe,
     Contour,
     Burlap,
+    Plain,
 }
 
 /// A variation within the tone.
