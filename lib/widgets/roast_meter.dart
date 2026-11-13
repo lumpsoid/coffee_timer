@@ -1,6 +1,6 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// Three coffee beans, the first [filled] of them inked in [accent]; the
 /// rest are outlines in [ink]. Shown in a recipe label's corner.

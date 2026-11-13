@@ -4,7 +4,7 @@ import 'dart:ui' show PointMode;
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/coffee_ring.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The paper of a recipe label: fill, texture, a coffee-ring stain, paper
 /// grain and a printed inner frame. Pure paint; every choice arrives in the

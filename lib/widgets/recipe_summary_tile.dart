@@ -3,7 +3,7 @@ import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:coffee_timer/widgets/label_paper.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/roast_meter.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// One row in the recipe list, drawn as a printed coffee-bag label: the name
 /// in a stamped badge, the description as a tagline, the brew figures in a

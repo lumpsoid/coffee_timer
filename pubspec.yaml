@@ -22,7 +22,7 @@ environment:
   sdk: ^3.9.2
   # The Flutter version CI installs (flutter-action reads this key). Bump it
   # here only; keep it equal to the local `flutter --version`.
-  flutter: 3.47.8
+  flutter: 3.50.0
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -37,13 +37,13 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter:
     sdk: flutter
+  material_ui: ^1.11.0
   meta: ^1.17.0
   path_provider: ^2.1.5
   rinf: ^8.11.0
   tuple: ^2.0.2
   vibration: ^3.1.4
   wakelock_plus: ^1.4.0
-
 dev_dependencies:
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

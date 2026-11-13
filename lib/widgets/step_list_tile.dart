@@ -1,6 +1,6 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// One line of the brew page's method: a round stamp, the step's name, a
 /// dotted leader, the water it pours (if any) and its duration, printed in

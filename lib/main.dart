@@ -11,8 +11,8 @@ import 'package:coffee_timer/holders/settings_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/coffee_ring.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:rinf/rinf.dart';
 
 /// Loads the coffee-ring shader, starts Rust, subscribes every holder (each

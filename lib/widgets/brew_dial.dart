@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 final _snapshot = SnapshotController(allowSnapshotting: true);
 

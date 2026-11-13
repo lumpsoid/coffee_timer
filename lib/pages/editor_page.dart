@@ -1,11 +1,9 @@
-import 'dart:async';
-
 import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/texture_gallery.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The recipe editor. Once subscribed it sends its opening intent ([open]:
 /// [NewDraft], [EditRecipe] or [DuplicateRecipe]) and shows the drafts that
@@ -342,28 +340,26 @@ class _EditorPageState extends State<EditorPage> {
   void _confirmDelete(String recipeId) {
     final saved = widget.recipes.byId(recipeId);
     if (saved == null) return;
-    unawaited(
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Delete recipe'),
-          content: Text(
-            'Delete "${saved.name}"?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                const DeleteRecipe().sendSignalToRust();
-              },
-              child: const Text('Delete', style: TextStyle(color: Colors.red)),
-            ),
-          ],
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete recipe'),
+        content: Text(
+          'Delete "${saved.name}"?',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              const DeleteRecipe().sendSignalToRust();
+            },
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
       ),
     );
   }

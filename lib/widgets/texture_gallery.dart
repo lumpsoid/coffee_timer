@@ -1,7 +1,7 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:coffee_timer/widgets/label_paper.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The label texture gallery: one painted tile per texture Rust offers;
 /// tapping one reports its texture (null is Auto).

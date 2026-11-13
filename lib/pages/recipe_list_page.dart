@@ -10,8 +10,8 @@ import 'package:coffee_timer/pages/editor_page.dart';
 import 'package:coffee_timer/pages/settings_page.dart';
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The home page: every recipe, in the order Rust lists them (pinned
 /// first), opening its brew page on tap and offering edit / duplicate /
@@ -319,102 +319,98 @@ class _RecipeListPageState extends State<RecipeListPage> {
   );
 
   void _showRecipeOptionsSheet(BuildContext context, RecipeSummary recipe) {
-    unawaited(
-      showModalBottomSheet<void>(
-        context: context,
-        builder: (ctx) {
-          return SafeArea(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ListTile(
-                  leading: const Icon(Icons.edit_outlined),
-                  title: const Text('Edit'),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _openEdit(context, recipe);
-                  },
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) {
+        return SafeArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.edit_outlined),
+                title: const Text('Edit'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openEdit(context, recipe);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.copy_outlined),
+                title: const Text('Duplicate'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _openDuplicate(context, recipe);
+                },
+              ),
+              ListTile(
+                leading: Icon(
+                  recipe.pinned ? Icons.push_pin_outlined : Icons.push_pin,
                 ),
-                ListTile(
-                  leading: const Icon(Icons.copy_outlined),
-                  title: const Text('Duplicate'),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _openDuplicate(context, recipe);
-                  },
+                title: Text(recipe.pinned ? 'Unpin' : 'Pin'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  if (recipe.pinned) {
+                    UnpinRecipe(recipeId: recipe.id).sendSignalToRust();
+                  } else {
+                    PinRecipe(recipeId: recipe.id).sendSignalToRust();
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.ios_share),
+                title: const Text('Export'),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  ExportRecipes(recipeIds: [recipe.id]).sendSignalToRust();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, color: Colors.red),
+                title: const Text(
+                  'Delete',
+                  style: TextStyle(color: Colors.red),
                 ),
-                ListTile(
-                  leading: Icon(
-                    recipe.pinned ? Icons.push_pin_outlined : Icons.push_pin,
-                  ),
-                  title: Text(recipe.pinned ? 'Unpin' : 'Pin'),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    if (recipe.pinned) {
-                      UnpinRecipe(recipeId: recipe.id).sendSignalToRust();
-                    } else {
-                      PinRecipe(recipeId: recipe.id).sendSignalToRust();
-                    }
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.ios_share),
-                  title: const Text('Export'),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    ExportRecipes(recipeIds: [recipe.id]).sendSignalToRust();
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.delete_outline, color: Colors.red),
-                  title: const Text(
-                    'Delete',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  onTap: () {
-                    Navigator.of(ctx).pop();
-                    _confirmDelete(context, recipe);
-                  },
-                ),
-                ListTile(
-                  leading: const Icon(Icons.close),
-                  title: const Text('Cancel'),
-                  onTap: () => Navigator.of(ctx).pop(),
-                ),
-              ],
-            ),
-          );
-        },
-      ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _confirmDelete(context, recipe);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.close),
+                title: const Text('Cancel'),
+                onTap: () => Navigator.of(ctx).pop(),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
   void _confirmDelete(BuildContext context, RecipeSummary recipe) {
-    unawaited(
-      showDialog<void>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('Delete recipe'),
-          content: Text(
-            'Delete "${recipe.name}"?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(),
-              child: const Text('Cancel'),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                RemoveRecipe(recipeId: recipe.id).sendSignalToRust();
-              },
-              child: const Text(
-                'Delete',
-                style: TextStyle(color: Colors.red),
-              ),
-            ),
-          ],
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete recipe'),
+        content: Text(
+          'Delete "${recipe.name}"?',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              RemoveRecipe(recipeId: recipe.id).sendSignalToRust();
+            },
+            child: const Text(
+              'Delete',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
       ),
     );
   }

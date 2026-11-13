@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:coffee_timer/holders/brew_holder.dart';
 import 'package:coffee_timer/holders/editor_holder.dart';
 import 'package:coffee_timer/holders/recipe_list_holder.dart';
@@ -12,8 +10,8 @@ import 'package:coffee_timer/widgets/label_paper.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/roast_meter.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 /// The brew page: the open recipe printed on its own label, its timer dial
 /// and its method. Once
@@ -87,32 +85,29 @@ class _BrewPageState extends State<BrewPage> {
   /// The dose controls (ratio and coffee), for this brew only; they follow
   /// Rust's updates while open.
   void _showRatioSheet(LabelColors colors) {
-    unawaited(
-      showModalBottomSheet<void>(
-        context: context,
-        isScrollControlled: true,
-        backgroundColor: colors.paper,
-        builder: (_) => ListenableBuilder(
-          listenable: widget.brew,
-          builder: (_, _) => switch (widget.brew.state) {
-            BrewUpdateIdle(:final recipe) ||
-            BrewUpdateRunning(:final recipe) ||
-            BrewUpdatePaused(:final recipe) ||
-            BrewUpdateFinished(:final recipe) => DoseSheet(
-              recipe: recipe,
-              colors: colors,
-              captionStyle: _caption(colors, size: 11),
-              figureStyle: _bigFigure(colors),
-              onRatio: (change) =>
-                  AdjustBrewRatio(change: change).sendSignalToRust(),
-              onCoffee: (grams) =>
-                  SetBrewCoffee(grams: grams).sendSignalToRust(),
-              onReset: () => const BackToRecipeDose().sendSignalToRust(),
-              onSave: () => const SaveBrewRatio().sendSignalToRust(),
-            ),
-            _ => const SizedBox.shrink(),
-          },
-        ),
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: colors.paper,
+      builder: (_) => ListenableBuilder(
+        listenable: widget.brew,
+        builder: (_, _) => switch (widget.brew.state) {
+          BrewUpdateIdle(:final recipe) ||
+          BrewUpdateRunning(:final recipe) ||
+          BrewUpdatePaused(:final recipe) ||
+          BrewUpdateFinished(:final recipe) => DoseSheet(
+            recipe: recipe,
+            colors: colors,
+            captionStyle: _caption(colors, size: 11),
+            figureStyle: _bigFigure(colors),
+            onRatio: (change) =>
+                AdjustBrewRatio(change: change).sendSignalToRust(),
+            onCoffee: (grams) => SetBrewCoffee(grams: grams).sendSignalToRust(),
+            onReset: () => const BackToRecipeDose().sendSignalToRust(),
+            onSave: () => const SaveBrewRatio().sendSignalToRust(),
+          ),
+          _ => const SizedBox.shrink(),
+        },
       ),
     );
   }
