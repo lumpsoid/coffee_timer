@@ -1724,3 +1724,52 @@ fn the_auto_texture_is_the_hash_pick_for_the_drafts_id() -> TestResult {
     assert_eq!(draft(&editor)?.hashed_texture(), hashed);
     Ok(())
 }
+
+#[test]
+fn the_texture_gallery_is_auto_then_every_choice() -> TestResult {
+    let editor = new_draft();
+    let current = draft(&editor)?;
+    let options = current.texture_options();
+    let labels: Vec<_> = options.iter().map(|option| option.label).collect();
+    assert_eq!(
+        labels,
+        [
+            "Auto",
+            "Kraft",
+            "Linen",
+            "Halftone",
+            "Pinstripe",
+            "Contour",
+            "Burlap",
+            "Plain"
+        ]
+    );
+    assert_eq!(options[0].texture, None);
+    assert_eq!(options[0].paper, current.hashed_texture());
+    for (option, texture) in options[1..].iter().zip(LabelTexture::CHOICES) {
+        assert_eq!(option.texture, Some(texture));
+        assert_eq!(option.paper, texture);
+    }
+    Ok(())
+}
+
+#[test]
+fn the_gallery_marks_only_the_chosen_tile() -> TestResult {
+    let mut editor = new_draft();
+    assert_eq!(chosen_labels(&editor)?, ["Auto"]);
+    editor.set_label_texture(Some(LabelTexture::Plain))?;
+    assert_eq!(chosen_labels(&editor)?, ["Plain"]);
+    editor.set_label_texture(None)?;
+    assert_eq!(chosen_labels(&editor)?, ["Auto"]);
+    Ok(())
+}
+
+/// The labels of the gallery tiles marked chosen.
+fn chosen_labels(editor: &EditorController) -> Result<Vec<&'static str>, &'static str> {
+    Ok(draft(editor)?
+        .texture_options()
+        .into_iter()
+        .filter(|option| option.chosen)
+        .map(|option| option.label)
+        .collect())
+}

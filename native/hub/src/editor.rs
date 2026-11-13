@@ -1,10 +1,12 @@
 //! Editor state ↔ editor signals.
 
-use coffee_timer_core::editor::{Draft, DurationNudge, EditorState, EditorStepRow, StepPreset};
+use coffee_timer_core::editor::{
+    Draft, DurationNudge, EditorState, EditorStepRow, StepPreset, TextureOption,
+};
 
 use crate::signals::{
-    AddStepButton, DurationNudgeButton, DurationNudgeChoice, EditorDraft, EditorStep, EditorUpdate,
-    StepPresetChoice,
+    AddStepButton, DurationNudgeButton, DurationNudgeChoice, EditorDraft, EditorStep,
+    EditorTexture, EditorUpdate, StepPresetChoice,
 };
 
 impl From<&EditorState> for EditorUpdate {
@@ -35,6 +37,11 @@ impl From<&Draft> for EditorDraft {
             pour_speed_error: draft.pour_speed_error(),
             grind: draft.grind().to_owned(),
             grind_error: draft.grind_error(),
+            textures: draft
+                .texture_options()
+                .into_iter()
+                .map(EditorTexture::from)
+                .collect(),
             total_label: draft.total_label(),
             pour_hint: draft.pour_hint(),
             steps: draft
@@ -74,6 +81,17 @@ impl From<EditorStepRow> for EditorStep {
             duration_revision: row.duration_revision,
             water_text: row.water_text,
             water_error: row.water_error,
+        }
+    }
+}
+
+impl From<TextureOption> for EditorTexture {
+    fn from(option: TextureOption) -> Self {
+        Self {
+            texture: option.texture.map(Into::into),
+            paper: option.paper.into(),
+            label: option.label.to_owned(),
+            chosen: option.chosen,
         }
     }
 }
@@ -118,6 +136,21 @@ impl From<DurationNudgeChoice> for DurationNudge {
             DurationNudgeChoice::MinusSmall => Self::MinusSmall,
             DurationNudgeChoice::PlusSmall => Self::PlusSmall,
             DurationNudgeChoice::PlusLarge => Self::PlusLarge,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use coffee_timer_core::model::LabelTexture;
+
+    use crate::signals::LabelTexture as ShownTexture;
+
+    #[test]
+    fn every_choice_survives_the_bridge() {
+        for texture in LabelTexture::CHOICES {
+            let shown = ShownTexture::from(texture);
+            assert_eq!(LabelTexture::from(shown), texture);
         }
     }
 }

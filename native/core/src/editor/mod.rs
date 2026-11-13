@@ -13,6 +13,7 @@ mod editor_step_row;
 mod field;
 mod save_error;
 mod step_preset;
+mod texture_option;
 
 pub use delete_error::DeleteError;
 pub use draft::Draft;
@@ -24,3 +25,4 @@ pub use editor_state::EditorState;
 pub use editor_step_row::EditorStepRow;
 pub use save_error::SaveError;
 pub use step_preset::StepPreset;
+pub use texture_option::TextureOption;

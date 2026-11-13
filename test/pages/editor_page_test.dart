@@ -114,6 +114,7 @@ void main() {
           pourSpeedError: '0.5–30 g/s',
           grind: '100',
           grindError: '0–99 clicks',
+          textures: [],
           totalLabel: '0:00',
           steps: [
             EditorStep(

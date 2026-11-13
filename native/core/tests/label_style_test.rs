@@ -182,6 +182,14 @@ fn every_choice_round_trips_through_storage() -> TestResult {
 }
 
 #[test]
+fn every_choice_has_its_own_label() {
+    let labels = LabelTexture::CHOICES.map(LabelTexture::label);
+    let distinct: HashSet<_> = labels.iter().collect();
+    assert_eq!(distinct.len(), labels.len());
+    assert!(labels.iter().all(|label| !label.is_empty()));
+}
+
+#[test]
 fn try_parse_refuses_anything_else() {
     for raw in ["", "Kraft", "velvet"] {
         assert!(

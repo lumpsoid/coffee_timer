@@ -44,6 +44,19 @@ impl LabelTexture {
         Self::Plain,
     ];
 
+    /// The name the gallery shows the texture under.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Kraft => "Kraft",
+            Self::Linen => "Linen",
+            Self::Halftone => "Halftone",
+            Self::Pinstripe => "Pinstripe",
+            Self::Contour => "Contour",
+            Self::Burlap => "Burlap",
+            Self::Plain => "Plain",
+        }
+    }
+
     /// The string persisted in storage.
     pub fn storage_value(self) -> &'static str {
         match self {

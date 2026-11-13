@@ -2,7 +2,9 @@ use std::fmt;
 
 use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
-use crate::editor::{DraftMode, DurationNudge, EditError, EditorStepRow, StepPreset};
+use crate::editor::{
+    DraftMode, DurationNudge, EditError, EditorStepRow, StepPreset, TextureOption,
+};
 use crate::model::{
     BrewMetrics, CoffeeDose, GrindClicks, LabelStyle, LabelTexture, ModelError, PourSpeed, Recipe,
     RecipeId, RecipeName, StepId, WaterAmount,
@@ -323,6 +325,27 @@ impl Draft {
     /// What Auto prints this recipe on.
     pub fn hashed_texture(&self) -> LabelTexture {
         LabelStyle::hashed_texture(&self.id)
+    }
+
+    /// The label texture gallery: Auto first, then every choice in gallery
+    /// order. Exactly one tile is chosen: the one the draft's texture names.
+    pub fn texture_options(&self) -> Vec<TextureOption> {
+        let option = |texture: Option<LabelTexture>, paper: LabelTexture, label: &'static str| {
+            TextureOption {
+                texture,
+                paper,
+                label,
+                chosen: texture == self.label_texture,
+            }
+        };
+        let auto = option(None, self.hashed_texture(), "Auto");
+        std::iter::once(auto)
+            .chain(
+                LabelTexture::CHOICES
+                    .into_iter()
+                    .map(|texture| option(Some(texture), texture, texture.label())),
+            )
+            .collect()
     }
 
     /// Live `M:SS` total of the typed durations, read leniently and capped
