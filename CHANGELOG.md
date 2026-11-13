@@ -7,6 +7,18 @@ version may change behaviour.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-13
+
+### Fixed
+
+- 0.3.0 was tagged but its APKs failed to build, so it was never
+  published. This release carries everything listed under 0.3.0.
+
+### Changed
+
+- Built with Flutter 3.50.0. No change in behaviour is intended; the
+  app still runs on Android 7.0 (API 24) and later.
+
 ## [0.3.0] - 2026-11-13
 
 ### Added
