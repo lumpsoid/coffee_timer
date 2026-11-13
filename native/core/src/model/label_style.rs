@@ -1,4 +1,6 @@
-use crate::model::{BrewMetrics, LabelShade, LabelTexture, LabelTone, Recipe, StainCorner};
+use crate::model::{
+    BrewMetrics, LabelShade, LabelTexture, LabelTone, Recipe, RecipeId, StainCorner,
+};
 
 /// How a recipe looks in the list, as a printed coffee-bag label.
 ///
@@ -28,6 +30,13 @@ impl LabelStyle {
             shade: take(&LabelShade::ALL, &mut bits),
             stain: take(&StainCorner::ALL, &mut bits),
         }
+    }
+
+    /// The texture the hash gives `id`: what a recipe with no chosen texture
+    /// is printed on.
+    pub fn hashed_texture(id: &RecipeId) -> LabelTexture {
+        let mut bits = usize::try_from(fnv1a(id.as_str())).unwrap_or_default();
+        take(&LabelTexture::ALL, &mut bits)
     }
 
     pub fn tone(&self) -> LabelTone {

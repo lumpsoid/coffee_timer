@@ -152,6 +152,19 @@ fn no_override_is_the_hash_pick() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn hashed_texture_is_what_of_picks_without_an_override() -> TestResult {
+    for n in 0..50 {
+        let r = recipe(&format!("r{n}"), "Shot", &[30])?;
+        assert_eq!(
+            LabelStyle::hashed_texture(r.id()),
+            style(&r).texture(),
+            "r{n}"
+        );
+    }
+    Ok(())
+}
+
 // LabelTexture storage
 
 #[test]

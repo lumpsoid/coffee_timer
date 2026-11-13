@@ -10,8 +10,8 @@ use coffee_timer_core::editor::{
 };
 use coffee_timer_core::fakes::{FakeRecipeStore, SequentialIds};
 use coffee_timer_core::model::{
-    CoffeeDose, GrindClicks, ModelError, Pin, Recipe, RecipeId, RecipeName, RecipeStep,
-    StepDuration, StepId, WaterAmount,
+    BrewMetrics, CoffeeDose, GrindClicks, LabelStyle, LabelTexture, ModelError, Pin, Recipe,
+    RecipeId, RecipeName, RecipeStep, StepDuration, StepId, WaterAmount,
 };
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
@@ -1664,5 +1664,63 @@ fn grind_errors_show_from_the_first_save() -> TestResult {
         draft(&editor)?.grind_error().as_deref(),
         Some("Enter clicks")
     );
+    Ok(())
+}
+
+// Label texture
+
+#[test]
+fn a_new_draft_has_no_label_texture() -> TestResult {
+    let editor = new_draft();
+    assert_eq!(draft(&editor)?.label_texture(), None);
+    Ok(())
+}
+
+#[test]
+fn the_label_texture_saves_reopens_and_clears() -> TestResult {
+    let mut catalog = catalog(vec![v60()?])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    editor.set_label_texture(Some(LabelTexture::Plain))?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("recipe-1")?).ok_or("not saved")?;
+    assert_eq!(saved.label_texture(), Some(LabelTexture::Plain));
+
+    editor.edit(&rid("recipe-1")?, &catalog)?;
+    assert_eq!(draft(&editor)?.label_texture(), Some(LabelTexture::Plain));
+    editor.duplicate(&rid("recipe-1")?, &catalog)?;
+    assert_eq!(
+        draft(&editor)?.label_texture(),
+        Some(LabelTexture::Plain),
+        "a copy keeps it"
+    );
+
+    editor.edit(&rid("recipe-1")?, &catalog)?;
+    editor.set_label_texture(None)?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("recipe-1")?).ok_or("not saved")?;
+    assert_eq!(saved.label_texture(), None, "none goes back to the hash");
+    Ok(())
+}
+
+#[test]
+fn editing_keeps_a_stored_label_texture_through_other_edits() -> TestResult {
+    let stored = v60()?.with_label_texture(Some(LabelTexture::Burlap));
+    let mut catalog = catalog(vec![stored])?;
+    let mut editor = editing("recipe-1", &catalog)?;
+    editor.set_name("Renamed")?;
+    editor.save(&mut catalog)?;
+    let saved = catalog.get(&rid("recipe-1")?).ok_or("not saved")?;
+    assert_eq!(saved.name().as_str(), "Renamed", "the save went through");
+    assert_eq!(saved.label_texture(), Some(LabelTexture::Burlap));
+    Ok(())
+}
+
+#[test]
+fn the_auto_texture_is_the_hash_pick_for_the_drafts_id() -> TestResult {
+    let recipe = v60()?;
+    let catalog = catalog(vec![recipe.clone()])?;
+    let editor = editing("recipe-1", &catalog)?;
+    let hashed = LabelStyle::of(&recipe, &BrewMetrics::default()).texture();
+    assert_eq!(draft(&editor)?.hashed_texture(), hashed);
     Ok(())
 }

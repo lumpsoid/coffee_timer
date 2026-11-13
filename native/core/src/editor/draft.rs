@@ -4,8 +4,8 @@ use crate::editor::draft_step::DraftStep;
 use crate::editor::field::Field;
 use crate::editor::{DraftMode, DurationNudge, EditError, EditorStepRow, StepPreset};
 use crate::model::{
-    BrewMetrics, CoffeeDose, GrindClicks, ModelError, PourSpeed, Recipe, RecipeId, RecipeName,
-    StepId, WaterAmount,
+    BrewMetrics, CoffeeDose, GrindClicks, LabelStyle, LabelTexture, ModelError, PourSpeed, Recipe,
+    RecipeId, RecipeName, StepId, WaterAmount,
 };
 use crate::ports::IdGen;
 
@@ -25,6 +25,7 @@ pub struct Draft {
     water: Field<WaterAmount>,
     pour_speed: Field<PourSpeed>,
     grind: Field<Option<GrindClicks>>,
+    label_texture: Option<LabelTexture>,
     steps: Vec<DraftStep>,
     errors_shown: bool,
     notice: Option<String>,
@@ -49,6 +50,7 @@ impl Draft {
             water: Field::parse(Self::NEW_WATER_TEXT, WaterAmount::try_parse_text),
             pour_speed: Field::parse(&PourSpeed::DEFAULT.text(), PourSpeed::try_parse_text),
             grind: Field::parse("", GrindClicks::try_parse_optional_text),
+            label_texture: None,
             steps: vec![DraftStep::new(ids.step_id(), StepPreset::Blank.step_name())],
             errors_shown: false,
             notice: None,
@@ -79,6 +81,7 @@ impl Draft {
                     .unwrap_or_default(),
                 GrindClicks::try_parse_optional_text,
             ),
+            label_texture: recipe.label_texture(),
             steps: recipe.steps().iter().map(DraftStep::of).collect(),
             errors_shown: false,
             notice: None,
@@ -139,6 +142,10 @@ impl Draft {
     /// The grind in clicks as typed; blank is none.
     pub(crate) fn set_grind(&mut self, raw: &str) {
         self.grind = Field::parse(raw, GrindClicks::try_parse_optional_text);
+    }
+
+    pub(crate) fn set_label_texture(&mut self, label_texture: Option<LabelTexture>) {
+        self.label_texture = label_texture;
     }
 
     pub(crate) fn set_step_name(&mut self, row: &StepId, raw: &str) -> Result<(), EditError> {
@@ -226,7 +233,8 @@ impl Draft {
                 steps,
             )
             .with_pour_speed(pour_speed)
-            .with_grind(grind),
+            .with_grind(grind)
+            .with_label_texture(self.label_texture),
         )
     }
 
@@ -304,6 +312,17 @@ impl Draft {
     /// `Enter clicks` or `0–99 clicks`, once errors are shown.
     pub fn grind_error(&self) -> Option<String> {
         self.shown(self.grind.error())
+    }
+
+    /// The label paper chosen for the recipe; none leaves it to the hash
+    /// (see [`Draft::hashed_texture`]).
+    pub fn label_texture(&self) -> Option<LabelTexture> {
+        self.label_texture
+    }
+
+    /// What Auto prints this recipe on.
+    pub fn hashed_texture(&self) -> LabelTexture {
+        LabelStyle::hashed_texture(&self.id)
     }
 
     /// Live `M:SS` total of the typed durations, read leniently and capped
