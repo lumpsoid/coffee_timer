@@ -294,7 +294,7 @@ cargo run -p coffee_timer_cli -- --db /tmp/ct.db settings finish-sound singing-b
 | [modules.md](modules.md) | A module-by-module guide to each crate and Dart directory, with its key types and tests |
 | [rinf-bridge.md](rinf-bridge.md) | The rules for the Rust↔Flutter bridge: signal conventions, the one-listener rule, testing per layer, and rinf gotchas |
 | [port-plan.md](port-plan.md) | The plan for porting the legacy Dart app, kept as the record of decisions and of every legacy bug fixed |
-| [code-principles.md](code-principles.md) | Rules for simple, readable code that the project follows |
+| [CODE-PRINCIPLES.md](../CODE-PRINCIPLES.md) | Rules for simple, readable code that the project follows |
 | [maintaining.md](maintaining.md) | Maintainer jobs in order: fresh checkout, everyday work, versions, releases, the signing key, dependency updates |
 
 [`CLAUDE.md`](../CLAUDE.md) holds the project's architectural commitments
