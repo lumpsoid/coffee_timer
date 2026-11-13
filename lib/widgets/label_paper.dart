@@ -22,7 +22,9 @@ class LabelPaper extends StatelessWidget {
 
   final LabelColors colors;
   final LabelTexture texture;
-  final StainCorner stain;
+
+  /// Where the coffee ring sits; none leaves it out.
+  final StainCorner? stain;
   final Widget child;
 
   @override

@@ -1,6 +1,9 @@
 import 'package:coffee_timer/src/bindings/bindings.dart';
 import 'package:coffee_timer/widgets/brew_dial.dart';
+import 'package:coffee_timer/widgets/coffee_ring.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
+import 'package:coffee_timer/widgets/label_paper.dart';
+import 'package:coffee_timer/widgets/label_paper_painter.dart';
 import 'package:coffee_timer/widgets/label_parts.dart';
 import 'package:coffee_timer/widgets/recipe_summary_tile.dart';
 import 'package:coffee_timer/widgets/step_list_tile.dart';
@@ -216,6 +219,31 @@ void main() {
         }
       }
     });
+
+    testWidgets('draws no coffee ring', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: ThemeData(brightness: Brightness.light),
+          home: Scaffold(
+            body: RecipeSummaryTile(
+              name: 'V60',
+              description: 'clean',
+              coffeeLabel: '20 g',
+              waterLabel: '100 g',
+              timeLabel: '1:35',
+              label: label(),
+            ),
+          ),
+        ),
+      );
+      final paper = tester.widget<LabelPaper>(
+        find.descendant(
+          of: find.byType(RecipeSummaryTile),
+          matching: find.byType(LabelPaper),
+        ),
+      );
+      expect(paper.stain, isNull);
+    });
   });
 
   group('BrewDial', () {
@@ -313,6 +341,80 @@ void main() {
       await tester.pumpWidget(timer(sweep: tenSeconds, restartKey: (1, 0)));
       await tester.pump(const Duration(seconds: 2));
       expect(ring(tester), closeTo(0.5, 0.01));
+    });
+  });
+
+  group('LabelPaperPainter', () {
+    // Plain paper, so the stain is the only thing besides fill, grain and
+    // frame.
+    Future<RenderObject> paper(
+      WidgetTester tester, {
+      required StainCorner? stain,
+      Size size = const Size(360, 120),
+    }) async {
+      await tester.pumpWidget(
+        Center(
+          child: CustomPaint(
+            size: size,
+            painter: LabelPaperPainter(
+              colors: _colors,
+              texture: LabelTexture.plain,
+              stain: stain,
+            ),
+          ),
+        ),
+      );
+      return tester.renderObject(find.byType(CustomPaint));
+    }
+
+    testWidgets('leaves the ring out without a stain', (tester) async {
+      await tester.runAsync(CoffeeRing.load);
+      expect(
+        await paper(tester, stain: null),
+        paintsExactlyCountTimes(#drawRect, 1),
+      );
+    });
+
+    testWidgets('a stain is the shader ring, sized to the paper, on a card as '
+        'on the page', (tester) async {
+      await tester.runAsync(CoffeeRing.load);
+      for (final (size, radius) in [
+        (const Size(400, 560), 152.0),
+        (const Size(360, 120), 45.6),
+      ]) {
+        final center = Offset(
+          size.width - radius * 0.55,
+          size.height - radius * 0.3,
+        );
+        expect(
+          await paper(tester, stain: StainCorner.bottomRight, size: size),
+          paints
+            ..rect() // the paper's fill
+            ..rect(
+              rect: Rect.fromCircle(center: center, radius: radius * 1.2),
+            ),
+          reason: '$size',
+        );
+      }
+      const cardRadius = 45.6;
+      expect(
+        await paper(tester, stain: StainCorner.topLeft),
+        paints
+          ..rect() // the paper's fill
+          ..rect(
+            rect: Rect.fromCircle(
+              center: const Offset(cardRadius * 0.45, cardRadius * 0.15),
+              radius: cardRadius * 1.2,
+            ),
+          ),
+      );
+      for (final corner in StainCorner.values) {
+        expect(
+          await paper(tester, stain: corner),
+          paintsExactlyCountTimes(#drawArc, 0),
+          reason: '$corner',
+        );
+      }
     });
   });
 }

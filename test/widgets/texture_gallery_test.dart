@@ -73,6 +73,7 @@ void main() {
         ),
       );
       expect(paper.texture, texture.paper, reason: texture.label);
+      expect(paper.stain, isNull, reason: '${texture.label} has no ring');
     }
     final auto = tester.widget<LabelPaper>(
       find.descendant(of: _tile('Auto'), matching: find.byType(LabelPaper)),

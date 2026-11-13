@@ -53,7 +53,8 @@ class RecipeSummaryTile extends StatelessWidget {
           child: LabelPaper(
             colors: colors,
             texture: label.texture,
-            stain: label.stain,
+            // No ring on list cards for now: only the brew page has one.
+            stain: null,
             child: Stack(
               children: [
                 Padding(

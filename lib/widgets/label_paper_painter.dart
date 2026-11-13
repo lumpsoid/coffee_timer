@@ -2,12 +2,17 @@ import 'dart:math' as math;
 import 'dart:ui' show PointMode;
 
 import 'package:coffee_timer/src/bindings/bindings.dart';
+import 'package:coffee_timer/widgets/coffee_ring.dart';
 import 'package:coffee_timer/widgets/label_colors.dart';
 import 'package:flutter/material.dart';
 
-/// The paper of a recipe label: fill, texture, a faint coffee-ring stain,
-/// paper grain and a printed inner frame. Pure paint; every choice arrives
-/// in the [RecipeLabel] from Rust.
+/// The paper of a recipe label: fill, texture, a coffee-ring stain, paper
+/// grain and a printed inner frame. Pure paint; every choice arrives in the
+/// [RecipeLabel] from Rust.
+///
+/// No [stain] leaves the ring out, for swatches that compare textures;
+/// otherwise a mug ring sized to the paper, drawn by a shader ([CoffeeRing]),
+/// sits half off the edge at that corner.
 class LabelPaperPainter extends CustomPainter {
   const LabelPaperPainter({
     required this.colors,
@@ -17,7 +22,7 @@ class LabelPaperPainter extends CustomPainter {
 
   final LabelColors colors;
   final LabelTexture texture;
-  final StainCorner stain;
+  final StainCorner? stain;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -26,7 +31,9 @@ class LabelPaperPainter extends CustomPainter {
       ..save()
       ..clipRect(Offset.zero & size);
     _paintTexture(canvas, size);
-    _paintStain(canvas, size);
+    if (stain case final corner?) {
+      _paintStain(canvas, size, corner);
+    }
     _paintGrain(canvas, size);
     canvas
       ..restore()
@@ -131,39 +138,24 @@ class LabelPaperPainter extends CustomPainter {
     }
   }
 
-  /// A coffee-ring arc, half off the edge, open on one side.
-  void _paintStain(Canvas canvas, Size size) {
-    final (center, start) = switch (stain) {
+  /// A mug ring sized to the paper, half off the edge at [corner]; the
+  /// shader draws it (see [CoffeeRing]).
+  void _paintStain(Canvas canvas, Size size, StainCorner corner) {
+    final radius = (size.shortestSide * 0.38).clamp(40.0, 180.0);
+    final (center, seed) = switch (corner) {
       StainCorner.bottomRight => (
-        Offset(size.width - 27, size.height - 13),
-        0.35,
+        Offset(size.width - radius * 0.55, size.height - radius * 0.3),
+        3.0,
       ),
-      StainCorner.topLeft => (const Offset(19, 5), 2.8),
+      StainCorner.topLeft => (Offset(radius * 0.45, radius * 0.15), 17.0),
     };
-    final ring = Rect.fromCircle(center: center, radius: 40);
-    const sweep = math.pi * 1.3;
-    canvas
-      ..drawArc(
-        ring,
-        start,
-        sweep,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 6
-          ..color = colors.stain.withValues(alpha: 0.06),
-      )
-      ..drawArc(
-        ring,
-        start,
-        sweep,
-        false,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2
-          ..strokeCap = StrokeCap.round
-          ..color = colors.stain.withValues(alpha: 0.16),
-      );
+    CoffeeRing.paint(
+      canvas,
+      center: center,
+      radius: radius,
+      color: colors.stain.withValues(alpha: 0.5),
+      seed: seed,
+    );
   }
 
   void _paintGrain(Canvas canvas, Size size) {

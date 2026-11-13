@@ -76,6 +76,10 @@ flutter:
   # For details regarding adding assets from package dependencies, see
   # https://flutter.dev/to/asset-from-package
 
+  # Fragment shaders, compiled at build time (see CoffeeRing).
+  shaders:
+    - shaders/coffee_ring.frag
+
   # Variable fonts (SIL OFL 1.1, licences registered in main.dart): pick a
   # weight with FontVariation.weight as well as fontWeight.
   fonts:
