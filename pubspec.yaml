@@ -37,7 +37,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter:
     sdk: flutter
-  material_ui: ^1.11.0
+  material_ui: ^1.11.1
   meta: ^1.17.0
   path_provider: ^2.1.5
   rinf: ^8.11.0
